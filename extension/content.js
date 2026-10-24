@@ -113,20 +113,63 @@
     "guest",
     "member"
   ]);
-  var VALID_USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,25}$/;
+  var FIDE_TITLES = /* @__PURE__ */ new Set([
+    "GM",
+    "WGM",
+    "IM",
+    "WIM",
+    "FM",
+    "WFM",
+    "NM",
+    "WNM",
+    "CM",
+    "WCM",
+    "AGM",
+    "AIM",
+    "AFM",
+    "ACM"
+  ]);
+  var VALID_USERNAME_REGEX = /^[a-zA-Z0-9_-]{2,32}$/;
   function sanitizeChessUsername(raw) {
     if (!raw) return null;
-    const cleaned = raw.replace(/\(?\d{3,4}\)?/g, " ").replace(/\b(GM|WGM|IM|WIM|FM|WFM|NM|WNM|CM|WCM)\b/g, " ").trim().split(/\s+/)[0]?.trim();
-    if (!cleaned) return null;
-    const lower = cleaned.toLowerCase();
+    const withoutParensAndInvisible = raw.replace(/[\u200B-\u200D\uFEFF]/g, "").replace(/\(\s*\d{2,5}\s*\)/g, " ").trim();
+    if (!withoutParensAndInvisible) return null;
+    const tokens = withoutParensAndInvisible.split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return null;
+    if (tokens.length > 1 && FIDE_TITLES.has(tokens[0].toUpperCase())) {
+      tokens.shift();
+    }
+    const candidate = tokens[0]?.trim();
+    if (!candidate) return null;
+    const lower = candidate.toLowerCase();
     if (INVALID_NAMES.has(lower)) return null;
     if (lower.startsWith("guest") && /^guest\d+$/i.test(lower)) return null;
-    if (!VALID_USERNAME_REGEX.test(cleaned)) return null;
-    return cleaned;
+    if (!VALID_USERNAME_REGEX.test(candidate)) return null;
+    return candidate;
   }
   function isChessComBoardUrl(url) {
     return /chess\.com\/(game|play\/online|live|analysis\/game|events)/i.test(url);
   }
+  var TOP_ZONE_SELECTORS = [
+    "#board-layout-player-top",
+    "#board-layout-top",
+    ".board-layout-player-top",
+    ".board-layout-top",
+    ".player-component.player-top",
+    ".player-top",
+    "#top-player",
+    "#topPlayer"
+  ];
+  var BOTTOM_ZONE_SELECTORS = [
+    "#board-layout-player-bottom",
+    "#board-layout-bottom",
+    ".board-layout-player-bottom",
+    ".board-layout-bottom",
+    ".player-component.player-bottom",
+    ".player-bottom",
+    "#bottom-player",
+    "#bottomPlayer"
+  ];
   var ChessComOpponentDetector = class {
     onContextChange;
     onMatchLeft;
@@ -158,7 +201,7 @@
           this.lastSignature = "";
         }
         this.evaluateDom();
-      }, 650);
+      }, 600);
       setTimeout(() => this.evaluateDom(), 150);
     }
     stop() {
@@ -183,81 +226,125 @@
     hasBoardOnPage() {
       if (isChessComBoardUrl(window.location.href)) return true;
       return !!document.querySelector(
-        "wc-chess-board, chess-board, #board-layout-main, .board-layout-main, #board-layout-player-top, .board-layout-top"
+        "wc-chess-board, chess-board, #board-layout-main, .board-layout-main, #board-layout-player-top, .board-layout-top, .player-component.player-top"
       );
+    }
+    getLoggedInUsername() {
+      const notif = document.getElementById("notifications-request");
+      const fromNotif = sanitizeChessUsername(notif?.getAttribute("username"));
+      if (fromNotif) return fromNotif;
+      const profileNav = document.querySelector(
+        'a[data-nav-link="profile"][href*="/member/"], .nav-link-profile[href*="/member/"]'
+      );
+      if (profileNav) {
+        const m = (profileNav.getAttribute("href") || "").match(/\/member\/([^/?#]+)/i);
+        if (m?.[1]) {
+          const s = sanitizeChessUsername(decodeURIComponent(m[1]));
+          if (s) return s;
+        }
+      }
+      return null;
+    }
+    extractCleanTextWithoutDecorations(root) {
+      if (root instanceof Element) {
+        const clone = root.cloneNode(true);
+        clone.querySelectorAll(
+          '.chess-sentinel-inline-pill, [class*="rating"], [class*="title"], [class*="flair"], [class*="country"], [class*="clock"]'
+        ).forEach((n) => n.remove());
+        return clone.textContent || "";
+      }
+      return root.textContent || "";
+    }
+    extractUsernameFromHref(href) {
+      if (!href) return null;
+      const m = href.match(/\/member\/([^/?#]+)/i);
+      if (!m?.[1]) return null;
+      try {
+        return sanitizeChessUsername(decodeURIComponent(m[1]));
+      } catch {
+        return sanitizeChessUsername(m[1]);
+      }
     }
     extractNameFromElement(el) {
       if (!el) return null;
-      if (el.shadowRoot) {
-        const shadowLink = el.shadowRoot.querySelector('a[href*="/member/"]');
-        if (shadowLink) {
-          const m = (shadowLink.getAttribute("href") || "").match(/\/member\/([^/?#]+)/i);
-          const s = sanitizeChessUsername(m?.[1]);
-          if (s) return s;
-        }
-        const shadowUser = el.shadowRoot.querySelector(
-          '[data-test-element="user-tagline-username"], [class*="username"]'
-        );
-        if (shadowUser) {
-          const s = sanitizeChessUsername(shadowUser.textContent);
-          if (s) return s;
-        }
-      }
-      if (el.tagName === "A") {
-        const m = (el.getAttribute("href") || "").match(/\/member\/([^/?#]+)/i);
-        const s = sanitizeChessUsername(m?.[1]);
-        if (s) return s;
-      }
-      const nestedMemberLink = el.querySelector('a[href*="/member/"]');
-      if (nestedMemberLink) {
-        const m = (nestedMemberLink.getAttribute("href") || "").match(/\/member\/([^/?#]+)/i);
-        const s = sanitizeChessUsername(m?.[1]);
-        if (s) return s;
-      }
       const attrName = el.getAttribute("username") || el.getAttribute("data-username") || el.getAttribute("data-player-username");
       if (attrName) {
         const s = sanitizeChessUsername(attrName);
         if (s) return s;
       }
-      const nestedUser = el.querySelector(
-        '[data-test-element="user-tagline-username"], .cc-user-username-component, .user-tagline-username, .user-tagline-compact-username, [class*="username"]'
-      );
-      if (nestedUser) {
-        const s = sanitizeChessUsername(nestedUser.textContent);
+      if (el.tagName === "A") {
+        const s = this.extractUsernameFromHref(el.getAttribute("href"));
         if (s) return s;
       }
-      return sanitizeChessUsername(el.textContent);
+      const nestedMemberLink = el.querySelector('a[href*="/member/"]');
+      if (nestedMemberLink) {
+        const s = this.extractUsernameFromHref(nestedMemberLink.getAttribute("href"));
+        if (s) return s;
+      }
+      if (el.shadowRoot) {
+        const shadowLink = el.shadowRoot.querySelector('a[href*="/member/"]');
+        if (shadowLink) {
+          const s = this.extractUsernameFromHref(shadowLink.getAttribute("href"));
+          if (s) return s;
+        }
+        const shadowUser = el.shadowRoot.querySelector(
+          '[data-test-element="user-tagline-username"], .cc-user-username-component, [class*="username"]:not([class*="rating"]):not([class*="title"])'
+        );
+        if (shadowUser) {
+          const s = sanitizeChessUsername(this.extractCleanTextWithoutDecorations(shadowUser));
+          if (s) return s;
+        }
+        const sRoot = sanitizeChessUsername(this.extractCleanTextWithoutDecorations(el.shadowRoot));
+        if (sRoot) return sRoot;
+      }
+      const nestedUser = el.querySelector(
+        '[data-test-element="user-tagline-username"], .cc-user-username-component, .user-tagline-username, .user-tagline-compact-username, [class*="username"]:not([class*="rating"]):not([class*="title"])'
+      );
+      if (nestedUser) {
+        const s = sanitizeChessUsername(this.extractCleanTextWithoutDecorations(nestedUser));
+        if (s) return s;
+      }
+      return sanitizeChessUsername(this.extractCleanTextWithoutDecorations(el));
     }
-    extractZonePlayer(zoneSelector) {
-      const zone = document.querySelector(zoneSelector);
-      if (!zone) return null;
-      const candidateSelectors = [
-        "cc-user-username-component",
-        '[data-test-element="user-tagline-username"]',
-        ".cc-user-username-component",
-        ".user-tagline-username",
-        ".user-tagline-compact-username",
-        'a[href*="/member/"]',
-        '[class*="username"]'
-      ];
-      for (const sel of candidateSelectors) {
-        const el = zone.querySelector(sel);
-        const name = this.extractNameFromElement(el);
-        if (name) return name;
+    extractZonePlayer(zoneSelectors) {
+      for (const zSel of zoneSelectors) {
+        const zone = document.querySelector(zSel);
+        if (!zone) continue;
+        const candidateSelectors = [
+          'a[href*="/member/"]',
+          "cc-user-username-component",
+          '[data-test-element="user-tagline-username"]',
+          ".cc-user-username-component",
+          ".user-username-component.user-tagline-username",
+          ".user-tagline-username",
+          ".user-tagline-compact-username",
+          "[data-username]",
+          "[data-player-username]",
+          '[class*="username"]:not([class*="rating"]):not([class*="title"])'
+        ];
+        for (const sel of candidateSelectors) {
+          const els = zone.querySelectorAll(sel);
+          for (const el of Array.from(els)) {
+            if (el.closest(".chess-sentinel-inline-pill")) continue;
+            const name = this.extractNameFromElement(el);
+            if (name) return name;
+          }
+        }
       }
       return null;
     }
     extractPlayers() {
-      let topPlayer = this.extractZonePlayer("#board-layout-player-top") || this.extractZonePlayer("#board-layout-top") || this.extractZonePlayer(".board-layout-player-top") || this.extractZonePlayer(".board-layout-top");
-      let bottomPlayer = this.extractZonePlayer("#board-layout-player-bottom") || this.extractZonePlayer("#board-layout-bottom") || this.extractZonePlayer(".board-layout-player-bottom") || this.extractZonePlayer(".board-layout-bottom");
+      let topPlayer = this.extractZonePlayer(TOP_ZONE_SELECTORS);
+      let bottomPlayer = this.extractZonePlayer(BOTTOM_ZONE_SELECTORS);
       if (!topPlayer || !bottomPlayer) {
         const candidates = Array.from(
           document.querySelectorAll(
-            'cc-user-username-component, [data-test-element="user-tagline-username"], .user-tagline-username, .user-tagline-compact-username'
+            'cc-user-username-component, [data-test-element="user-tagline-username"], .cc-user-username-component, .user-tagline-username, .user-tagline-compact-username'
           )
         ).filter((el) => {
+          if (el.closest(".chess-sentinel-inline-pill")) return false;
           const rect = el.getBoundingClientRect();
-          return rect.width > 10 && rect.height > 6 && rect.top >= 0 && rect.top < window.innerHeight;
+          return rect.width > 8 && rect.height > 6 && rect.top >= 0 && rect.top < window.innerHeight;
         }).sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
         const names = [];
         for (const el of candidates) {
@@ -291,7 +378,7 @@
         return "rapid";
       }
       const clockEl = document.querySelector(
-        "#board-layout-player-top .clock-time-monospace, .board-layout-top .clock-time-monospace, .clock-component"
+        "#board-layout-player-top .clock-time-monospace, .board-layout-top .clock-time-monospace, .player-top .clock-time-monospace, .clock-component"
       );
       if (clockEl) {
         const txt = (clockEl.textContent || "").trim();
@@ -324,17 +411,24 @@
         return;
       }
       const { topPlayer, bottomPlayer } = this.extractPlayers();
-      const opponent = topPlayer;
+      const loggedIn = this.getLoggedInUsername()?.toLowerCase();
+      let opponent = topPlayer;
+      let opponentSide = "top";
+      if (loggedIn && topPlayer && bottomPlayer && topPlayer.toLowerCase() === loggedIn && bottomPlayer.toLowerCase() !== loggedIn) {
+        opponent = bottomPlayer;
+        opponentSide = "bottom";
+      }
       if (!opponent) return;
       const detectedFormat = this.detectActiveFormat();
       const isAbortWindowOpen = this.detectAbortWindow();
-      const sig = `${opponent.toLowerCase()}|${(bottomPlayer || "").toLowerCase()}|${isAbortWindowOpen ? "1" : "0"}`;
+      const sig = `${opponent.toLowerCase()}|${opponentSide}|${(bottomPlayer || "").toLowerCase()}|${isAbortWindowOpen ? "1" : "0"}`;
       if (sig === this.lastSignature) return;
       this.lastSignature = sig;
       this.onContextChange({
         topPlayer,
         bottomPlayer,
         opponent,
+        opponentSide,
         detectedFormat,
         isAbortWindowOpen,
         url: window.location.href
@@ -1764,21 +1858,34 @@
       "#board-layout-player-top .user-tagline-component",
       "#board-layout-top .user-tagline-component",
       ".board-layout-top .user-tagline-component",
+      ".player-component.player-top .user-tagline-component",
+      ".player-top .user-tagline-component",
+      "#board-layout-player-top .cc-user-block",
+      ".player-top .cc-user-block",
       "#board-layout-player-top .user-tagline-compact-row",
       ".board-layout-top cc-user-username-component",
-      "#board-layout-player-top cc-user-username-component"
+      "#board-layout-player-top cc-user-username-component",
+      ".player-top cc-user-username-component"
     ] : [
       "#board-layout-player-bottom .user-tagline-component",
       "#board-layout-bottom .user-tagline-component",
       ".board-layout-bottom .user-tagline-component",
+      ".player-component.player-bottom .user-tagline-component",
+      ".player-bottom .user-tagline-component",
+      "#board-layout-player-bottom .cc-user-block",
+      ".player-bottom .cc-user-block",
       "#board-layout-player-bottom .user-tagline-compact-row",
       ".board-layout-bottom cc-user-username-component",
-      "#board-layout-player-bottom cc-user-username-component"
+      "#board-layout-player-bottom cc-user-username-component",
+      ".player-bottom cc-user-username-component"
     ];
     for (const sel of selectors) {
       const el = document.querySelector(sel);
       if (el) {
-        return el.tagName.toLowerCase() === "cc-user-username-component" ? el.parentElement || el : el;
+        if (el.tagName.toLowerCase() === "cc-user-username-component" || el.classList.contains("cc-user-username-component") || el.classList.contains("user-tagline-username")) {
+          return el.parentElement || el;
+        }
+        return el;
       }
     }
     return null;
@@ -1881,12 +1988,12 @@
       void this.analyzeTarget(candidate, this.lastCtx.detectedFormat, false);
     }
     handleMatchContext(ctx) {
-      const prevTop = this.lastCtx?.topPlayer?.toLowerCase();
+      const prevOpponent = this.lastCtx?.opponent?.toLowerCase();
       this.lastCtx = ctx;
-      if (ctx.topPlayer && ctx.topPlayer.toLowerCase() !== prevTop) {
-        this.targetSide = "top";
+      if (ctx.opponent.toLowerCase() !== prevOpponent) {
+        this.targetSide = ctx.opponentSide;
       }
-      const target = this.targetSide === "bottom" && ctx.bottomPlayer ? ctx.bottomPlayer : ctx.opponent;
+      const target = this.targetSide === "bottom" ? ctx.bottomPlayer || ctx.opponent : ctx.topPlayer || ctx.opponent;
       this.hud?.setAbortWindow(ctx.isAbortWindowOpen);
       if (target.toLowerCase() !== this.activeUsername?.toLowerCase()) {
         void this.analyzeTarget(target, ctx.detectedFormat, false);

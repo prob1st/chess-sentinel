@@ -57,25 +57,41 @@ function findPlayerAnchorContainer(targetSide: 'top' | 'bottom'): Element | null
           '#board-layout-player-top .user-tagline-component',
           '#board-layout-top .user-tagline-component',
           '.board-layout-top .user-tagline-component',
+          '.player-component.player-top .user-tagline-component',
+          '.player-top .user-tagline-component',
+          '#board-layout-player-top .cc-user-block',
+          '.player-top .cc-user-block',
           '#board-layout-player-top .user-tagline-compact-row',
           '.board-layout-top cc-user-username-component',
           '#board-layout-player-top cc-user-username-component',
+          '.player-top cc-user-username-component',
         ]
       : [
           '#board-layout-player-bottom .user-tagline-component',
           '#board-layout-bottom .user-tagline-component',
           '.board-layout-bottom .user-tagline-component',
+          '.player-component.player-bottom .user-tagline-component',
+          '.player-bottom .user-tagline-component',
+          '#board-layout-player-bottom .cc-user-block',
+          '.player-bottom .cc-user-block',
           '#board-layout-player-bottom .user-tagline-compact-row',
           '.board-layout-bottom cc-user-username-component',
           '#board-layout-player-bottom cc-user-username-component',
+          '.player-bottom cc-user-username-component',
         ];
 
   for (const sel of selectors) {
     const el = document.querySelector(sel);
     if (el) {
-      return el.tagName.toLowerCase() === 'cc-user-username-component'
-        ? el.parentElement || el
-        : el;
+      // Never append inside the username text element itself — always attach to its tagline row!
+      if (
+        el.tagName.toLowerCase() === 'cc-user-username-component' ||
+        el.classList.contains('cc-user-username-component') ||
+        el.classList.contains('user-tagline-username')
+      ) {
+        return el.parentElement || el;
+      }
+      return el;
     }
   }
   return null;

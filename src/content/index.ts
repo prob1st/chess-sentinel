@@ -76,16 +76,18 @@ class SentinelContentController {
   }
 
   private handleMatchContext(ctx: DetectedMatchContext): void {
-    const prevTop = this.lastCtx?.topPlayer?.toLowerCase();
+    const prevOpponent = this.lastCtx?.opponent?.toLowerCase();
     this.lastCtx = ctx;
 
-    // Reset side to 'top' whenever a brand-new opponent appears on top
-    if (ctx.topPlayer && ctx.topPlayer.toLowerCase() !== prevTop) {
-      this.targetSide = 'top';
+    // Reset target side to detected opponent side whenever a new opponent appears
+    if (ctx.opponent.toLowerCase() !== prevOpponent) {
+      this.targetSide = ctx.opponentSide;
     }
 
     const target =
-      this.targetSide === 'bottom' && ctx.bottomPlayer ? ctx.bottomPlayer : ctx.opponent;
+      this.targetSide === 'bottom'
+        ? ctx.bottomPlayer || ctx.opponent
+        : ctx.topPlayer || ctx.opponent;
 
     this.hud?.setAbortWindow(ctx.isAbortWindowOpen);
 
