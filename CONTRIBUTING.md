@@ -5,7 +5,7 @@ Contributions, empirical threshold refinements, and Chess.com DOM selector updat
 ## Quick Development Setup
 
 ```bash
-git clone https://github.com/fatihmehmettezcan5-ops/chess-sentinel.git
+git clone https://github.com/prob1st/chess-sentinel.git
 cd chess-sentinel
 npm install
 

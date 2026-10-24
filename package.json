@@ -4,10 +4,10 @@
   "description": "Real-time Opponent Cheat Probability & Fair-Play Forensic HUD for Chess.com (Manifest V3)",
   "type": "module",
   "license": "MIT",
-  "author": "fatihmehmettezcan5-ops",
+  "author": "prob1st",
   "repository": {
     "type": "git",
-    "url": "https://github.com/fatihmehmettezcan5-ops/chess-sentinel.git"
+    "url": "https://github.com/prob1st/chess-sentinel.git"
   },
   "keywords": [
     "chess",

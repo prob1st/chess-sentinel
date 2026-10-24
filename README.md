@@ -4,8 +4,8 @@
 
 <br />
 
-[![CI Status](https://github.com/fatihmehmettezcan5-ops/chess-sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/fatihmehmettezcan5-ops/chess-sentinel/actions)
-[![Release](https://img.shields.io/github/v/release/fatihmehmettezcan5-ops/chess-sentinel?color=10b981&label=Latest%20Release)](https://github.com/fatihmehmettezcan5-ops/chess-sentinel/releases)
+[![CI Status](https://github.com/prob1st/chess-sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/prob1st/chess-sentinel/actions)
+[![Release](https://img.shields.io/github/v/release/prob1st/chess-sentinel?color=10b981&label=Latest%20Release)](https://github.com/prob1st/chess-sentinel/releases)
 [![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-38bdf8?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/develop/migrate/what-is-mv3)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7%20Strict-3178c6?logo=typescript&logoColor=white)](./tsconfig.json)
 [![Zero Telemetry](https://img.shields.io/badge/Privacy-100%25%20Local%20%2F%20Zero%20Tracking-10b981)](./PRIVACY.md)
@@ -46,7 +46,7 @@ Older Chess.com opponent-risk extensions stopped working in 2025–2026 due to f
 Works out of the box on **Google Chrome, Brave, Microsoft Edge, Arc, Opera, and Vivaldi**.
 
 ### Option A — Instant Install from Releases (No Node.js Required)
-1. Download **`chess-sentinel-v1.0.1-chrome.zip`** from [**GitHub Releases**](https://github.com/fatihmehmettezcan5-ops/chess-sentinel/releases/latest) and extract the folder. *(Alternatively, clone this repo—the pre-built `./extension` folder is included ready-to-load!)*
+1. Download **`chess-sentinel-v1.0.1-chrome.zip`** from [**GitHub Releases**](https://github.com/prob1st/chess-sentinel/releases/latest) and extract the folder. *(Alternatively, clone this repo—the pre-built `./extension` folder is included ready-to-load!)*
 2. Open `chrome://extensions` in your browser.
 3. Toggle **Developer mode** ON in the top-right corner.
 4. Click **Load unpacked** and select the extracted folder (or the `extension/` folder inside this repository).
@@ -54,7 +54,7 @@ Works out of the box on **Google Chrome, Brave, Microsoft Edge, Arc, Opera, and 
 
 ### Option B — Build & Verify from Source (Developers)
 ```bash
-git clone https://github.com/fatihmehmettezcan5-ops/chess-sentinel.git
+git clone https://github.com/prob1st/chess-sentinel.git
 cd chess-sentinel
 npm install
 
@@ -100,7 +100,7 @@ Chess Sentinel computes a composite **Cheat Probability (`0% – 100%`)** by fus
 - **Tek Tıkla Çift Dil (`TR` / `EN`):** Hem sayfa içi HUD pop-up üzerinden hem de araç çubuğu menüsünden Türkçe ve İngilizce arasında anında geçiş yapabilirsiniz.
 
 ### 🚀 Kurulum (30 Saniye)
-1. Sağ taraftaki [**Releases**](https://github.com/fatihmehmettezcan5-ops/chess-sentinel/releases/latest) bölümünden **`chess-sentinel-v1.0.1-chrome.zip`** dosyasını indirin ve klasöre çıkartın *(veya bu repoyu klonlayın; hazır derlenmiş `extension/` klasörü doğrudan içindedir)*.
+1. Sağ taraftaki [**Releases**](https://github.com/prob1st/chess-sentinel/releases/latest) bölümünden **`chess-sentinel-v1.0.1-chrome.zip`** dosyasını indirin ve klasöre çıkartın *(veya bu repoyu klonlayın; hazır derlenmiş `extension/` klasörü doğrudan içindedir)*.
 2. Tarayıcınızda (Chrome, Brave, Edge, Opera) adres çubuğuna `chrome://extensions` yazıp açın.
 3. Sağ üst köşedeki **Geliştirici modu (Developer mode)** anahtarını açın.
 4. Sol üstteki **Paketlenmemiş öğe yükle (Load unpacked)** butonuna tıklayın ve çıkarttığınız klasörü (veya `extension` klasörünü) seçin.
