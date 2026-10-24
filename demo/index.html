@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chess Sentinel — Canlı Chess.com HUD Önizleme & Test Sahnesi</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        min-height: 100vh;
+        background: radial-gradient(circle at 20% 10%, #1b241c 0%, #14171a 55%, #0b0e13 100%);
+        color: #f1f5f9;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        display: flex;
+        flex-direction: column;
+      }
+      .demo-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 12px 22px;
+        background: rgba(11, 15, 25, 0.9);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(12px);
+      }
+      .demo-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+        font-weight: 800;
+      }
+      .demo-badge {
+        padding: 3px 8px;
+        border-radius: 99px;
+        font-size: 10.5px;
+        font-weight: 800;
+        background: rgba(16, 185, 129, 0.16);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, 0.35);
+      }
+      .controls-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .preset-btn {
+        appearance: none;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.05);
+        color: #cbd5e1;
+        padding: 7px 11px;
+        border-radius: 8px;
+        font-size: 11.5px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .preset-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+      }
+      .preset-btn.active {
+        background: rgba(56, 189, 248, 0.16);
+        border-color: rgba(56, 189, 248, 0.5);
+        color: #38bdf8;
+      }
+      .lookup-form {
+        display: flex;
+        gap: 6px;
+      }
+      .lookup-input {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 8px;
+        padding: 6px 10px;
+        color: #fff;
+        font-size: 12px;
+        width: 195px;
+        outline: none;
+      }
+      .lookup-input:focus {
+        border-color: #38bdf8;
+      }
+      .lookup-submit {
+        background: linear-gradient(135deg, #10b981, #0ea5e9);
+        border: none;
+        color: #03151e;
+        font-weight: 800;
+        font-size: 11.5px;
+        padding: 0 12px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .stage {
+        flex: 1;
+        display: flex;
+        padding: 26px 32px;
+        gap: 28px;
+        align-items: flex-start;
+      }
+      /* Simulated Chess.com Live Board Area */
+      #board-layout-main {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        width: 480px;
+        max-width: 100%;
+      }
+      .player-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 12px;
+        background: rgba(25, 28, 34, 0.92);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+      }
+      .user-tagline-component {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .avatar-box {
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        background: #27303f;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        color: #cbd5e1;
+      }
+      .cc-title {
+        background: #b91c1c;
+        color: #fff;
+        font-size: 10px;
+        font-weight: 800;
+        padding: 1px 5px;
+        border-radius: 3px;
+        display: none;
+      }
+      .user-tagline-username {
+        font-weight: 700;
+        font-size: 14px;
+        color: #f8fafc;
+      }
+      .elo-txt {
+        color: #94a3b8;
+        font-size: 13px;
+      }
+      .clock-component {
+        background: #1f242d;
+        color: #e2e8f0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-weight: 800;
+        font-size: 16px;
+        padding: 5px 11px;
+        border-radius: 6px;
+        border: 1px solid rgba(255,255,255,0.08);
+      }
+      .chessboard-grid {
+        width: 480px;
+        height: 480px;
+        border-radius: 8px;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: repeat(8, 1fr);
+        grid-template-rows: repeat(8, 1fr);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+        border: 2px solid rgba(255, 255, 255, 0.08);
+      }
+      .sq {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 38px;
+        user-select: none;
+      }
+      .sq.light { background: #ebecd0; color: #1e293b; }
+      .sq.dark { background: #739552; color: #1e293b; }
+      .piece-w {
+        color: #ffffff;
+        text-shadow: 0 2px 3px rgba(0,0,0,0.65), 0 0 1px #000;
+      }
+      .piece-b {
+        color: #18181b;
+        text-shadow: 0 1px 1px rgba(255,255,255,0.35);
+      }
+      .hint-box {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #94a3b8;
+        line-height: 1.5;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        padding: 10px 13px;
+        border-radius: 9px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="demo-topbar">
+      <div class="demo-title">
+        <span>🛡️ Chess Sentinel</span>
+        <span class="demo-badge">CANLI ÖNİZLEME • GERÇEK CHESS.COM API</span>
+      </div>
+      <div class="controls-bar">
+        <button class="preset-btn active" data-preset="1" data-user="sumitgm000" data-mode="preban_cheater">
+          🚨 Şüpheli Rakip (%89)
+        </button>
+        <button class="preset-btn" data-preset="2" data-user="chessleopard1969" data-mode="normal">
+          ✅ Dürüst Oyuncu (%3)
+        </button>
+        <button class="preset-btn" data-preset="3" data-user="gothamchess" data-mode="normal">
+          👑 IM GothamChess (%11)
+        </button>
+        <button class="preset-btn" data-preset="4" data-user="sumitgm000" data-mode="normal">
+          ⛔ Banlı Hileci (%100)
+        </button>
+        <form class="lookup-form" id="live-lookup-form">
+          <input class="lookup-input" id="live-lookup-input" type="text" placeholder="Herhangi bir Chess.com üyesi..." />
+          <button class="lookup-submit" type="submit">Canlı Test Et</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div id="board-layout-main">
+        <!-- Opponent Top Bar (exact Chess.com DOM classes so Inline Badge injects natively!) -->
+        <div id="board-layout-player-top" class="player-bar">
+          <div class="user-tagline-component">
+            <div id="top-avatar-box" class="avatar-box">S</div>
+            <span id="top-title-pill" class="cc-title">GM</span>
+            <span id="top-username-txt" class="user-tagline-username">sumitgm000</span>
+            <span id="top-elo-txt" class="elo-txt">(2385)</span>
+          </div>
+          <div class="clock-component">10:00</div>
+        </div>
+
+        <div class="chessboard-grid" id="mock-board"></div>
+
+        <!-- Self Bottom Bar -->
+        <div id="board-layout-player-bottom" class="player-bar">
+          <div class="user-tagline-component">
+            <div class="avatar-box">Y</div>
+            <span class="user-tagline-username">chessleopard1969</span>
+            <span class="elo-txt">(2045)</span>
+          </div>
+          <div class="clock-component">10:00</div>
+        </div>
+
+        <div class="hint-box">
+          <div id="demo-status" style="color:#38bdf8;font-weight:700;margin-bottom:3px">Hazır</div>
+          Sağdaki <strong>Chess Sentinel HUD Pop-up</strong> kartını fareyle istediğiniz yere sürükleyebilir, <strong>TR / EN</strong> dilini tek tıkla değiştirebilir, rakip isminin yanındaki mini rozete tıklayabilir veya yukarıdan gerçek bir Chess.com kullanıcı adı yazarak canlı test edebilirsiniz. (Kısayol: <code>Alt + S</code>)
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Render starting chess position on the mock Chess.com board
+      const initialRows = [
+        ['♜','♞','♝','♛','♚','♝','♞','♜'],
+        ['♟','♟','♟','♟','♟','♟','♟','♟'],
+        ['','','','','','','',''],
+        ['','','','','','','',''],
+        ['','','','','♙','','',''],
+        ['','','','','','','',''],
+        ['♙','♙','♙','♙','','♙','♙','♙'],
+        ['♖','♘','♗','♕','♔','♗','♘','♖'],
+      ];
+      const board = document.getElementById('mock-board');
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const sq = document.createElement('div');
+          sq.className = 'sq ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
+          const p = initialRows[r][c];
+          if (p) {
+            const sp = document.createElement('span');
+            sp.className = r < 2 ? 'piece-b' : 'piece-w';
+            sp.textContent = p;
+            sq.appendChild(sp);
+          }
+          board.appendChild(sq);
+        }
+      }
+    </script>
+    <script type="module" src="/bundle.js"></script>
+  </body>
+</html>

@@ -1,0 +1,38 @@
+{
+  "name": "chess-sentinel",
+  "version": "1.0.0",
+  "description": "Real-time Opponent Cheat Probability & Fair-Play Forensic HUD for Chess.com (Manifest V3)",
+  "type": "module",
+  "license": "MIT",
+  "author": "fatihmehmettezcan5-ops",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fatihmehmettezcan5-ops/chess-sentinel.git"
+  },
+  "keywords": [
+    "chess",
+    "chess.com",
+    "anti-cheat",
+    "fair-play",
+    "chrome-extension",
+    "manifest-v3",
+    "cheat-detection",
+    "caps2",
+    "pgn-analysis"
+  ],
+  "scripts": {
+    "generate:icons": "node scripts/generate-icons.mjs",
+    "build": "node scripts/generate-icons.mjs && node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "package": "npm run build && node scripts/package-zip.mjs",
+    "demo": "node scripts/dev-server.mjs"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+coverage/
+*.zip
+*.log
+.DS_Store
+demo/bundle.js

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 260" width="1080" height="260">
+  <rect width="1080" height="260" rx="18" fill="#090d16" stroke="rgba(255,255,255,0.09)"/>
+  <g font-family="Inter, system-ui, sans-serif">
+    <!-- Node 1 -->
+    <rect x="28" y="44" width="225" height="172" rx="14" fill="#0f172a" stroke="rgba(56,189,248,0.35)"/>
+    <text x="46" y="76" fill="#38bdf8" font-size="11" font-weight="800" letter-spacing="1">1. DOM &amp; SPA DETECTOR</text>
+    <text x="46" y="102" fill="#e2e8f0" font-size="13" font-weight="700">Chess.com 2026 Watcher</text>
+    <text x="46" y="128" fill="#94a3b8" font-size="11.5">• Web Component ShadowRoot</text>
+    <text x="46" y="148" fill="#94a3b8" font-size="11.5">• /game/* &amp; /play/online SPA</text>
+    <text x="46" y="168" fill="#94a3b8" font-size="11.5">• Active Clock Speed &amp; Abort</text>
+    <text x="46" y="188" fill="#94a3b8" font-size="11.5">• Zero Board Interference</text>
+
+    <path d="M258 130 L292 130" stroke="#38bdf8" stroke-width="2" stroke-dasharray="4 3"/>
+
+    <!-- Node 2 -->
+    <rect x="298" y="44" width="235" height="172" rx="14" fill="#0f172a" stroke="rgba(16,185,129,0.35)"/>
+    <text x="316" y="76" fill="#10b981" font-size="11" font-weight="800" letter-spacing="1">2. SERIAL PUBAPI CLIENT</text>
+    <text x="316" y="102" fill="#e2e8f0" font-size="13" font-weight="700">Resilient Data Harvester</text>
+    <text x="316" y="128" fill="#94a3b8" font-size="11.5">• /pub/player &amp; /stats</text>
+    <text x="316" y="148" fill="#94a3b8" font-size="11.5">• Monthly PGN [%clk] Archives</text>
+    <text x="316" y="168" fill="#94a3b8" font-size="11.5">• Auto-Fallback on HTTP 500</text>
+    <text x="316" y="188" fill="#94a3b8" font-size="11.5">• 5-Min Smart LRU Cache</text>
+
+    <path d="M538 130 L572 130" stroke="#10b981" stroke-width="2" stroke-dasharray="4 3"/>
+
+    <!-- Node 3 -->
+    <rect x="578" y="44" width="245" height="172" rx="14" fill="#0f172a" stroke="rgba(245,158,11,0.4)"/>
+    <text x="596" y="76" fill="#f59e0b" font-size="11" font-weight="800" letter-spacing="1">3. BAYESIAN ENGINE</text>
+    <text x="596" y="102" fill="#e2e8f0" font-size="13" font-weight="700">6-Signal Forensic Model</text>
+    <text x="596" y="128" fill="#94a3b8" font-size="11.5">• Recent &amp; Lifetime Glicko WR</text>
+    <text x="596" y="148" fill="#94a3b8" font-size="11.5">• CAPS2 vs Elo Band Excess</text>
+    <text x="596" y="168" fill="#94a3b8" font-size="11.5">• PGN [%clk] Metronome &amp; Toggle</text>
+    <text x="596" y="188" fill="#94a3b8" font-size="11.5">• FIDE Title &amp; FairPlay Check</text>
+
+    <path d="M828 130 L862 130" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4 3"/>
+
+    <!-- Node 4 -->
+    <rect x="868" y="44" width="184" height="172" rx="14" fill="#0f172a" stroke="rgba(239,68,68,0.4)"/>
+    <text x="886" y="76" fill="#f87171" font-size="11" font-weight="800" letter-spacing="1">4. SHADOW HUD</text>
+    <text x="886" y="102" fill="#e2e8f0" font-size="13" font-weight="700">Live Overlay + Badge</text>
+    <text x="886" y="128" fill="#94a3b8" font-size="11.5">• Floating Glass HUD</text>
+    <text x="886" y="148" fill="#94a3b8" font-size="11.5">• Inline % Name Pill</text>
+    <text x="886" y="168" fill="#94a3b8" font-size="11.5">• Ban Watchlist Alarm</text>
+    <text x="886" y="188" fill="#94a3b8" font-size="11.5">• Instant TR / EN UI</text>
+  </g>
+</svg>
