@@ -46,7 +46,7 @@ Older Chess.com opponent-risk extensions stopped working in 2025–2026 due to f
 Works out of the box on **Google Chrome, Brave, Microsoft Edge, Arc, Opera, and Vivaldi**.
 
 ### Option A — Instant Install from Releases (No Node.js Required)
-1. Download **`chess-sentinel-v2.0.0-chrome.zip`** from [**GitHub Releases**](https://github.com/prob1st/chess-sentinel/releases/latest) and extract the folder. *(Alternatively, clone this repo—the pre-built `./extension` folder is included ready-to-load!)*
+1. Download **`chess-sentinel-v2.0.1-chrome.zip`** from [**GitHub Releases**](https://github.com/prob1st/chess-sentinel/releases/latest) and extract the folder. *(Alternatively, clone this repo—the pre-built `./extension` folder is included ready-to-load!)*
 2. Open `chrome://extensions` in your browser.
 3. Toggle **Developer mode** ON in the top-right corner.
 4. Click **Load unpacked** and select the extracted folder (or the `extension/` folder inside this repository).
@@ -98,7 +98,7 @@ Chess Sentinel v2.0 replaces naive linear heuristics with a **4-Pillar Bayesian 
 - **Tek Tıkla Çift Dil (`TR` / `EN`):** Hem sayfa içi HUD pop-up üzerinden hem de araç çubuğu menüsünden Türkçe ve İngilizce arasında anında geçiş yapabilirsiniz.
 
 ### 🚀 Kurulum (30 Saniye)
-1. Sağ taraftaki [**Releases**](https://github.com/prob1st/chess-sentinel/releases/latest) bölümünden **`chess-sentinel-v2.0.0-chrome.zip`** dosyasını indirin ve klasöre çıkartın *(veya bu repoyu klonlayın; hazır derlenmiş `extension/` klasörü doğrudan içindedir)*.
+1. Sağ taraftaki [**Releases**](https://github.com/prob1st/chess-sentinel/releases/latest) bölümünden **`chess-sentinel-v2.0.1-chrome.zip`** dosyasını indirin ve klasöre çıkartın *(veya bu repoyu klonlayın; hazır derlenmiş `extension/` klasörü doğrudan içindedir)*.
 2. Tarayıcınızda (Chrome, Brave, Edge, Opera) adres çubuğuna `chrome://extensions` yazıp açın.
 3. Sağ üst köşedeki **Geliştirici modu (Developer mode)** anahtarını açın.
 4. Sol üstteki **Paketlenmemiş öğe yükle (Load unpacked)** butonuna tıklayın ve çıkarttığınız klasörü (veya `extension` klasörünü) seçin.
@@ -115,6 +115,15 @@ Chess Sentinel v2.0 replaces naive linear heuristics with a **4-Pillar Bayesian 
 | **`⇅` Button** | Swap analysis between Top Player (Opponent) and Bottom Player (Self) |
 | **`👁` Button** | Add / remove player from the Fair-Play Ban Watchlist |
 | **`TR / EN` Button** | Switch HUD & inline badge language instantaneously |
+
+---
+
+## 🏪 Chrome Web Store Submission Kit
+
+Ready to publish directly to the Google Chrome Web Store? This repository ships with:
+- **CWS-Hardened Manifest V3 (`v2.0.1`)**: Multi-locale `_locales/en` & `_locales/tr` (`≤132`-char descriptions), explicit narrowed host permissions, and zero remote code.
+- **24-bit RGB Store Graphics (`./store-assets/`)**: Pre-rendered `1280x800` screenshots, `440x280` small promo tile, and `1400x560` marquee banner (strict no-alpha PNG24).
+- **Copy-Paste Submission & Privacy Guide**: See [**CHROME_WEB_STORE_GUIDE.md**](./CHROME_WEB_STORE_GUIDE.md) + automated CI/CD workflow (`.github/workflows/chrome-web-store.yml`).
 
 ---
 

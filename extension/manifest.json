@@ -1,9 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "Chess Sentinel — Cheat Probability & Fair-Play HUD",
-  "short_name": "Chess Sentinel",
-  "version": "2.0.0",
-  "description": "Real-time opponent cheat probability (%), PGN move-pacing forensics, CAPS2 accuracy telemetry & ban watchlist for Chess.com.",
+  "name": "__MSG_extName__",
+  "short_name": "__MSG_extShortName__",
+  "version": "2.0.1",
+  "default_locale": "en",
+  "description": "__MSG_extDescription__",
+  "homepage_url": "https://github.com/prob1st/chess-sentinel",
+  "minimum_chrome_version": "116",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -25,7 +28,8 @@
     "alarms"
   ],
   "host_permissions": [
-    "https://*.chess.com/*",
+    "https://www.chess.com/*",
+    "https://chess.com/*",
     "https://api.chess.com/*"
   ],
   "background": {

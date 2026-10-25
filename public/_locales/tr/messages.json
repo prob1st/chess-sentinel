@@ -1,0 +1,14 @@
+{
+  "extName": {
+    "message": "Chess Sentinel — Hile Olasılığı ve Adil Oyun Radarı",
+    "description": "Extension name in Turkish"
+  },
+  "extShortName": {
+    "message": "Chess Sentinel",
+    "description": "Short extension name"
+  },
+  "extDescription": {
+    "message": "Chess.com rakipleriniz için canlı % hile olasılığı, PGN hamle ritmi entropisi, CAPS2 doğruluk analizi ve ban takip listesi.",
+    "description": "Extension description in Turkish (max 132 chars)"
+  }
+}

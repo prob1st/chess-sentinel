@@ -12,6 +12,7 @@ fs.mkdirSync(path.join(OUT_DIR, 'icons'), { recursive: true });
 fs.copyFileSync(path.join(ROOT, 'public', 'manifest.json'), path.join(OUT_DIR, 'manifest.json'));
 fs.copyFileSync(path.join(ROOT, 'public', 'popup.html'), path.join(OUT_DIR, 'popup.html'));
 fs.copyFileSync(path.join(ROOT, 'src', 'popup', 'popup.css'), path.join(OUT_DIR, 'popup.css'));
+fs.cpSync(path.join(ROOT, 'public', '_locales'), path.join(OUT_DIR, '_locales'), { recursive: true });
 
 for (const size of [16, 32, 48, 128]) {
   fs.copyFileSync(
