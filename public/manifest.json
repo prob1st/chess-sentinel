@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Chess Sentinel — Cheat Probability & Fair-Play HUD",
   "short_name": "Chess Sentinel",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "description": "Real-time opponent cheat probability (%), PGN move-pacing forensics, CAPS2 accuracy telemetry & ban watchlist for Chess.com.",
   "icons": {
     "16": "icons/icon16.png",

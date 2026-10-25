@@ -105,6 +105,8 @@ export interface PacingGameMetrics {
   meanMoveSec: number;
   stdMoveSec: number;
   cv: number;
+  qcd: number; // Robust Quartile Coefficient of Dispersion (Q3-Q1)/(Q3+Q1)
+  entropyBits: number; // Shannon entropy across 7 log-time buckets (0 - 2.81 bits)
   fastMoveRatio: number;
   roboticBandRatio: number;
   isFlatline: boolean;
@@ -115,12 +117,15 @@ export interface PacingGameMetrics {
 export interface PacingSummary {
   gamesAnalyzed: number;
   medianCV: number | null;
+  medianQCD: number | null;
+  meanEntropyBits: number | null;
   minCV: number | null;
   meanFastMoveRatio: number | null;
   meanRoboticBandRatio: number | null;
   flatlineGames: number;
   flatlineRate: number;
   toggleGames: number;
+  isConfirmedHumanPacing: boolean;
   pacingScore: number; // 0-100
 }
 
@@ -153,6 +158,8 @@ export interface FormatTelemetry {
   highAccCeiling: number;
   highAccRate: number;
   reviewedGames: number;
+  eloZScore: number;
+  performanceRating: number | null;
   eloDelta7d: number | null;
   eloDelta30d: number | null;
   formatProbability: number;

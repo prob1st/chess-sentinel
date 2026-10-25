@@ -46,7 +46,7 @@ Older Chess.com opponent-risk extensions stopped working in 2025–2026 due to f
 Works out of the box on **Google Chrome, Brave, Microsoft Edge, Arc, Opera, and Vivaldi**.
 
 ### Option A — Instant Install from Releases (No Node.js Required)
-1. Download **`chess-sentinel-v1.0.1-chrome.zip`** from [**GitHub Releases**](https://github.com/prob1st/chess-sentinel/releases/latest) and extract the folder. *(Alternatively, clone this repo—the pre-built `./extension` folder is included ready-to-load!)*
+1. Download **`chess-sentinel-v2.0.0-chrome.zip`** from [**GitHub Releases**](https://github.com/prob1st/chess-sentinel/releases/latest) and extract the folder. *(Alternatively, clone this repo—the pre-built `./extension` folder is included ready-to-load!)*
 2. Open `chrome://extensions` in your browser.
 3. Toggle **Developer mode** ON in the top-right corner.
 4. Click **Load unpacked** and select the extracted folder (or the `extension/` folder inside this repository).
@@ -66,18 +66,16 @@ npm run package
 
 ---
 
-## 🧬 The 6-Signal Bayesian Forensic Engine
+## 🧬 The v2.0 Bayesian Log-Odds & Anti-False-Positive Engine
 
-Chess Sentinel computes a composite **Cheat Probability (`0% – 100%`)** by fusing six orthogonal public signals from Chess.com's official Published-Data API:
+Chess Sentinel v2.0 replaces naive linear heuristics with a **4-Pillar Bayesian Log-Likelihood Ratio (`LLR`) Posterior Model** (`base prior p₀ ≈ 4.1%`) engineered specifically to eliminate false positives on honest players:
 
-| # | Forensic Signal | Base Weight | What It Measures |
-| :--- | :--- | :---: | :--- |
-| **1** | **Recent Win-Rate Anomaly (`RWR`)** | `25%` | Sample-weighted (`n / (n + 14)`) win-rate deviation above the 50% Glicko-2 equilibrium in recent rated games. |
-| **2** | **CAPS2 Accuracy Excess (`ACC`)** | `25%*` | Mean accuracy excess + ≥95th-percentile ceiling spikes calibrated per Elo band (`<800` to `2500+`) and speed (`Bullet`, `Blitz`, `Rapid`). *\*Dynamically redistributed if `<2` reviewed games exist.* |
-| **3** | **PGN `[%clk]` Move Pacing (`PACE`)** | `18%` | Non-scramble middlegame (moves 9–38) Coefficient of Variation ($\text{CV} = \sigma/\mu$), absence of human `<1.8s` recaptures, `[2.3s, 8.8s]` mechanical band density, and mid-game engine launch pauses. |
-| **4** | **Lifetime Glicko Deviation (`OWR`)** | `16%` | All-time format win-rate disequilibrium across total rated sample (`n / (n + 22)`). |
-| **5** | **Elo Surge Velocity (`VEL`)** | `8%` | 7-day & 30-day vertical rating climb ($\Delta R$) damped by Glicko Rating Deviation (`RD`), plus consecutive rated win streaks. |
-| **6** | **Account Trust & Smurf Prior (`TRUST`)** | `8%` | Account creation age (`joined`), high-Elo burner ratio, and massive Live-Elo vs. Tactics-Elo skill gaps (`Δ ≥ 900`). |
+| # | Orthogonal Pillar | Forensic Method & False-Positive Protection |
+| :--- | :--- | :--- |
+| **1** | **Elo-Adjusted Binomial Z-Score (`Z_Elo`)** | Evaluates every game against exact opponent Elo ($E_i = (1 + 10^{\Delta R/400})^{-1}$) with Laplace-Bayes shrinkage and Glicko `RD` damping—eliminating false positives from open arenas, custom friend matches, or provisional placement swings. |
+| **2** | **Bias-Corrected Long-Game CAPS2 (`ACC`)** | Filters out `<16`-move opening traps/miniatures (`<32 plies`) and applies **Free-Tier Survivorship Bias De-Skewing** when `<45%` of games are reviewed and skewed toward wins. |
+| **3** | **Chronometric Entropy & QCD (`PACE`)** | Computes **7-bin Logarithmic Shannon Entropy (`bits`)** + outlier-immune **Quartile Coefficient of Dispersion (`QCD = (Q3-Q1)/(Q3+Q1)`)** across non-scramble middlegame moves (`%clk`), plus strict multi-game Engine Toggle detection and Bullet clock-physics damping. |
+| **4** | **Corroboration Gate & Human Veto** | Confirmed organic human move-time entropy (`H ≥ 1.82 bits`, `CV ≥ 0.78`, `QCD ≥ 0.38`) applies negative exculpatory log-odds and caps uncorroborated hot streaks / hand-played smurfs (`≤42% Guarded`) so single-signal variance never triggers false Critical engine alarms. |
 
 ### Built-In Safeguards & Calibrations
 - **Confirmed Fair-Play Bans (`100%`):** Accounts with `status: "closed:fair_play_violations"` immediately trigger a `100% BANNED` alert.
@@ -100,7 +98,7 @@ Chess Sentinel computes a composite **Cheat Probability (`0% – 100%`)** by fus
 - **Tek Tıkla Çift Dil (`TR` / `EN`):** Hem sayfa içi HUD pop-up üzerinden hem de araç çubuğu menüsünden Türkçe ve İngilizce arasında anında geçiş yapabilirsiniz.
 
 ### 🚀 Kurulum (30 Saniye)
-1. Sağ taraftaki [**Releases**](https://github.com/prob1st/chess-sentinel/releases/latest) bölümünden **`chess-sentinel-v1.0.1-chrome.zip`** dosyasını indirin ve klasöre çıkartın *(veya bu repoyu klonlayın; hazır derlenmiş `extension/` klasörü doğrudan içindedir)*.
+1. Sağ taraftaki [**Releases**](https://github.com/prob1st/chess-sentinel/releases/latest) bölümünden **`chess-sentinel-v2.0.0-chrome.zip`** dosyasını indirin ve klasöre çıkartın *(veya bu repoyu klonlayın; hazır derlenmiş `extension/` klasörü doğrudan içindedir)*.
 2. Tarayıcınızda (Chrome, Brave, Edge, Opera) adres çubuğuna `chrome://extensions` yazıp açın.
 3. Sağ üst köşedeki **Geliştirici modu (Developer mode)** anahtarını açın.
 4. Sol üstteki **Paketlenmemiş öğe yükle (Load unpacked)** butonuna tıklayın ve çıkarttığınız klasörü (veya `extension` klasörünü) seçin.
