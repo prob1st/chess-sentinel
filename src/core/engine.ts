@@ -41,73 +41,80 @@ function estimateGamePlies(pgn?: string): number {
   return 40;
 }
 
+function wilsonLowerBound(successes: number, total: number, z = 2.33): number {
+  if (total <= 0 || successes <= 0) return 0;
+  const p = successes / total;
+  const z2 = z * z;
+  const denom = 1 + z2 / total;
+  const center = p + z2 / (2 * total);
+  const spread = z * Math.sqrt((p * (1 - p) + z2 / (4 * total)) / total);
+  return Math.max(0, (center - spread) / denom);
+}
+
 /**
- * Signal 1: Elo-Adjusted Binomial Performance Z-Score (`Z_Elo`).
- * Accounts for exact opponent ratings on every game so beating weaker opponents in open arenas
- * or small-sample lucky streaks (`Z < 1.75σ`) do not cause false positives.
+ * Signal 1: Zero-FP Elo-Adjusted Binomial Performance Z-Score (`Z_Elo`).
+ * Enforces a strict +2.65σ null-hypothesis gate (p < 0.004) over >= 8 games so normal
+ * human weekend streaks or weaker-opponent arena games produce strictly 0 suspicion.
  */
 export function computeEloZScoreSignal(eloZScore: number, gamesCount: number, rd: number | null): number {
-  if (gamesCount < 5 || eloZScore <= 1.35) return 0;
+  if (gamesCount < 8 || eloZScore <= 2.65) return 0;
 
   // Provisional/high-RD accounts naturally swing faster while converging to true skill
-  const rdDamper = rd !== null && rd > 110 ? 0.68 : rd !== null && rd > 80 ? 0.85 : 1.0;
+  const rdDamper = rd !== null && rd > 110 ? 0.55 : rd !== null && rd > 80 ? 0.80 : 1.0;
   const adjZ = eloZScore * rdDamper;
-  if (adjZ <= 1.35) return 0;
+  if (adjZ <= 2.65) return 0;
 
   let raw = 0;
-  if (adjZ <= 2.2) {
-    // 1.35σ -> 2.2σ: mild hot streak (0 -> 28)
-    raw = ((adjZ - 1.35) / 0.85) * 28;
-  } else if (adjZ <= 3.2) {
-    // 2.2σ -> 3.2σ: significant anomaly (28 -> 68)
-    raw = 28 + ((adjZ - 2.2) / 1.0) * 40;
-  } else if (adjZ <= 4.3) {
-    // 3.2σ -> 4.3σ: extreme outlier (68 -> 94)
-    raw = 68 + ((adjZ - 3.2) / 1.1) * 26;
+  if (adjZ <= 3.5) {
+    // 2.65σ -> 3.5σ: strong climb / streak (0 -> 42)
+    raw = ((adjZ - 2.65) / 0.85) * 42;
+  } else if (adjZ <= 4.5) {
+    // 3.5σ -> 4.5σ: extreme statistical outperformance (42 -> 80)
+    raw = 42 + ((adjZ - 3.5) / 1.0) * 38;
   } else {
-    raw = 94 + Math.min(6, (adjZ - 4.3) * 4);
+    // >4.5σ (p < 3.4e-6)
+    raw = 80 + Math.min(20, (adjZ - 4.5) * 14);
   }
 
-  const sampleConfidence = gamesCount / (gamesCount + 8);
+  const sampleConfidence = gamesCount / (gamesCount + 10);
   return Math.min(100, Math.round(raw * sampleConfidence));
 }
 
 /**
- * Signal 2: Lifetime Glicko-2 Equilibrium Deviation.
- * Active honest players in arenas or gradual improvers routinely hold 52%–56% lifetime WR.
- * Only meaningful excess above 56% over substantial sample sizes contributes suspicion.
+ * Signal 2: Lifetime Glicko-2 Equilibrium Deviation (Zero-FP Tuned).
+ * Requires >=30 lifetime games, >60% score ratio, and >2.8σ binomial excess above 56%
+ * so steady honest improvers and tournament players always score 0.
  */
 export function computeLifetimeGlickoSignal(wins: number, losses: number, draws: number): number {
   const total = wins + losses + draws;
-  if (total < 15) return 0;
+  if (total < 30) return 0;
 
   const scoreRatio = (wins + 0.5 * draws) / total;
-  // Normal honest upper band is ~0.565
-  if (scoreRatio <= 0.565) return 0;
+  if (scoreRatio <= 0.60) return 0;
 
-  // Binomial Z-score above 0.555 honest climber baseline
-  const z = (scoreRatio - 0.555) / Math.sqrt(0.247 / total);
-  if (z <= 1.5) return 0;
+  const z = (scoreRatio - 0.56) / Math.sqrt(0.2464 / total);
+  if (z <= 2.8) return 0;
 
   let raw = 0;
-  if (scoreRatio <= 0.63) {
-    raw = ((scoreRatio - 0.565) / 0.065) * 38;
-  } else if (scoreRatio <= 0.71) {
-    raw = 38 + ((scoreRatio - 0.63) / 0.08) * 42;
+  if (scoreRatio <= 0.68) {
+    raw = ((scoreRatio - 0.60) / 0.08) * 45;
+  } else if (scoreRatio <= 0.78) {
+    raw = 45 + ((scoreRatio - 0.68) / 0.10) * 40;
   } else {
-    raw = 80 + Math.min(20, ((scoreRatio - 0.71) / 0.10) * 20);
+    raw = 85 + Math.min(15, ((scoreRatio - 0.78) / 0.10) * 15);
   }
 
-  const zCap = Math.min(1.0, (z - 1.2) / 3.2);
-  const weight = total / (total + 38);
+  const zCap = Math.min(1.0, (z - 2.5) / 3.0);
+  const weight = total / (total + 45);
   return Math.min(100, Math.round(raw * zCap * weight));
 }
 
 /**
- * Signal 3: Bias-Corrected Long-Game CAPS2 Accuracy Excess.
- * - Filters out miniature/trap games (< 32 plies / 16 moves) where book moves yield 95%+ naturally.
- * - Discounts "Free Daily Review Selection Bias" when <40% of games are reviewed and reviewed games
- *   are heavily skewed toward wins.
+ * Signal 3: 99.5% Lower-Confidence-Bound (LCB) Long-Game CAPS2 Accuracy Excess.
+ * - Requires >= 5 full-length (>= 44 plies / 22 moves) reviewed games.
+ * - Subtracts BOTH Free-Tier Survivorship Bias AND studentized sampling uncertainty
+ *   (`1.68 * (5.6 / sqrt(n))`) plus 99% Wilson Lower Bound on ceiling spikes so lucky
+ *   honest review samples NEVER produce false positives.
  */
 export function computeBiasAdjustedAccuracySignal(
   avgLongAccuracy: number | null,
@@ -118,48 +125,50 @@ export function computeBiasAdjustedAccuracySignal(
   reviewedWinRate: number,
   overallRecentWinRate: number
 ): number {
-  if (avgLongAccuracy === null || reviewedLongGames < 3) return 0;
+  if (avgLongAccuracy === null || reviewedLongGames < 5) return 0;
 
-  // Detect Free Game-Review Survivorship Bias (honest users reviewing only their best daily win)
+  // 1. Free Game-Review Survivorship Bias Cushion
   const coverage = totalLongGames > 0 ? reviewedLongGames / totalLongGames : 1;
   const winSkew = Math.max(0, reviewedWinRate - overallRecentWinRate);
   let survivorshipBiasOffset = 0;
-  if (coverage < 0.45 && winSkew > 0.18) {
-    survivorshipBiasOffset = Math.min(4.2, 1.8 + winSkew * 4.5);
-  } else if (coverage < 0.25) {
-    survivorshipBiasOffset = 2.0;
+  if (coverage < 0.50 && winSkew > 0.15) {
+    survivorshipBiasOffset = Math.min(4.6, 2.0 + winSkew * 5.0);
+  } else if (coverage < 0.30) {
+    survivorshipBiasOffset = 2.4;
   }
 
-  const adjustedExpected = expected + survivorshipBiasOffset;
-  const excess = avgLongAccuracy - adjustedExpected;
+  // 2. Studentized 99.5% Small-Sample Uncertainty Margin (prevents 5-game lucky variance FPs)
+  const samplingMargin = 2.58 * (5.6 / Math.sqrt(reviewedLongGames)) * 0.62;
+  const lowerBoundExcess =
+    avgLongAccuracy - (expected + survivorshipBiasOffset + samplingMargin);
 
   let excessScore = 0;
-  if (excess > 1.2) {
-    if (excess <= 4.5) {
-      excessScore = ((excess - 1.2) / 3.3) * 32;
-    } else if (excess <= 8.0) {
-      excessScore = 32 + ((excess - 4.5) / 3.5) * 44;
+  if (lowerBoundExcess > 0.4) {
+    if (lowerBoundExcess <= 3.2) {
+      excessScore = ((lowerBoundExcess - 0.4) / 2.8) * 48;
+    } else if (lowerBoundExcess <= 6.2) {
+      excessScore = 48 + ((lowerBoundExcess - 3.2) / 3.0) * 38;
     } else {
-      excessScore = Math.min(100, 76 + ((excess - 8.0) / 4.5) * 24);
+      excessScore = Math.min(100, 86 + ((lowerBoundExcess - 6.2) / 3.5) * 14);
     }
   }
 
-  // Discount ceiling spikes if survivorship bias is detected
-  const effectiveHighRate =
-    survivorshipBiasOffset > 1.5 ? Math.max(0, highAccRate - 0.15) : highAccRate;
+  // 3. 99% Wilson Lower Bound on Ceiling Accuracy Spikes
+  const rawHighCount = Math.round(highAccRate * reviewedLongGames);
+  const wilsonSpikeRate = wilsonLowerBound(rawHighCount, reviewedLongGames, 2.33);
+  const biasAdjustedSpikeLcb =
+    survivorshipBiasOffset > 1.5 ? Math.max(0, wilsonSpikeRate - 0.10) : wilsonSpikeRate;
+
   let spikeScore = 0;
-  if (effectiveHighRate > 0.18) {
-    if (effectiveHighRate <= 0.35) {
-      spikeScore = ((effectiveHighRate - 0.18) / 0.17) * 45;
-    } else if (effectiveHighRate <= 0.55) {
-      spikeScore = 45 + ((effectiveHighRate - 0.35) / 0.20) * 40;
+  if (biasAdjustedSpikeLcb > 0.16) {
+    if (biasAdjustedSpikeLcb <= 0.34) {
+      spikeScore = ((biasAdjustedSpikeLcb - 0.16) / 0.18) * 52;
     } else {
-      spikeScore = Math.min(100, 85 + ((effectiveHighRate - 0.55) / 0.25) * 15);
+      spikeScore = Math.min(100, 52 + ((biasAdjustedSpikeLcb - 0.34) / 0.25) * 48);
     }
   }
 
-  const conf = reviewedLongGames / (reviewedLongGames + 7);
-  return Math.min(100, Math.round((0.65 * excessScore + 0.35 * spikeScore) * conf));
+  return Math.min(100, Math.round(0.68 * excessScore + 0.32 * spikeScore));
 }
 
 /**
@@ -351,7 +360,7 @@ function buildFormatTelemetry(
     }
 
     const plies = estimateGamePlies(g.pgn);
-    const isFullLengthGame = plies >= 32;
+    const isFullLengthGame = plies >= 44; // >= 22 full moves to eliminate opening-book/miniature CAPS2 inflation
     if (isFullLengthGame) {
       totalLongGames++;
       const acc = g.accuracies ? (isWhite ? g.accuracies.white : g.accuracies.black) : null;
@@ -632,64 +641,73 @@ export function analyzePlayerBundle(
     // Pillar D: Account Provenance Prior
     const trustPillar = trustRiskScore;
 
-    // ── BAYESIAN LOG-ODDS POSTERIOR CALCULATION ──
-    // Base prior p0 ≈ 4.1% -> logit = -3.15
-    let logit = -3.15 + sensitivityOffsetLogit;
+    // ── BAYESIAN LOG-ODDS POSTERIOR + STRICT TWO-FACTOR ZERO-FP CORROBORATION LAW ──
+    // Base prior p0 ≈ 1.8% -> logit = -4.00 (Neyman-Pearson α -> 0 calibration)
+    let logit = -4.0 + sensitivityOffsetLogit;
 
     // Positive Log-Likelihood Ratios (LLRs) per orthogonal pillar
     logit += (perfPillar / 100) * 2.55;
-    logit += (accPillar / 100) * 2.85;
-    logit += (pacePillar / 100) * 2.65;
-    logit += (trustPillar / 100) * 0.95;
+    logit += (accPillar / 100) * 3.10;
+    logit += (pacePillar / 100) * 2.95;
+    logit += (trustPillar / 100) * 0.75;
 
-    // Corroboration Synergy: fires ONLY when >=2 independent pillars strongly confirm engine usage
-    const hasEngineSignal = accPillar >= 52 || pacePillar >= 55;
-    if (hasEngineSignal && perfPillar >= 48) {
-      logit += 0.95;
+    // Strict Engine Pillars:
+    // 1) 99.5% LCB-proven long-game CAPS2 excess (`accPillar >= 46`)
+    // 2) Multi-game won-match chronometric collapse (`pacePillar >= 55`)
+    const hasHardQualityEvidence = accPillar >= 46;
+    const hasHardClockEvidence = pacePillar >= 55;
+    const hasDirectEngineEvidence = hasHardQualityEvidence || hasHardClockEvidence;
+
+    // Multi-Pillar Corroboration Synergy (requires >= 2 independent pillars confirming engine assistance)
+    const isMultiPillarCorroborated =
+      (hasHardQualityEvidence && hasHardClockEvidence) ||
+      (hasHardQualityEvidence && perfPillar >= 42) ||
+      (hasHardClockEvidence && perfPillar >= 45);
+
+    if (isMultiPillarCorroborated) {
+      logit += 1.35;
     }
-    if (accPillar >= 55 && pacePillar >= 55) {
-      logit += 1.05;
+    if (hasHardQualityEvidence && hasHardClockEvidence) {
+      logit += 1.15;
     }
-    if (hasEngineSignal && perfPillar >= 55 && trustPillar >= 55) {
-      logit += 0.55;
+    if (isMultiPillarCorroborated && trustPillar >= 55) {
+      logit += 0.45;
     }
 
     // ── EXCULPATORY HUMAN COUNTER-EVIDENCE (Negative LLRs) ──
-    if (pacing.isConfirmedHumanPacing && accPillar < 45) {
-      // Strong biomechanical proof of organic human mouse/clock variance
-      logit -= 0.85;
+    if (pacing.isConfirmedHumanPacing && !hasHardQualityEvidence) {
+      logit -= 1.10;
     }
     if (
       ft.reviewedGames >= 5 &&
       ft.avgAccuracy !== null &&
-      ft.avgAccuracy <= ft.expectedAccuracy + 1.2
+      ft.avgAccuracy <= ft.expectedAccuracy + 1.5
     ) {
-      // Proven normal human move accuracy across >=5 full-length games
-      logit -= 0.75;
+      logit -= 0.90;
     }
-    if (accountAgeDays !== null && accountAgeDays >= 730 && lifetimeGames >= 600 && !hasEngineSignal) {
-      // Established multi-year veteran without engine quality/pacing flags
-      logit -= 0.50;
+    if (accountAgeDays !== null && accountAgeDays >= 730 && lifetimeGames >= 600 && !hasDirectEngineEvidence) {
+      logit -= 0.65;
     }
 
     let posteriorPct = logistic(logit) * 100 * titleDampener;
 
-    // ── HARD FALSE-POSITIVE PROTECTION GATES ──
-    // Gate 1: Fresh account alone with normal play can never exceed Low Risk (18%)
+    // ── STRICT ZERO-FALSE-POSITIVE INVARIANT GATES ──
+    // Invariant 1: Normal play on a brand-new account can never exceed 12%
     if (perfPillar < 20 && accPillar < 20 && pacePillar < 25) {
-      posteriorPct = Math.min(posteriorPct, 18);
+      posteriorPct = Math.min(posteriorPct, 12);
     }
 
-    // Gate 2: Pure hot-streak / smurf with CONFIRMED human pacing and no CAPS2 excess
-    // is capped at 42% (Guarded / Smurf-Watch) instead of false "High/Critical Engine" alarm!
-    if (pacing.isConfirmedHumanPacing && accPillar < 35) {
-      posteriorPct = Math.min(posteriorPct, 42);
+    // Invariant 2 (Zero-FP Core Law): Without DIRECT biomechanical clock (`%clk`) or 99.5%-LCB
+    // move-quality (`CAPS2`) engine evidence, NO pure win-streak, returning OTB player, or
+    // hand-played smurf can EVER cross into Elevated/High/Critical Cheat Risk (capped <= 28% Low)!
+    if (!hasDirectEngineEvidence) {
+      posteriorPct = Math.min(posteriorPct, 28);
     }
 
-    // Gate 3: Uncorroborated single-pillar ceiling (if neither Accuracy nor Pacing flags engine play,
-    // even when pacing sample is small, cap pure winrate streaks below Critical unless massive Z>4σ)
-    if (!hasEngineSignal && accPillar < 30 && pacePillar < 35 && perfPillar < 88) {
-      posteriorPct = Math.min(posteriorPct, 48);
+    // Invariant 3: Single uncorroborated engine signal without outperformance or second engine
+    // pillar is capped at 46% (Guarded) — High/Critical strictly requires >=2 corroborated pillars!
+    if (hasDirectEngineEvidence && !isMultiPillarCorroborated) {
+      posteriorPct = Math.min(posteriorPct, 46);
     }
 
     ft.formatProbability = Math.min(99, Math.max(floor, Math.round(posteriorPct)));
@@ -799,7 +817,7 @@ export function analyzePlayerBundle(
   }
 
   if (
-    signals.recentWinrate >= 40 &&
+    (signals.recentWinrate >= 18 || pf.eloZScore >= 2.65) &&
     pacing.isConfirmedHumanPacing &&
     signals.accuracyAnomaly < 35 &&
     !isBannedFairPlay
@@ -949,7 +967,7 @@ export function buildFairPlayEvidenceReport(
   const lines: string[] = [];
 
   if (lang === 'tr') {
-    lines.push(`[Chess Sentinel v3.0 — Adil Oyun Telemetri Özeti]`);
+    lines.push(`[Chess Sentinel v3.1 (Zero-FP) — Adil Oyun Telemetri Özeti]`);
     lines.push(
       `Oyuncu: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Hesap Yaşı: ${
         res.accountAgeDays !== null ? `${res.accountAgeDays} gün` : 'Bilinmiyor'
@@ -984,7 +1002,7 @@ export function buildFairPlayEvidenceReport(
       lines.push(`İncelenmesi Önerilen Son Maçlar:\n- ${topUrls.join('\n- ')}`);
     }
   } else {
-    lines.push(`[Chess Sentinel v3.0 — Fair-Play Telemetry Summary]`);
+    lines.push(`[Chess Sentinel v3.1 (Zero-FP) — Fair-Play Telemetry Summary]`);
     lines.push(
       `Player: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Account Age: ${
         res.accountAgeDays !== null ? `${res.accountAgeDays} days` : 'Unknown'

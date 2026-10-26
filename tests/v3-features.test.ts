@@ -13,13 +13,13 @@ describe('v3.0 Live Match Clock Radar & Forensic Evidence Export', () => {
     expect(parseClockTextSec('')).toBeNull();
   });
 
-  it('flags mid-game pause followed by flatline mechanical moves in live game', () => {
+  it('flags mid-game pause followed by >=8 flatline mechanical moves in live game', () => {
     const snap = summarizeLiveMoveTimes('SuspectRelay99', [
-      1.2, 2.5, 36.0, 4.4, 4.6, 4.3, 4.5, 4.4, 4.6,
+      1.2, 2.1, 1.5, 36.0, 4.4, 4.6, 4.3, 4.5, 4.4, 4.6, 4.5, 4.4,
     ]);
-    expect(snap.movesObserved).toBe(9);
+    expect(snap.movesObserved).toBe(12);
     expect(snap.detectedPauseSec).toBe(36);
-    expect(snap.consecutiveRoboticMoves).toBe(6);
+    expect(snap.consecutiveRoboticMoves).toBe(8);
     expect(snap.isLiveSuspectPacing).toBe(true);
   });
 
@@ -68,7 +68,7 @@ describe('v3.0 Live Match Clock Radar & Forensic Evidence Export', () => {
 
     const trReport = buildFairPlayEvidenceReport(res, 'tr');
     const enReport = buildFairPlayEvidenceReport(res, 'en');
-    expect(trReport).toContain('Chess Sentinel v3.0');
+    expect(trReport).toContain('Chess Sentinel v3.1');
     expect(trReport).toContain('@testengine99');
     expect(enReport).toContain('https://www.chess.com/game/live/999000');
   });

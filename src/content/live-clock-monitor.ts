@@ -51,7 +51,7 @@ export function summarizeLiveMoveTimes(
   const recent = allMoveTimesSec.slice(-16);
   const n = allMoveTimesSec.length;
 
-  if (n < 3) {
+  if (n < 4) {
     return {
       opponent,
       movesObserved: n,
@@ -64,8 +64,8 @@ export function summarizeLiveMoveTimes(
     };
   }
 
-  // Evaluate post-opening moves when >=5 moves exist, else all observed
-  const evalMoves = n >= 5 ? allMoveTimesSec.slice(2) : allMoveTimesSec;
+  // Evaluate post-opening moves when >=6 moves exist, else all observed
+  const evalMoves = n >= 6 ? allMoveTimesSec.slice(3) : allMoveTimesSec;
   const mean = evalMoves.reduce((s, v) => s + v, 0) / evalMoves.length;
   const sorted = [...evalMoves].sort((a, b) => a - b);
   const q1 = quantileSorted(sorted, 0.25);
@@ -75,7 +75,7 @@ export function summarizeLiveMoveTimes(
   let consecutiveRoboticMoves = 0;
   for (let i = allMoveTimesSec.length - 1; i >= 0; i--) {
     const t = allMoveTimesSec[i];
-    if (t >= 2.4 && t <= 8.8) {
+    if (t >= 2.6 && t <= 8.2) {
       consecutiveRoboticMoves++;
     } else {
       break;
@@ -83,13 +83,13 @@ export function summarizeLiveMoveTimes(
   }
 
   let detectedPauseSec: number | null = null;
-  if (allMoveTimesSec.length >= 6) {
-    for (let i = 1; i <= allMoveTimesSec.length - 5; i++) {
+  if (allMoveTimesSec.length >= 10) {
+    for (let i = 1; i <= allMoveTimesSec.length - 8; i++) {
       const t = allMoveTimesSec[i];
-      if (t >= 22 && t <= 115) {
+      if (t >= 25 && t <= 115) {
         const after = allMoveTimesSec.slice(i + 1);
-        const roboticAfter = after.filter((x) => x >= 2.3 && x <= 8.8).length / after.length;
-        if (after.length >= 4 && roboticAfter >= 0.8) {
+        const roboticAfter = after.filter((x) => x >= 2.6 && x <= 8.2).length / after.length;
+        if (after.length >= 7 && roboticAfter >= 0.88) {
           detectedPauseSec = Number(t.toFixed(1));
           break;
         }
@@ -97,15 +97,19 @@ export function summarizeLiveMoveTimes(
     }
   }
 
-  const hasFastInstinctMove = evalMoves.some((t) => t <= 1.65);
+  const hasFastInstinctMove = evalMoves.some((t) => t <= 1.85);
+  const hasDeepHumanThink = evalMoves.some((t) => t >= 15.0);
+  // Zero-FP Live Match Alert: requires >=10 observed moves, >=8 straight mechanical moves,
+  // zero fast recaptures, and extreme quartile compression (QCD <= 0.17).
   const isLiveSuspectPacing =
-    (n >= 6 &&
-      liveQCD <= 0.23 &&
-      consecutiveRoboticMoves >= 5 &&
+    (n >= 10 &&
+      liveQCD <= 0.17 &&
+      consecutiveRoboticMoves >= 8 &&
       !hasFastInstinctMove &&
-      mean >= 2.6 &&
-      mean <= 9.5) ||
-    (detectedPauseSec !== null && consecutiveRoboticMoves >= 4 && liveQCD <= 0.26);
+      !hasDeepHumanThink &&
+      mean >= 2.8 &&
+      mean <= 8.5) ||
+    (detectedPauseSec !== null && consecutiveRoboticMoves >= 7 && liveQCD <= 0.18);
 
   return {
     opponent,

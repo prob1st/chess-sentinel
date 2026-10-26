@@ -59,7 +59,7 @@ function buildFairPlayEvidenceReport(res, lang, liveClock) {
   const pf = res.formats[res.primaryFormat];
   const lines = [];
   if (lang === "tr") {
-    lines.push(`[Chess Sentinel v3.0 \u2014 Adil Oyun Telemetri \xD6zeti]`);
+    lines.push(`[Chess Sentinel v3.1 (Zero-FP) \u2014 Adil Oyun Telemetri \xD6zeti]`);
     lines.push(
       `Oyuncu: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Hesap Ya\u015F\u0131: ${res.accountAgeDays !== null ? `${res.accountAgeDays} g\xFCn` : "Bilinmiyor"}`
     );
@@ -90,7 +90,7 @@ function buildFairPlayEvidenceReport(res, lang, liveClock) {
 - ${topUrls.join("\n- ")}`);
     }
   } else {
-    lines.push(`[Chess Sentinel v3.0 \u2014 Fair-Play Telemetry Summary]`);
+    lines.push(`[Chess Sentinel v3.1 (Zero-FP) \u2014 Fair-Play Telemetry Summary]`);
     lines.push(
       `Player: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Account Age: ${res.accountAgeDays !== null ? `${res.accountAgeDays} days` : "Unknown"}`
     );

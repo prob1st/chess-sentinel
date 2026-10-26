@@ -194,7 +194,8 @@ describe('Multi-Pillar Bayesian Log-Odds Engine v2.0 & False-Positive Shield', (
     };
 
     const res = analyzePlayerBundle(bundle, { nowMs });
-    expect(res.probability).toBeLessThanOrEqual(42);
+    expect(res.probability).toBeLessThanOrEqual(28);
+    expect(res.tier).toBe('low');
     expect(res.flags.some((f) => f.id === 'smurf_human_pacing')).toBe(true);
   });
 

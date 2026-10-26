@@ -95,7 +95,10 @@ function renderBundle(bundle: PlayerRawBundle, nowMs?: number): void {
   hud.showResult(result, watchlist.has(result.username.toLowerCase()), true);
   if (result.probability >= 70) {
     hud.updateLiveClock(
-      summarizeLiveMoveTimes(result.displayName, [1.4, 2.8, 34.5, 4.4, 4.7, 4.3, 4.6, 4.5, 4.4])
+      summarizeLiveMoveTimes(
+        result.displayName,
+        [1.4, 2.2, 1.6, 34.5, 4.4, 4.7, 4.3, 4.6, 4.5, 4.4, 4.6, 4.5]
+      )
     );
   } else {
     hud.updateLiveClock(

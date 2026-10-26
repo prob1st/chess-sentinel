@@ -222,10 +222,10 @@ var TIER_THEMES = {
 };
 function probabilityToTier(probability, isBanned = false) {
   if (isBanned) return "banned";
-  if (probability < 22) return "low";
-  if (probability < 40) return "guarded";
-  if (probability < 62) return "elevated";
-  if (probability < 80) return "high";
+  if (probability < 30) return "low";
+  if (probability < 55) return "guarded";
+  if (probability < 75) return "elevated";
+  if (probability < 90) return "high";
   return "critical";
 }
 function getTitleDampener(title) {
@@ -302,11 +302,11 @@ function extractPlayerMoveTimes(pgn, isWhite) {
     const secs = Number(match[3]);
     allClocks.push(hours * 3600 + mins * 60 + secs);
   }
-  if (allClocks.length < 26) {
+  if (allClocks.length < 30) {
     return null;
   }
   const playerClocks = allClocks.filter((_, idx) => isWhite ? idx % 2 === 0 : idx % 2 === 1);
-  if (playerClocks.length < 13) return null;
+  if (playerClocks.length < 15) return null;
   const moveDurationsSec = [];
   for (let i = 1; i < playerClocks.length; i++) {
     const rawElapsed = playerClocks[i - 1] - playerClocks[i] + incrementSec;
@@ -327,16 +327,16 @@ function analyzeSingleGamePacing(pgn, isWhite, timeClass, won) {
   if (!parsed) return null;
   const { baseSec, clocksSec, moveDurationsSec } = parsed;
   const isUltraFastBullet = timeClass === "bullet" && baseSec <= 120;
-  const scrambleThreshold = timeClass === "bullet" ? 9 : timeClass === "blitz" ? 20 : 30;
+  const scrambleThreshold = timeClass === "bullet" ? 10 : timeClass === "blitz" ? 22 : 35;
   const midMoves = [];
   const startIdx = Math.min(8, Math.floor(moveDurationsSec.length * 0.25));
-  const endIdx = Math.min(40, moveDurationsSec.length);
+  const endIdx = Math.min(42, moveDurationsSec.length);
   for (let i = startIdx; i < endIdx; i++) {
     const clockRemaining = clocksSec[i + 1] ?? 0;
     if (clockRemaining < scrambleThreshold) break;
     midMoves.push(moveDurationsSec[i]);
   }
-  if (midMoves.length < 9) return null;
+  if (midMoves.length < 10) return null;
   const mean = midMoves.reduce((sum, v) => sum + v, 0) / midMoves.length;
   const variance = midMoves.reduce((sum, v) => sum + (v - mean) ** 2, 0) / midMoves.length;
   const std = Math.sqrt(variance);
@@ -349,22 +349,22 @@ function analyzeSingleGamePacing(pgn, isWhite, timeClass, won) {
   const fastThreshold = timeClass === "bullet" ? 1 : timeClass === "blitz" ? 1.75 : 2.25;
   const fastCount = midMoves.filter((t) => t <= fastThreshold).length;
   const fastMoveRatio = fastCount / midMoves.length;
-  const roboticLo = timeClass === "bullet" ? 1.8 : 2.5;
-  const roboticHi = timeClass === "bullet" ? 4.8 : 8.8;
+  const roboticLo = timeClass === "bullet" ? 1.9 : 2.6;
+  const roboticHi = timeClass === "bullet" ? 4.8 : 8.6;
   const roboticCount = midMoves.filter((t) => t >= roboticLo && t <= roboticHi).length;
   const roboticBandRatio = roboticCount / midMoves.length;
-  const isFlatline = !isUltraFastBullet && (cv <= 0.4 && qcd <= 0.26 || qcd <= 0.2 && entropyBits <= 1.38) && mean >= 2.7 && mean <= 11.2 && fastMoveRatio <= 0.06 && roboticBandRatio >= 0.64;
+  const isFlatline = won && !isUltraFastBullet && (cv <= 0.36 && qcd <= 0.21 || qcd <= 0.17 && entropyBits <= 1.28) && mean >= 2.8 && mean <= 10.5 && fastMoveRatio <= 0.04 && roboticBandRatio >= 0.72;
   let hasMidgameToggle = false;
-  if (won && !isUltraFastBullet && timeClass !== "bullet" && moveDurationsSec.length >= 19) {
-    const pauseMin = timeClass === "blitz" ? 22 : 30;
+  if (won && !isUltraFastBullet && timeClass !== "bullet" && moveDurationsSec.length >= 20) {
+    const pauseMin = timeClass === "blitz" ? 24 : 32;
     const pauseMax = timeClass === "blitz" ? 95 : 130;
-    const latestToggleIdx = Math.min(20, moveDurationsSec.length - 10);
+    const latestToggleIdx = Math.min(20, moveDurationsSec.length - 11);
     for (let i = 5; i <= latestToggleIdx; i++) {
       if (moveDurationsSec[i] >= pauseMin && moveDurationsSec[i] <= pauseMax) {
         const preSlice = moveDurationsSec.slice(0, i);
-        const preHasFast = preSlice.some((t) => t <= 2.2);
-        const postSlice = moveDurationsSec.slice(i + 1, Math.min(i + 14, moveDurationsSec.length));
-        if (preHasFast && postSlice.length >= 9) {
+        const preHasFast = preSlice.some((t) => t <= 2.1);
+        const postSlice = moveDurationsSec.slice(i + 1, Math.min(i + 15, moveDurationsSec.length));
+        if (preHasFast && postSlice.length >= 10) {
           const pMean = postSlice.reduce((a, b) => a + b, 0) / postSlice.length;
           const pStd = Math.sqrt(
             postSlice.reduce((a, b) => a + (b - pMean) ** 2, 0) / postSlice.length
@@ -375,8 +375,8 @@ function analyzeSingleGamePacing(pgn, isWhite, timeClass, won) {
           const pQ3 = quantileSorted(pSorted, 0.75);
           const pQcd = pQ3 + pQ1 > 0 ? (pQ3 - pQ1) / (pQ3 + pQ1) : 1;
           const pFastCount = postSlice.filter((t) => t <= 1.9).length;
-          const bandHits = postSlice.filter((t) => t >= 2.3 && t <= 8.6).length / postSlice.length;
-          if (pCv <= 0.36 && pQcd <= 0.23 && pFastCount === 0 && bandHits >= 0.8 && pMean >= 2.7) {
+          const bandHits = postSlice.filter((t) => t >= 2.5 && t <= 8.5).length / postSlice.length;
+          if (pCv <= 0.32 && pQcd <= 0.19 && pFastCount === 0 && bandHits >= 0.85 && pMean >= 2.8) {
             hasMidgameToggle = true;
             break;
           }
@@ -425,13 +425,13 @@ function computeAggregatePacing(games, username, ratedOnly = true) {
     }
   }
   const bucketDistribution = totalMoves > 0 ? totalBuckets.map((c) => Number((c / totalMoves).toFixed(3))) : new Array(LOG_TIME_BINS.length + 1).fill(0);
-  if (metrics.length < 4) {
+  if (metrics.length < 6) {
     return {
       gamesAnalyzed: metrics.length,
-      medianCV: null,
-      medianQCD: null,
-      meanEntropyBits: null,
-      minCV: null,
+      medianCV: metrics.length > 0 ? Number(quantileSorted(metrics.map((m) => m.cv).sort((a, b) => a - b), 0.5).toFixed(2)) : null,
+      medianQCD: metrics.length > 0 ? Number(quantileSorted(metrics.map((m) => m.qcd).sort((a, b) => a - b), 0.5).toFixed(2)) : null,
+      meanEntropyBits: metrics.length > 0 ? Number((metrics.reduce((s, m) => s + m.entropyBits, 0) / metrics.length).toFixed(2)) : null,
+      minCV: metrics.length > 0 ? Number(Math.min(...metrics.map((m) => m.cv)).toFixed(2)) : null,
       meanFastMoveRatio: null,
       meanRoboticBandRatio: null,
       bucketDistribution,
@@ -459,9 +459,25 @@ function computeAggregatePacing(games, username, ratedOnly = true) {
   const flatlineGames = metrics.filter((m) => m.isFlatline).length;
   const flatlineRate = Number((flatlineGames / metrics.length).toFixed(3));
   const toggleGames = metrics.filter((m) => m.hasMidgameToggle).length;
-  const nonBulletRatio = metrics.filter((m) => m.timeClass !== "bullet").length / metrics.length;
-  const formatDamper = nonBulletRatio < 0.35 ? 0.25 : 1;
-  const isConfirmedHumanPacing = metrics.length >= 6 && medianCV >= 0.78 && medianQCD >= 0.38 && meanEntropyBits >= 1.82 && flatlineRate <= 0.06 && toggleGames <= 1;
+  const nonBulletCount = metrics.filter((m) => m.timeClass !== "bullet").length;
+  if (nonBulletCount < 5) {
+    return {
+      gamesAnalyzed: metrics.length,
+      medianCV,
+      medianQCD,
+      meanEntropyBits,
+      minCV,
+      meanFastMoveRatio,
+      meanRoboticBandRatio,
+      bucketDistribution,
+      flatlineGames,
+      flatlineRate,
+      toggleGames,
+      isConfirmedHumanPacing: medianCV >= 0.65 && medianQCD >= 0.3,
+      pacingScore: 0
+    };
+  }
+  const isConfirmedHumanPacing = medianCV >= 0.68 && medianQCD >= 0.33 && meanEntropyBits >= 1.7 && flatlineGames <= 1 && toggleGames === 0;
   if (isConfirmedHumanPacing) {
     return {
       gamesAnalyzed: metrics.length,
@@ -480,33 +496,31 @@ function computeAggregatePacing(games, username, ratedOnly = true) {
     };
   }
   let dispersionRisk = 0;
-  if (medianQCD < 0.32 && medianCV < 0.58) {
-    const qScore = (0.32 - medianQCD) / 0.16 * 55;
-    const cScore = (0.58 - medianCV) / 0.28 * 45;
+  if (medianQCD <= 0.23 && medianCV <= 0.45 && meanFastMoveRatio <= 0.05) {
+    const qScore = (0.23 - medianQCD) / 0.12 * 55;
+    const cScore = (0.45 - medianCV) / 0.22 * 45;
     dispersionRisk = Math.min(100, qScore + cScore);
   }
   let entropyRisk = 0;
-  if (meanEntropyBits < 1.65 && meanFastMoveRatio < 0.07 && meanRoboticBandRatio > 0.56) {
+  if (meanEntropyBits <= 1.42 && meanFastMoveRatio <= 0.04 && meanRoboticBandRatio >= 0.68) {
     entropyRisk = Math.min(
       100,
-      (1.65 - meanEntropyBits) / 0.55 * 55 + (0.07 - meanFastMoveRatio) / 0.07 * 45
+      (1.42 - meanEntropyBits) / 0.45 * 60 + (0.04 - meanFastMoveRatio) / 0.04 * 40
     );
   }
   let flatlineRisk = 0;
-  if (flatlineGames >= 2 && flatlineRate >= 0.16) {
-    flatlineRisk = Math.min(100, (flatlineRate - 0.12) / 0.32 * 98);
+  if (flatlineGames >= 3 && flatlineRate >= 0.22) {
+    const countBoost = flatlineGames >= 5 ? Math.min(28, (flatlineGames - 3) * 4.5) : 0;
+    flatlineRisk = Math.min(100, (flatlineRate - 0.14) / 0.24 * 85 + countBoost);
   }
-  const toggleBonus = toggleGames >= 3 ? 28 : toggleGames === 2 && toggleGames / metrics.length >= 0.1 ? 16 : 0;
-  const sampleWeight = metrics.length / (metrics.length + 3);
+  const toggleBonus = toggleGames >= 3 && toggleGames / metrics.length >= 0.15 ? 24 : 0;
+  const sampleWeight = metrics.length / (metrics.length + 3.2);
   const rawCombined = Math.max(
-    flatlineRisk * 0.92,
+    flatlineRisk * 0.97,
     dispersionRisk * 0.55 + flatlineRisk * 0.45,
     dispersionRisk * 0.55 + entropyRisk * 0.45
   ) + toggleBonus;
-  const pacingScore = Math.min(
-    100,
-    Math.max(0, Math.round(rawCombined * sampleWeight * formatDamper))
-  );
+  const pacingScore = Math.min(100, Math.max(0, Math.round(rawCombined * sampleWeight)));
   return {
     gamesAnalyzed: metrics.length,
     medianCV,
@@ -540,78 +554,84 @@ function estimateGamePlies(pgn) {
   }
   return 40;
 }
+function wilsonLowerBound(successes, total, z = 2.33) {
+  if (total <= 0 || successes <= 0) return 0;
+  const p = successes / total;
+  const z2 = z * z;
+  const denom = 1 + z2 / total;
+  const center = p + z2 / (2 * total);
+  const spread = z * Math.sqrt((p * (1 - p) + z2 / (4 * total)) / total);
+  return Math.max(0, (center - spread) / denom);
+}
 function computeEloZScoreSignal(eloZScore, gamesCount, rd) {
-  if (gamesCount < 5 || eloZScore <= 1.35) return 0;
-  const rdDamper = rd !== null && rd > 110 ? 0.68 : rd !== null && rd > 80 ? 0.85 : 1;
+  if (gamesCount < 8 || eloZScore <= 2.65) return 0;
+  const rdDamper = rd !== null && rd > 110 ? 0.55 : rd !== null && rd > 80 ? 0.8 : 1;
   const adjZ = eloZScore * rdDamper;
-  if (adjZ <= 1.35) return 0;
+  if (adjZ <= 2.65) return 0;
   let raw = 0;
-  if (adjZ <= 2.2) {
-    raw = (adjZ - 1.35) / 0.85 * 28;
-  } else if (adjZ <= 3.2) {
-    raw = 28 + (adjZ - 2.2) / 1 * 40;
-  } else if (adjZ <= 4.3) {
-    raw = 68 + (adjZ - 3.2) / 1.1 * 26;
+  if (adjZ <= 3.5) {
+    raw = (adjZ - 2.65) / 0.85 * 42;
+  } else if (adjZ <= 4.5) {
+    raw = 42 + (adjZ - 3.5) / 1 * 38;
   } else {
-    raw = 94 + Math.min(6, (adjZ - 4.3) * 4);
+    raw = 80 + Math.min(20, (adjZ - 4.5) * 14);
   }
-  const sampleConfidence = gamesCount / (gamesCount + 8);
+  const sampleConfidence = gamesCount / (gamesCount + 10);
   return Math.min(100, Math.round(raw * sampleConfidence));
 }
 function computeLifetimeGlickoSignal(wins, losses, draws) {
   const total = wins + losses + draws;
-  if (total < 15) return 0;
+  if (total < 30) return 0;
   const scoreRatio = (wins + 0.5 * draws) / total;
-  if (scoreRatio <= 0.565) return 0;
-  const z = (scoreRatio - 0.555) / Math.sqrt(0.247 / total);
-  if (z <= 1.5) return 0;
+  if (scoreRatio <= 0.6) return 0;
+  const z = (scoreRatio - 0.56) / Math.sqrt(0.2464 / total);
+  if (z <= 2.8) return 0;
   let raw = 0;
-  if (scoreRatio <= 0.63) {
-    raw = (scoreRatio - 0.565) / 0.065 * 38;
-  } else if (scoreRatio <= 0.71) {
-    raw = 38 + (scoreRatio - 0.63) / 0.08 * 42;
+  if (scoreRatio <= 0.68) {
+    raw = (scoreRatio - 0.6) / 0.08 * 45;
+  } else if (scoreRatio <= 0.78) {
+    raw = 45 + (scoreRatio - 0.68) / 0.1 * 40;
   } else {
-    raw = 80 + Math.min(20, (scoreRatio - 0.71) / 0.1 * 20);
+    raw = 85 + Math.min(15, (scoreRatio - 0.78) / 0.1 * 15);
   }
-  const zCap = Math.min(1, (z - 1.2) / 3.2);
-  const weight = total / (total + 38);
+  const zCap = Math.min(1, (z - 2.5) / 3);
+  const weight = total / (total + 45);
   return Math.min(100, Math.round(raw * zCap * weight));
 }
 function computeBiasAdjustedAccuracySignal(avgLongAccuracy, expected, highAccRate, reviewedLongGames, totalLongGames, reviewedWinRate, overallRecentWinRate) {
-  if (avgLongAccuracy === null || reviewedLongGames < 3) return 0;
+  if (avgLongAccuracy === null || reviewedLongGames < 5) return 0;
   const coverage = totalLongGames > 0 ? reviewedLongGames / totalLongGames : 1;
   const winSkew = Math.max(0, reviewedWinRate - overallRecentWinRate);
   let survivorshipBiasOffset = 0;
-  if (coverage < 0.45 && winSkew > 0.18) {
-    survivorshipBiasOffset = Math.min(4.2, 1.8 + winSkew * 4.5);
-  } else if (coverage < 0.25) {
-    survivorshipBiasOffset = 2;
+  if (coverage < 0.5 && winSkew > 0.15) {
+    survivorshipBiasOffset = Math.min(4.6, 2 + winSkew * 5);
+  } else if (coverage < 0.3) {
+    survivorshipBiasOffset = 2.4;
   }
-  const adjustedExpected = expected + survivorshipBiasOffset;
-  const excess = avgLongAccuracy - adjustedExpected;
+  const samplingMargin = 2.58 * (5.6 / Math.sqrt(reviewedLongGames)) * 0.62;
+  const lowerBoundExcess = avgLongAccuracy - (expected + survivorshipBiasOffset + samplingMargin);
   let excessScore = 0;
-  if (excess > 1.2) {
-    if (excess <= 4.5) {
-      excessScore = (excess - 1.2) / 3.3 * 32;
-    } else if (excess <= 8) {
-      excessScore = 32 + (excess - 4.5) / 3.5 * 44;
+  if (lowerBoundExcess > 0.4) {
+    if (lowerBoundExcess <= 3.2) {
+      excessScore = (lowerBoundExcess - 0.4) / 2.8 * 48;
+    } else if (lowerBoundExcess <= 6.2) {
+      excessScore = 48 + (lowerBoundExcess - 3.2) / 3 * 38;
     } else {
-      excessScore = Math.min(100, 76 + (excess - 8) / 4.5 * 24);
+      excessScore = Math.min(100, 86 + (lowerBoundExcess - 6.2) / 3.5 * 14);
     }
   }
-  const effectiveHighRate = survivorshipBiasOffset > 1.5 ? Math.max(0, highAccRate - 0.15) : highAccRate;
+  const rawHighCount = Math.round(highAccRate * reviewedLongGames);
+  const wilsonSpikeRate = wilsonLowerBound(rawHighCount, reviewedLongGames, 2.33);
+  const biasAdjustedSpikeLcb = survivorshipBiasOffset > 1.5 ? Math.max(0, wilsonSpikeRate - 0.1) : wilsonSpikeRate;
   let spikeScore = 0;
-  if (effectiveHighRate > 0.18) {
-    if (effectiveHighRate <= 0.35) {
-      spikeScore = (effectiveHighRate - 0.18) / 0.17 * 45;
-    } else if (effectiveHighRate <= 0.55) {
-      spikeScore = 45 + (effectiveHighRate - 0.35) / 0.2 * 40;
+  if (biasAdjustedSpikeLcb > 0.16) {
+    if (biasAdjustedSpikeLcb <= 0.34) {
+      spikeScore = (biasAdjustedSpikeLcb - 0.16) / 0.18 * 52;
     } else {
-      spikeScore = Math.min(100, 85 + (effectiveHighRate - 0.55) / 0.25 * 15);
+      spikeScore = Math.min(100, 52 + (biasAdjustedSpikeLcb - 0.34) / 0.25 * 48);
     }
   }
-  const conf = reviewedLongGames / (reviewedLongGames + 7);
-  return Math.min(100, Math.round((0.65 * excessScore + 0.35 * spikeScore) * conf));
+  return Math.min(100, Math.round(0.68 * excessScore + 0.32 * spikeScore));
 }
 function computeEloVelocitySignal(eloDelta7d, eloDelta30d, winStreak, rd) {
   const rdDamper = rd !== null && rd > 125 ? 0.35 : rd !== null && rd > 85 ? 0.65 : 1;
@@ -729,7 +749,7 @@ function buildFormatTelemetry(format, stats, games, usernameLower, ratedOnly, no
       ratedPairCount++;
     }
     const plies = estimateGamePlies(g.pgn);
-    const isFullLengthGame = plies >= 32;
+    const isFullLengthGame = plies >= 44;
     if (isFullLengthGame) {
       totalLongGames++;
       const acc = g.accuracies ? isWhite ? g.accuracies.white : g.accuracies.black : null;
@@ -925,39 +945,42 @@ function analyzePlayerBundle(bundle, options = {}) {
     const hasResultsOrQuality = perfPillar >= 22 || accPillar >= 25 || ft.recentWinPct >= 56;
     const pacePillar = hasResultsOrQuality ? pace : Math.round(pace * 0.32);
     const trustPillar = trustRiskScore;
-    let logit = -3.15 + sensitivityOffsetLogit;
+    let logit = -4 + sensitivityOffsetLogit;
     logit += perfPillar / 100 * 2.55;
-    logit += accPillar / 100 * 2.85;
-    logit += pacePillar / 100 * 2.65;
-    logit += trustPillar / 100 * 0.95;
-    const hasEngineSignal = accPillar >= 52 || pacePillar >= 55;
-    if (hasEngineSignal && perfPillar >= 48) {
-      logit += 0.95;
+    logit += accPillar / 100 * 3.1;
+    logit += pacePillar / 100 * 2.95;
+    logit += trustPillar / 100 * 0.75;
+    const hasHardQualityEvidence = accPillar >= 46;
+    const hasHardClockEvidence = pacePillar >= 55;
+    const hasDirectEngineEvidence = hasHardQualityEvidence || hasHardClockEvidence;
+    const isMultiPillarCorroborated = hasHardQualityEvidence && hasHardClockEvidence || hasHardQualityEvidence && perfPillar >= 42 || hasHardClockEvidence && perfPillar >= 45;
+    if (isMultiPillarCorroborated) {
+      logit += 1.35;
     }
-    if (accPillar >= 55 && pacePillar >= 55) {
-      logit += 1.05;
+    if (hasHardQualityEvidence && hasHardClockEvidence) {
+      logit += 1.15;
     }
-    if (hasEngineSignal && perfPillar >= 55 && trustPillar >= 55) {
-      logit += 0.55;
+    if (isMultiPillarCorroborated && trustPillar >= 55) {
+      logit += 0.45;
     }
-    if (pacing.isConfirmedHumanPacing && accPillar < 45) {
-      logit -= 0.85;
+    if (pacing.isConfirmedHumanPacing && !hasHardQualityEvidence) {
+      logit -= 1.1;
     }
-    if (ft.reviewedGames >= 5 && ft.avgAccuracy !== null && ft.avgAccuracy <= ft.expectedAccuracy + 1.2) {
-      logit -= 0.75;
+    if (ft.reviewedGames >= 5 && ft.avgAccuracy !== null && ft.avgAccuracy <= ft.expectedAccuracy + 1.5) {
+      logit -= 0.9;
     }
-    if (accountAgeDays !== null && accountAgeDays >= 730 && lifetimeGames >= 600 && !hasEngineSignal) {
-      logit -= 0.5;
+    if (accountAgeDays !== null && accountAgeDays >= 730 && lifetimeGames >= 600 && !hasDirectEngineEvidence) {
+      logit -= 0.65;
     }
     let posteriorPct = logistic(logit) * 100 * titleDampener;
     if (perfPillar < 20 && accPillar < 20 && pacePillar < 25) {
-      posteriorPct = Math.min(posteriorPct, 18);
+      posteriorPct = Math.min(posteriorPct, 12);
     }
-    if (pacing.isConfirmedHumanPacing && accPillar < 35) {
-      posteriorPct = Math.min(posteriorPct, 42);
+    if (!hasDirectEngineEvidence) {
+      posteriorPct = Math.min(posteriorPct, 28);
     }
-    if (!hasEngineSignal && accPillar < 30 && pacePillar < 35 && perfPillar < 88) {
-      posteriorPct = Math.min(posteriorPct, 48);
+    if (hasDirectEngineEvidence && !isMultiPillarCorroborated) {
+      posteriorPct = Math.min(posteriorPct, 46);
     }
     ft.formatProbability = Math.min(99, Math.max(floor, Math.round(posteriorPct)));
   }
@@ -1041,7 +1064,7 @@ function analyzePlayerBundle(bundle, options = {}) {
       params: { games: pf.recentTotal, wr: pf.recentWinPct, z: pf.eloZScore }
     });
   }
-  if (signals.recentWinrate >= 40 && pacing.isConfirmedHumanPacing && signals.accuracyAnomaly < 35 && !isBannedFairPlay) {
+  if ((signals.recentWinrate >= 18 || pf.eloZScore >= 2.65) && pacing.isConfirmedHumanPacing && signals.accuracyAnomaly < 35 && !isBannedFairPlay) {
     flags.push({
       id: "smurf_human_pacing",
       severity: "info",

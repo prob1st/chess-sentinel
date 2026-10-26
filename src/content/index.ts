@@ -159,10 +159,10 @@ class SentinelContentController {
       if (
         this.settings.soundAlerts &&
         !this.alertedUsernames.has(result.username.toLowerCase()) &&
-        (result.probability >= 68 || result.isBannedFairPlay || isWatched)
+        (result.probability >= 75 || result.isBannedFairPlay || isWatched)
       ) {
         this.alertedUsernames.add(result.username.toLowerCase());
-        playRiskAlertChime(result.probability >= 80 || result.isBannedFairPlay);
+        playRiskAlertChime(result.probability >= 88 || result.isBannedFairPlay);
       }
 
       if (this.settings.autoShowHud || forceRefresh) {

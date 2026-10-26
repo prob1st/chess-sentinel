@@ -116,10 +116,10 @@ export const TIER_THEMES: Record<RiskTierId, TierTheme> = {
 
 export function probabilityToTier(probability: number, isBanned = false): RiskTierId {
   if (isBanned) return 'banned';
-  if (probability < 22) return 'low';
-  if (probability < 40) return 'guarded';
-  if (probability < 62) return 'elevated';
-  if (probability < 80) return 'high';
+  if (probability < 30) return 'low';
+  if (probability < 55) return 'guarded';
+  if (probability < 75) return 'elevated';
+  if (probability < 90) return 'high';
   return 'critical';
 }
 

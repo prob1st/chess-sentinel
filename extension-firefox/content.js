@@ -484,7 +484,7 @@
     const pf = res.formats[res.primaryFormat];
     const lines = [];
     if (lang === "tr") {
-      lines.push(`[Chess Sentinel v3.0 \u2014 Adil Oyun Telemetri \xD6zeti]`);
+      lines.push(`[Chess Sentinel v3.1 (Zero-FP) \u2014 Adil Oyun Telemetri \xD6zeti]`);
       lines.push(
         `Oyuncu: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Hesap Ya\u015F\u0131: ${res.accountAgeDays !== null ? `${res.accountAgeDays} g\xFCn` : "Bilinmiyor"}`
       );
@@ -515,7 +515,7 @@
 - ${topUrls.join("\n- ")}`);
       }
     } else {
-      lines.push(`[Chess Sentinel v3.0 \u2014 Fair-Play Telemetry Summary]`);
+      lines.push(`[Chess Sentinel v3.1 (Zero-FP) \u2014 Fair-Play Telemetry Summary]`);
       lines.push(
         `Player: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Account Age: ${res.accountAgeDays !== null ? `${res.accountAgeDays} days` : "Unknown"}`
       );
@@ -2081,7 +2081,7 @@
       let alertHtml = "";
       if (res.isBannedFairPlay) {
         alertHtml = `<div class="alert-banner banned">\u{1F6A8} ${escapeHtml(t.bannedFairPlayBanner)}</div>`;
-      } else if (this.isAbortWindowOpen && displayProb >= 55) {
+      } else if (this.isAbortWindowOpen && displayProb >= 75) {
         alertHtml = `<div class="alert-banner abort-warn">\u26A0\uFE0F ${escapeHtml(t.abortWindowActive)} \u2014 ${escapeHtml(
           t.considerAborting
         )}</div>`;
@@ -2091,7 +2091,7 @@
       const flagEmoji = countryToFlagEmoji(res.countryCode);
       const avatarHtml = res.avatarUrl ? `<img class="avatar" src="${escapeHtml(res.avatarUrl)}" alt="" />` : `<div class="avatar">${escapeHtml(res.displayName.slice(0, 1).toUpperCase())}</div>`;
       const titleBadgeHtml = res.title ? `<span class="title-pill">${escapeHtml(res.title.toUpperCase())}</span>` : "";
-      const verdictText = res.isBannedFairPlay ? t.tiers.banned.summary : displayProb >= 60 ? t.considerAborting : displayProb >= 35 ? t.cautionAdvised : t.safeToPlay;
+      const verdictText = res.isBannedFairPlay ? t.tiers.banned.summary : displayProb >= 75 ? t.considerAborting : displayProb >= 55 ? t.cautionAdvised : t.safeToPlay;
       const ageStr = formatAgeShort(res.accountAgeDays, lang);
       const accStr = fmtData.avgAccuracy !== null ? `${fmtData.avgAccuracy}%` : "\u2014";
       const accClass = fmtData.avgAccuracy !== null && fmtData.avgAccuracy - fmtData.expectedAccuracy >= 4 ? "neg" : fmtData.avgAccuracy !== null ? "pos" : "";
@@ -2433,7 +2433,7 @@
   function summarizeLiveMoveTimes(opponent, allMoveTimesSec) {
     const recent = allMoveTimesSec.slice(-16);
     const n = allMoveTimesSec.length;
-    if (n < 3) {
+    if (n < 4) {
       return {
         opponent,
         movesObserved: n,
@@ -2445,7 +2445,7 @@
         isLiveSuspectPacing: false
       };
     }
-    const evalMoves = n >= 5 ? allMoveTimesSec.slice(2) : allMoveTimesSec;
+    const evalMoves = n >= 6 ? allMoveTimesSec.slice(3) : allMoveTimesSec;
     const mean = evalMoves.reduce((s, v) => s + v, 0) / evalMoves.length;
     const sorted = [...evalMoves].sort((a, b) => a - b);
     const q1 = quantileSorted(sorted, 0.25);
@@ -2454,28 +2454,29 @@
     let consecutiveRoboticMoves = 0;
     for (let i = allMoveTimesSec.length - 1; i >= 0; i--) {
       const t = allMoveTimesSec[i];
-      if (t >= 2.4 && t <= 8.8) {
+      if (t >= 2.6 && t <= 8.2) {
         consecutiveRoboticMoves++;
       } else {
         break;
       }
     }
     let detectedPauseSec = null;
-    if (allMoveTimesSec.length >= 6) {
-      for (let i = 1; i <= allMoveTimesSec.length - 5; i++) {
+    if (allMoveTimesSec.length >= 10) {
+      for (let i = 1; i <= allMoveTimesSec.length - 8; i++) {
         const t = allMoveTimesSec[i];
-        if (t >= 22 && t <= 115) {
+        if (t >= 25 && t <= 115) {
           const after = allMoveTimesSec.slice(i + 1);
-          const roboticAfter = after.filter((x) => x >= 2.3 && x <= 8.8).length / after.length;
-          if (after.length >= 4 && roboticAfter >= 0.8) {
+          const roboticAfter = after.filter((x) => x >= 2.6 && x <= 8.2).length / after.length;
+          if (after.length >= 7 && roboticAfter >= 0.88) {
             detectedPauseSec = Number(t.toFixed(1));
             break;
           }
         }
       }
     }
-    const hasFastInstinctMove = evalMoves.some((t) => t <= 1.65);
-    const isLiveSuspectPacing = n >= 6 && liveQCD <= 0.23 && consecutiveRoboticMoves >= 5 && !hasFastInstinctMove && mean >= 2.6 && mean <= 9.5 || detectedPauseSec !== null && consecutiveRoboticMoves >= 4 && liveQCD <= 0.26;
+    const hasFastInstinctMove = evalMoves.some((t) => t <= 1.85);
+    const hasDeepHumanThink = evalMoves.some((t) => t >= 15);
+    const isLiveSuspectPacing = n >= 10 && liveQCD <= 0.17 && consecutiveRoboticMoves >= 8 && !hasFastInstinctMove && !hasDeepHumanThink && mean >= 2.8 && mean <= 8.5 || detectedPauseSec !== null && consecutiveRoboticMoves >= 7 && liveQCD <= 0.18;
     return {
       opponent,
       movesObserved: n,
@@ -2702,9 +2703,9 @@
         const isWatched = watchlist.some(
           (w) => w.username.toLowerCase() === result.username.toLowerCase()
         );
-        if (this.settings.soundAlerts && !this.alertedUsernames.has(result.username.toLowerCase()) && (result.probability >= 68 || result.isBannedFairPlay || isWatched)) {
+        if (this.settings.soundAlerts && !this.alertedUsernames.has(result.username.toLowerCase()) && (result.probability >= 75 || result.isBannedFairPlay || isWatched)) {
           this.alertedUsernames.add(result.username.toLowerCase());
-          playRiskAlertChime(result.probability >= 80 || result.isBannedFairPlay);
+          playRiskAlertChime(result.probability >= 88 || result.isBannedFairPlay);
         }
         if (this.settings.autoShowHud || forceRefresh) {
           this.hud?.showResult(result, isWatched, this.lastCtx?.isAbortWindowOpen ?? false);

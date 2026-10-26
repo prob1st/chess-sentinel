@@ -529,7 +529,7 @@ export class SentinelHudOverlay {
     let alertHtml = '';
     if (res.isBannedFairPlay) {
       alertHtml = `<div class="alert-banner banned">🚨 ${escapeHtml(t.bannedFairPlayBanner)}</div>`;
-    } else if (this.isAbortWindowOpen && displayProb >= 55) {
+    } else if (this.isAbortWindowOpen && displayProb >= 75) {
       alertHtml = `<div class="alert-banner abort-warn">⚠️ ${escapeHtml(t.abortWindowActive)} — ${escapeHtml(
         t.considerAborting
       )}</div>`;
@@ -548,9 +548,9 @@ export class SentinelHudOverlay {
 
     const verdictText = res.isBannedFairPlay
       ? t.tiers.banned.summary
-      : displayProb >= 60
+      : displayProb >= 75
         ? t.considerAborting
-        : displayProb >= 35
+        : displayProb >= 55
           ? t.cautionAdvised
           : t.safeToPlay;
 
