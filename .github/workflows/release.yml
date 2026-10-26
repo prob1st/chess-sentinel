@@ -1,4 +1,4 @@
-name: Release — Build & Publish Chrome Extension ZIP
+name: Release — Build & Publish Browser Extension Packages
 
 on:
   push:
@@ -21,8 +21,10 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run package
-      - name: Upload Release Asset
+      - name: Upload Ready-to-Run Extension Assets
         uses: softprops/action-gh-release@v2
         with:
-          files: chess-sentinel-v*-chrome.zip
+          files: |
+            chess-sentinel-v*-chrome-brave-edge.zip
+            chess-sentinel-v*-firefox.zip
           generate_release_notes: true

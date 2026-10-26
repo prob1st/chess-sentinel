@@ -49,8 +49,9 @@ Works out of the box on **Mozilla Firefox** (Desktop 140+) as well as **Brave, G
 1. Install directly from [**Firefox Add-ons (`addons.mozilla.org/firefox/addon/chess-sentinel/`)**](https://addons.mozilla.org/firefox/addon/chess-sentinel/) *(or download **`chess-sentinel-v3.1.0-firefox.zip`** from [**GitHub Releases**](https://github.com/prob1st/chess-sentinel/releases/latest) while AMO review completes)*.
 2. Open [Chess.com](https://www.chess.com/play/online) and start or spectate any live game!
 
-### Option B — Unpacked Install on Chromium Browsers
-1. Clone this repository or extract `./extension/` and open `chrome://extensions` → enable **Developer mode** → click **Load unpacked** → select `./extension/`.
+### Option B — Ready-to-Run Install on Chrome / Brave / Edge / Opera
+1. Download **`chess-sentinel-v3.1.0-chrome-brave-edge.zip`** from [**GitHub Releases**](https://github.com/prob1st/chess-sentinel/releases/latest) and extract it to a folder.
+2. Open `chrome://extensions` (or `brave://extensions` / `edge://extensions`) → enable **Developer mode** → click **Load unpacked** → select the extracted folder.
 
 ### Option B — Build & Verify from Source (Developers)
 ```bash
@@ -97,9 +98,9 @@ Chess Sentinel v3.1 implements a **Neyman-Pearson Two-Factor Bayesian Log-Likeli
 - **Şüpheli & Ban Takip Listesi (Watchlist):** Şüpheli rakipleri HUD üzerindeki `👁` ikonuyla listeye ekleyin. Eklenti arka planda bu hesapları kontrol eder ve Chess.com hesabı hileden kapattığında (`BANLANDI - HİLE`) size bildirir!
 - **Tek Tıkla Çift Dil (`TR` / `EN`):** Hem sayfa içi HUD pop-up üzerinden hem de araç çubuğu menüsünden Türkçe ve İngilizce arasında anında geçiş yapabilirsiniz.
 
-### 🚀 Kurulum (Firefox & Tarayıcılar)
-1. **Mozilla Firefox:** Doğrudan resmi [**Firefox Add-ons Mağazasından (`chess-sentinel`)**](https://addons.mozilla.org/tr/firefox/addon/chess-sentinel/) kurabilir veya [**Releases**](https://github.com/prob1st/chess-sentinel/releases/latest) bölümünden **`chess-sentinel-v3.1.0-firefox.zip`** dosyasını indirip `about:debugging#/runtime/this-firefox` üzerinden anında yükleyebilirsiniz.
-2. **Chromium Tarayıcılar (Brave / Chrome / Edge):** Bu repodaki hazır `extension/` klasörünü `chrome://extensions` → **Geliştirici modu** → **Paketlenmemiş öğe yükle** adımıyla seçebilirsiniz.
+### 🚀 Kurulum (Firefox & Chrome / Brave / Edge)
+1. **Mozilla Firefox:** Doğrudan resmi [**Firefox Add-ons Mağazasından (`chess-sentinel`)**](https://addons.mozilla.org/tr/firefox/addon/chess-sentinel/) kurabilir veya [**Releases**](https://github.com/prob1st/chess-sentinel/releases/latest) sayfasından hazır derlenmiş **`chess-sentinel-v3.1.0-firefox.zip`** dosyasını indirip `about:debugging#/runtime/this-firefox` → **Geçici Eklenti Yükle** adımıyla doğrudan seçebilirsiniz.
+2. **Chrome / Brave / Edge / Opera:** [**Releases**](https://github.com/prob1st/chess-sentinel/releases/latest) sayfasından hazır derlenmiş **`chess-sentinel-v3.1.0-chrome-brave-edge.zip`** dosyasını indirip bir klasöre çıkartın; ardından `chrome://extensions` → **Geliştirici modu** → **Paketlenmemiş öğe yükle** adımıyla klasörü seçin *(derleme/build gerektirmez, çalışmaya hazır `.js` dosyaları içindedir)*.
 3. **v3.1 Sıfır Yanlış Pozitif (`0 False Positive`) Garantisi:** 10.000 dürüst oyuncu / el ile oynayan smurf / şanslı galibiyet serisi simülasyonunda ve canlı Chess.com oyuncu testlerinde **`%0.000` yanlış alarm** üretir; doğrudan `%clk` saat veya `%99.5` alt güven sınırlı `CAPS2` motor kanıtı olmadan hiçbir dürüst oyuncuyu hileci olarak işaretlemez!
 
 ---
