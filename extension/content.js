@@ -51,6 +51,7 @@
     compactMode: false,
     showInlineBadge: true,
     ratedOnly: true,
+    soundAlerts: true,
     sensitivity: "balanced",
     hudPosition: null
   };
@@ -92,6 +93,48 @@
       return Array.isArray(res[KEYS.WATCHLIST]) ? res[KEYS.WATCHLIST] : [];
     } catch {
       return [];
+    }
+  }
+
+  // src/utils/safe-dom.ts
+  function escapeHtml(raw) {
+    return raw.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  function setSafeHtml(target, html) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<!DOCTYPE html><html><body>${html}</body></html>`, "text/html");
+    const nodes = Array.from(doc.body.childNodes).map((node) => document.importNode(node, true));
+    target.replaceChildren(...nodes);
+  }
+  function playRiskAlertChime(isCritical) {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      if (ctx.state === "suspended") {
+        void ctx.resume().catch(() => {
+        });
+      }
+      const now = ctx.currentTime;
+      const freqs = isCritical ? [587.33, 880, 1174.66] : [523.25, 659.25];
+      freqs.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = isCritical ? "triangle" : "sine";
+        osc.frequency.setValueAtTime(freq, now + idx * 0.11);
+        gain.gain.setValueAtTime(1e-4, now + idx * 0.11);
+        gain.gain.exponentialRampToValueAtTime(0.075, now + idx * 0.11 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(1e-4, now + idx * 0.11 + 0.16);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + idx * 0.11);
+        osc.stop(now + idx * 0.11 + 0.17);
+      });
+      setTimeout(() => {
+        void ctx.close().catch(() => {
+        });
+      }, 800);
+    } catch {
     }
   }
 
@@ -436,6 +479,76 @@
     }
   };
 
+  // src/core/engine.ts
+  function buildFairPlayEvidenceReport(res, lang, liveClock) {
+    const pf = res.formats[res.primaryFormat];
+    const lines = [];
+    if (lang === "tr") {
+      lines.push(`[Chess Sentinel v3.0 \u2014 Adil Oyun Telemetri \xD6zeti]`);
+      lines.push(
+        `Oyuncu: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Hesap Ya\u015F\u0131: ${res.accountAgeDays !== null ? `${res.accountAgeDays} g\xFCn` : "Bilinmiyor"}`
+      );
+      lines.push(
+        `Birincil Format: ${res.primaryFormat.toUpperCase()} (${pf.currentRating ?? "\u2014"} Elo) | \u0130statistiksel Anomali Olas\u0131l\u0131\u011F\u0131: %${res.probability}`
+      );
+      lines.push(
+        `Son Performans: ${pf.recentWins}G / ${pf.recentLosses}M / ${pf.recentDraws}B (%${pf.recentWinPct} galibiyet, Rakip Elo beklentisine g\xF6re ${pf.eloZScore >= 0 ? "+" : ""}${pf.eloZScore}\u03C3 Z-Skoru)`
+      );
+      if (pf.avgAccuracy !== null) {
+        lines.push(
+          `Uzun Ma\xE7 CAPS2 Do\u011Fruluk: %${pf.avgAccuracy} (Elo band\u0131 beklentisi: %${pf.expectedAccuracy}, \u0130ncelenen tam ma\xE7: ${pf.reviewedGames})`
+        );
+      }
+      if (res.pacing.gamesAnalyzed >= 4) {
+        lines.push(
+          `Kronometrik Saat Analizi (%clk): Entropi ${res.pacing.meanEntropyBits ?? "\u2014"} bit | Medyan QCD: ${res.pacing.medianQCD ?? "\u2014"} | Medyan CV: ${res.pacing.medianCV ?? "\u2014"} | Mekanik Ma\xE7 Oran\u0131: %${Math.round(res.pacing.flatlineRate * 100)}`
+        );
+      }
+      if (liveClock && liveClock.movesObserved >= 4) {
+        lines.push(
+          `Canl\u0131 Ma\xE7 Saat Verisi: ${liveClock.movesObserved} hamle izlendi | Ort: ${liveClock.liveMeanSec ?? "\u2014"} sn | Canl\u0131 QCD: ${liveClock.liveQCD ?? "\u2014"} | Ard\u0131\u015F\u0131k mekanik hamle: ${liveClock.consecutiveRoboticMoves}`
+        );
+      }
+      const topUrls = res.recentMatches.filter((m) => m.url && m.result === "W").slice(0, 3).map((m) => `${m.url}${m.accuracy !== null ? ` (%${m.accuracy})` : ""}`);
+      if (topUrls.length > 0) {
+        lines.push(`\u0130ncelenmesi \xD6nerilen Son Ma\xE7lar:
+- ${topUrls.join("\n- ")}`);
+      }
+    } else {
+      lines.push(`[Chess Sentinel v3.0 \u2014 Fair-Play Telemetry Summary]`);
+      lines.push(
+        `Player: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Account Age: ${res.accountAgeDays !== null ? `${res.accountAgeDays} days` : "Unknown"}`
+      );
+      lines.push(
+        `Primary Format: ${res.primaryFormat.toUpperCase()} (${pf.currentRating ?? "\u2014"} Elo) | Statistical Anomaly Probability: ${res.probability}%`
+      );
+      lines.push(
+        `Recent Performance: ${pf.recentWins}W / ${pf.recentLosses}L / ${pf.recentDraws}D (${pf.recentWinPct}% WR, ${pf.eloZScore >= 0 ? "+" : ""}${pf.eloZScore}\u03C3 Elo-adjusted Z-Score)`
+      );
+      if (pf.avgAccuracy !== null) {
+        lines.push(
+          `Long-Game CAPS2 Accuracy: ${pf.avgAccuracy}% (Band expected: ${pf.expectedAccuracy}%, Full-length reviewed games: ${pf.reviewedGames})`
+        );
+      }
+      if (res.pacing.gamesAnalyzed >= 4) {
+        lines.push(
+          `Chronometric PGN [%clk] Profile: Entropy ${res.pacing.meanEntropyBits ?? "\u2014"} bits | Median QCD: ${res.pacing.medianQCD ?? "\u2014"} | Median CV: ${res.pacing.medianCV ?? "\u2014"} | Flatline Rate: ${Math.round(res.pacing.flatlineRate * 100)}%`
+        );
+      }
+      if (liveClock && liveClock.movesObserved >= 4) {
+        lines.push(
+          `Live Match Clock Radar: ${liveClock.movesObserved} moves | Mean: ${liveClock.liveMeanSec ?? "\u2014"}s | Live QCD: ${liveClock.liveQCD ?? "\u2014"} | Consecutive flatline moves: ${liveClock.consecutiveRoboticMoves}`
+        );
+      }
+      const topUrls = res.recentMatches.filter((m) => m.url && m.result === "W").slice(0, 3).map((m) => `${m.url}${m.accuracy !== null ? ` (${m.accuracy}%)` : ""}`);
+      if (topUrls.length > 0) {
+        lines.push(`Recent Games for Review:
+- ${topUrls.join("\n- ")}`);
+      }
+    }
+    return lines.join("\n");
+  }
+
   // src/i18n/translations.ts
   var TRANSLATIONS = {
     tr: {
@@ -493,8 +606,20 @@
         minimize: "K\xFC\xE7\xFClt (Alt+S)",
         expand: "B\xFCy\xFCt",
         openProfile: "Chess.com Profilini A\xE7",
-        toggleDetails: "Detayl\u0131 Telemetriyi G\xF6ster",
-        hideDetails: "Detaylar\u0131 Gizle"
+        toggleDetails: "Adli Detaylar\u0131 & Grafikleri G\xF6ster",
+        hideDetails: "Detaylar\u0131 Gizle",
+        copyReport: "\u{1F4CB} Kan\u0131t Raporunu Kopyala",
+        copiedReport: "\u2713 Rapor Panoya Kopyaland\u0131!",
+        soundOn: "Sesli Risk Uyar\u0131s\u0131: A\xE7\u0131k",
+        soundOff: "Sesli Risk Uyar\u0131s\u0131: Kapal\u0131"
+      },
+      v3: {
+        liveClockTitle: "CANLI MA\xC7 HAMLE RADARI",
+        liveClockMoves: "{count} hamle \u2022 Ort {mean}s \u2022 QCD {qcd}",
+        liveClockSuspect: "\u26A1 Canl\u0131 ma\xE7ta mekanik hamle temposu alg\u0131land\u0131!",
+        pacingHistTitle: "HAMLE S\xDCRES\u0130 DA\u011EILIMI (%clk)",
+        pacingEntropyTag: "Entropi: {ent}b \u2022 QCD: {qcd}",
+        recentMatchesTitle: "SON PUANLI MA\xC7LAR"
       },
       popup: {
         tabScanner: "Oyuncu Tara",
@@ -521,6 +646,8 @@
         settingsCompactDesc: "HUD kart\u0131n\u0131 varsay\u0131lan olarak daralt\u0131lm\u0131\u015F g\xF6r\xFCn\xFCmde ba\u015Flat\u0131r.",
         settingsRatedOnly: "Sadece Puanl\u0131 (Rated) Ma\xE7lar",
         settingsRatedOnlyDesc: "Arkada\u015Fl\u0131k / puans\u0131z ma\xE7lar\u0131 olas\u0131l\u0131k hesab\u0131ndan hari\xE7 tutar.",
+        settingsSoundAlerts: "Kritik Risk Sesli Uyar\u0131s\u0131",
+        settingsSoundAlertsDesc: "Y\xFCksek/Kritik riskli (%68+) veya takipteki rakip geldi\u011Finde hafif radar sesi \xE7alar.",
         settingsSensitivity: "Alg\u0131lama Hassasiyeti",
         sensitivityConservative: "Esnek",
         sensitivityBalanced: "Dengeli (\xD6nerilen)",
@@ -602,8 +729,20 @@
         minimize: "Minimize (Alt+S)",
         expand: "Expand HUD",
         openProfile: "Open Chess.com Profile",
-        toggleDetails: "Show Forensic Breakdown",
-        hideDetails: "Hide Breakdown"
+        toggleDetails: "Show Forensic Charts & Breakdown",
+        hideDetails: "Hide Breakdown",
+        copyReport: "\u{1F4CB} Copy Fair-Play Report",
+        copiedReport: "\u2713 Evidence Copied!",
+        soundOn: "Critical Risk Audio Alert: ON",
+        soundOff: "Critical Risk Audio Alert: OFF"
+      },
+      v3: {
+        liveClockTitle: "LIVE MATCH CLOCK RADAR",
+        liveClockMoves: "{count} moves \u2022 Avg {mean}s \u2022 QCD {qcd}",
+        liveClockSuspect: "\u26A1 Mechanical move pacing detected in live game!",
+        pacingHistTitle: "MOVE-TIME HISTOGRAM (%clk)",
+        pacingEntropyTag: "Entropy: {ent}b \u2022 QCD: {qcd}",
+        recentMatchesTitle: "RECENT RATED MATCHES"
       },
       popup: {
         tabScanner: "Live Scanner",
@@ -630,6 +769,8 @@
         settingsCompactDesc: "Starts the in-page HUD popup with telemetry bars collapsed by default.",
         settingsRatedOnly: "Rated Games Only",
         settingsRatedOnlyDesc: "Excludes casual / unrated games when computing cheat probability.",
+        settingsSoundAlerts: "Critical Risk Audio Chime",
+        settingsSoundAlertsDesc: "Plays a subtle radar tone when matched against a High/Critical (\u226568%) or watched opponent.",
         settingsSensitivity: "Detection Sensitivity",
         sensitivityConservative: "Conservative",
         sensitivityBalanced: "Balanced (Default)",
@@ -695,8 +836,11 @@
     position: fixed;
     top: 72px;
     right: 20px;
-    width: 344px;
-    background: linear-gradient(165deg, rgba(13, 18, 30, 0.93) 0%, rgba(8, 11, 20, 0.96) 100%);
+    width: 356px;
+    max-height: calc(100vh - 88px);
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(165deg, rgba(13, 18, 30, 0.94) 0%, rgba(8, 11, 20, 0.97) 100%);
     backdrop-filter: blur(22px) saturate(165%);
     -webkit-backdrop-filter: blur(22px) saturate(165%);
     border: 1px solid var(--tier-border, rgba(148, 163, 184, 0.22));
@@ -713,6 +857,13 @@
       box-shadow 0.3s ease;
     animation: sentinelSlideIn 0.32s cubic-bezier(0.16, 1, 0.3, 1);
     user-select: none;
+  }
+
+  .hud-scroll-body {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
   }
 
   .sentinel-card.hidden {
@@ -1252,6 +1403,190 @@
     transition: width 0.55s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
+  /* v3.0 Live Match Clock Radar */
+  .live-clock-box {
+    margin: 0 14px 9px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.72);
+    border: 1px solid rgba(56, 189, 248, 0.22);
+  }
+  .live-clock-box.suspect {
+    background: rgba(127, 29, 29, 0.24);
+    border-color: rgba(239, 68, 68, 0.55);
+  }
+  .live-clock-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    color: #7dd3fc;
+    margin-bottom: 5px;
+  }
+  .live-clock-box.suspect .live-clock-head {
+    color: #fca5a5;
+  }
+  .live-spark-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 22px;
+  }
+  .live-spark-col {
+    flex: 1;
+    min-width: 6px;
+    border-radius: 2px 2px 0 0;
+    transition: height 0.2s ease;
+  }
+  .live-suspect-msg {
+    margin-top: 5px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #fecaca;
+  }
+
+  /* v3.0 7-Bin Move-Time Histogram */
+  .hist-card {
+    margin-top: 6px;
+    padding: 8px 10px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .sub-sec-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    color: #94a3b8;
+    margin-bottom: 7px;
+  }
+  .hist-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    align-items: end;
+    height: 44px;
+  }
+  .hist-col-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 100%;
+    gap: 3px;
+  }
+  .hist-bar {
+    width: 100%;
+    border-radius: 3px 3px 1px 1px;
+    min-height: 3px;
+  }
+  .hist-lbl {
+    font-size: 8px;
+    color: #64748b;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* v3.0 Recent 5 Matches Strip */
+  .matches-card {
+    margin-top: 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .match-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 8px;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    text-decoration: none;
+    color: #e2e8f0;
+    font-size: 10px;
+    transition: background 0.14s ease;
+  }
+  .match-row:hover {
+    background: rgba(255, 255, 255, 0.07);
+  }
+  .match-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .match-res {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    font-size: 9.5px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .match-res.W { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+  .match-res.L { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+  .match-res.D { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+  .match-opp {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 145px;
+    font-weight: 600;
+  }
+  .match-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-variant-numeric: tabular-nums;
+    font-size: 9.5px;
+    color: #94a3b8;
+    flex-shrink: 0;
+  }
+  .match-acc {
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-weight: 700;
+    background: rgba(56, 189, 248, 0.12);
+    color: #7dd3fc;
+  }
+  .match-acc.high {
+    background: rgba(239, 68, 68, 0.18);
+    color: #fca5a5;
+  }
+
+  /* v3.0 Copy Fair-Play Evidence Button */
+  .copy-report-btn {
+    margin-top: 6px;
+    width: 100%;
+    padding: 7px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(56, 189, 248, 0.28);
+    background: rgba(56, 189, 248, 0.1);
+    color: #bae6fd;
+    font-size: 10.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.16s ease;
+    text-align: center;
+  }
+  .copy-report-btn:hover {
+    background: rgba(56, 189, 248, 0.19);
+    color: #f8fafc;
+  }
+  .copy-report-btn.copied {
+    border-color: rgba(16, 185, 129, 0.5);
+    background: rgba(16, 185, 129, 0.18);
+    color: #6ee7b7;
+  }
+
   /* Loading State */
   .loading-box {
     padding: 22px 16px;
@@ -1333,6 +1668,7 @@
 `;
 
   // src/content/hud-overlay.ts
+  var HIST_LABELS = ["<0.9s", "1.8s", "3.2s", "5.5s", "9.5s", "18s", "18s+"];
   function countryToFlagEmoji(code) {
     if (!code || code.length !== 2) return "";
     const upper = code.toUpperCase();
@@ -1349,9 +1685,6 @@
     if (score < 82) return "#f97316";
     return "#ef4444";
   }
-  function escapeHtml(raw) {
-    return raw.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-  }
   var SentinelHudOverlay = class {
     host = null;
     shadow = null;
@@ -1360,12 +1693,14 @@
     settings;
     callbacks;
     currentResult = null;
+    liveClock = null;
     selectedFormat = "blitz";
     isMinimized = false;
     isHidden = true;
     detailsExpanded = true;
     isAbortWindowOpen = false;
     isWatched = false;
+    copiedFeedback = false;
     loadingUsername = null;
     // Drag state
     dragging = false;
@@ -1413,8 +1748,15 @@
     }
     updateSettings(next) {
       const prevLang = this.settings.language;
+      const prevSound = this.settings.soundAlerts;
       this.settings = next;
-      if (prevLang !== next.language) {
+      if (prevLang !== next.language || prevSound !== next.soundAlerts) {
+        this.render();
+      }
+    }
+    updateLiveClock(telemetry) {
+      this.liveClock = telemetry;
+      if (this.currentResult && !this.isHidden) {
         this.render();
       }
     }
@@ -1432,6 +1774,7 @@
       this.mount();
       this.loadingUsername = username;
       this.currentResult = null;
+      this.liveClock = null;
       this.isHidden = false;
       this.render();
       this.syncVisibility();
@@ -1443,6 +1786,7 @@
       this.selectedFormat = result.primaryFormat;
       this.isWatched = watched;
       this.isAbortWindowOpen = isAbortWindowOpen;
+      this.copiedFeedback = false;
       this.isHidden = false;
       this.render();
       this.syncVisibility();
@@ -1453,7 +1797,9 @@
       this.isHidden = false;
       if (!this.cardEl) return;
       const lang = this.settings.language;
-      this.cardEl.innerHTML = `
+      setSafeHtml(
+        this.cardEl,
+        `
       <div class="tier-accent-line"></div>
       ${this.renderHeaderHtml(lang)}
       <div class="loading-box">
@@ -1462,7 +1808,8 @@
           <div class="loading-sub">${escapeHtml(message)}</div>
         </div>
       </div>
-    `;
+    `
+      );
       this.bindHeaderEvents();
       this.syncVisibility();
     }
@@ -1536,6 +1883,8 @@
     renderHeaderHtml(lang) {
       const t = TRANSLATIONS[lang];
       const nextLang = lang === "tr" ? "EN" : "TR";
+      const soundIcon = this.settings.soundAlerts ? "\u{1F514}" : "\u{1F515}";
+      const soundTitle = this.settings.soundAlerts ? t.actions.soundOn : t.actions.soundOff;
       return `
       <div class="hud-header" data-drag-handle="1">
         <div class="brand">
@@ -1547,6 +1896,7 @@
         </div>
         <div class="header-actions">
           <button class="icon-btn lang-btn" data-action="lang" title="Switch Language / Dil De\u011Fi\u015Ftir">${nextLang}</button>
+          <button class="icon-btn" data-action="sound" title="${escapeHtml(soundTitle)}">${soundIcon}</button>
           <button class="icon-btn" data-action="swap" title="${escapeHtml(t.actions.swapTarget)}">\u21C5</button>
           ${this.currentResult ? `<button class="icon-btn ${this.isWatched ? "active" : ""}" data-action="watch" title="${escapeHtml(
         this.isWatched ? t.actions.watchingSuspect : t.actions.watchSuspect
@@ -1579,6 +1929,11 @@
             this.settings = { ...this.settings, language: next };
             this.render();
             this.callbacks.onToggleLanguage(next);
+          } else if (act === "sound") {
+            const nextSound = !this.settings.soundAlerts;
+            this.settings = { ...this.settings, soundAlerts: nextSound };
+            this.render();
+            this.callbacks.onToggleSound(nextSound);
           } else if (act === "swap") {
             this.callbacks.onSwapTarget();
           } else if (act === "watch" && this.currentResult) {
@@ -1594,6 +1949,91 @@
         });
       });
     }
+    renderLiveClockHtml(lang) {
+      const lc = this.liveClock;
+      if (!lc || lc.movesObserved < 3) return "";
+      if (this.currentResult && lc.opponent.toLowerCase() !== this.currentResult.username.toLowerCase() && lc.opponent.toLowerCase() !== this.currentResult.displayName.toLowerCase()) {
+        return "";
+      }
+      const t = TRANSLATIONS[lang];
+      const maxSec = Math.max(12, ...lc.moveTimesSec);
+      const barsHtml = lc.moveTimesSec.map((sec) => {
+        const hPct = Math.max(14, Math.min(100, Math.round(sec / maxSec * 100)));
+        const color = sec <= 1.8 ? "#34d399" : sec >= 2.4 && sec <= 8.8 && lc.isLiveSuspectPacing ? "#ef4444" : sec >= 18 ? "#f59e0b" : "#38bdf8";
+        return `<div class="live-spark-col" style="height:${hPct}%;background:${color}" title="${sec}s"></div>`;
+      }).join("");
+      const statsText = t.v3.liveClockMoves.replace("{count}", String(lc.movesObserved)).replace("{mean}", String(lc.liveMeanSec ?? "\u2014")).replace("{qcd}", String(lc.liveQCD ?? "\u2014"));
+      return `
+      <div class="live-clock-box ${lc.isLiveSuspectPacing ? "suspect" : ""}">
+        <div class="live-clock-head">
+          <span>${escapeHtml(t.v3.liveClockTitle)}</span>
+          <span>${escapeHtml(statsText)}</span>
+        </div>
+        <div class="live-spark-bars">${barsHtml}</div>
+        ${lc.isLiveSuspectPacing ? `<div class="live-suspect-msg">${escapeHtml(t.v3.liveClockSuspect)}</div>` : ""}
+      </div>
+    `;
+    }
+    renderHistogramHtml(res, lang) {
+      if (res.pacing.gamesAnalyzed < 4 || res.pacing.bucketDistribution.length < 7) return "";
+      const t = TRANSLATIONS[lang];
+      const dist = res.pacing.bucketDistribution;
+      const maxRatio = Math.max(0.25, ...dist);
+      const colsHtml = dist.map((ratio, idx) => {
+        const hPx = Math.max(3, Math.round(ratio / maxRatio * 30));
+        const isRoboticZone = (idx === 3 || idx === 4) && res.signals.movePacing >= 55;
+        const color = isRoboticZone ? "#ef4444" : idx <= 1 ? "#34d399" : idx >= 5 ? "#38bdf8" : "#60a5fa";
+        const pct = Math.round(ratio * 100);
+        return `
+          <div class="hist-col-wrap" title="${HIST_LABELS[idx]}: ${pct}%">
+            <div class="hist-bar" style="height:${hPx}px;background:${color}"></div>
+            <span class="hist-lbl">${HIST_LABELS[idx]}</span>
+          </div>
+        `;
+      }).join("");
+      const entTag = t.v3.pacingEntropyTag.replace("{ent}", String(res.pacing.meanEntropyBits ?? "\u2014")).replace("{qcd}", String(res.pacing.medianQCD ?? "\u2014"));
+      return `
+      <div class="hist-card">
+        <div class="sub-sec-head">
+          <span>${escapeHtml(t.v3.pacingHistTitle)}</span>
+          <span>${escapeHtml(entTag)}</span>
+        </div>
+        <div class="hist-grid">${colsHtml}</div>
+      </div>
+    `;
+    }
+    renderRecentMatchesHtml(res, lang) {
+      if (!res.recentMatches || res.recentMatches.length === 0) return "";
+      const t = TRANSLATIONS[lang];
+      const bandCeiling = res.formats[res.primaryFormat]?.highAccCeiling ?? 92;
+      const rowsHtml = res.recentMatches.slice(0, 5).map((m) => {
+        const resLbl = lang === "tr" ? m.result === "W" ? "G" : m.result === "L" ? "M" : "B" : m.result;
+        const movesCount = Math.max(1, Math.round(m.plies / 2));
+        const accHtml = m.accuracy !== null ? `<span class="match-acc ${m.accuracy >= bandCeiling ? "high" : ""}">${m.accuracy}%</span>` : "";
+        const href = m.url || `https://www.chess.com/member/${encodeURIComponent(res.displayName)}`;
+        return `
+          <a class="match-row" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">
+            <div class="match-left">
+              <span class="match-res ${m.result}">${resLbl}</span>
+              <span class="match-opp">vs @${escapeHtml(m.opponentUsername)} (${m.opponentRating})</span>
+            </div>
+            <div class="match-right">
+              ${accHtml}
+              <span>${movesCount}m</span>
+            </div>
+          </a>
+        `;
+      }).join("");
+      return `
+      <div class="hist-card">
+        <div class="sub-sec-head">
+          <span>${escapeHtml(t.v3.recentMatchesTitle)}</span>
+          <span>${res.analyzedGamesCount} total</span>
+        </div>
+        <div class="matches-card">${rowsHtml}</div>
+      </div>
+    `;
+    }
     render() {
       if (!this.cardEl || !this.minPillEl) return;
       const lang = this.settings.language;
@@ -1602,7 +2042,9 @@
         this.cardEl.style.setProperty("--tier-color", "#38bdf8");
         this.cardEl.style.setProperty("--tier-border", "rgba(56, 189, 248, 0.3)");
         this.cardEl.style.setProperty("--tier-glow", "rgba(56, 189, 248, 0.25)");
-        this.cardEl.innerHTML = `
+        setSafeHtml(
+          this.cardEl,
+          `
         <div class="tier-accent-line"></div>
         ${this.renderHeaderHtml(lang)}
         <div class="loading-box">
@@ -1612,10 +2054,12 @@
             <div class="loading-sub">${escapeHtml(t.scanningOpponent)}</div>
           </div>
         </div>
-      `;
-        this.minPillEl.innerHTML = `<span class="min-pct">\u2026</span><span class="min-user">@${escapeHtml(
-          this.loadingUsername
-        )}</span>`;
+      `
+        );
+        setSafeHtml(
+          this.minPillEl,
+          `<span class="min-pct">\u2026</span><span class="min-user">@${escapeHtml(this.loadingUsername)}</span>`
+        );
         this.bindHeaderEvents();
         return;
       }
@@ -1703,90 +2147,105 @@
       `;
       }).join("");
       const pctDisplay = lang === "tr" ? `<span>%</span>${displayProb}` : `${displayProb}<span>%</span>`;
-      this.cardEl.innerHTML = `
+      setSafeHtml(
+        this.cardEl,
+        `
       <div class="tier-accent-line"></div>
       ${this.renderHeaderHtml(lang)}
-      ${alertHtml}
-      <div class="hero">
-        <div class="gauge-wrap">
-          <svg class="gauge-svg" viewBox="0 0 86 86">
-            <circle class="gauge-track" cx="43" cy="43" r="${radius}"></circle>
-            <circle
-              class="gauge-progress"
-              cx="43"
-              cy="43"
-              r="${radius}"
-              stroke-dasharray="${circ.toFixed(2)}"
-              stroke-dashoffset="${offset.toFixed(2)}"
-            ></circle>
-          </svg>
-          <div class="gauge-center">
-            <div class="gauge-pct">${pctDisplay}</div>
-            <div class="gauge-caption">${escapeHtml(t.cheatProbability)}</div>
+      <div class="hud-scroll-body">
+        ${alertHtml}
+        <div class="hero">
+          <div class="gauge-wrap">
+            <svg class="gauge-svg" viewBox="0 0 86 86">
+              <circle class="gauge-track" cx="43" cy="43" r="${radius}"></circle>
+              <circle
+                class="gauge-progress"
+                cx="43"
+                cy="43"
+                r="${radius}"
+                stroke-dasharray="${circ.toFixed(2)}"
+                stroke-dashoffset="${offset.toFixed(2)}"
+              ></circle>
+            </svg>
+            <div class="gauge-center">
+              <div class="gauge-pct">${pctDisplay}</div>
+              <div class="gauge-caption">${escapeHtml(t.cheatProbability)}</div>
+            </div>
+          </div>
+          <div class="identity">
+            <div class="player-row">
+              ${avatarHtml}
+              ${titleBadgeHtml}
+              <a class="username-link" href="https://www.chess.com/member/${encodeURIComponent(
+          res.displayName
+        )}" target="_blank" rel="noopener noreferrer">
+                ${escapeHtml(res.displayName)}
+              </a>
+              ${flagEmoji ? `<span>${flagEmoji}</span>` : ""}
+            </div>
+            <div class="tier-badge-row">
+              <span class="tier-pill">${escapeHtml(t.tiers[res.tier].label)}</span>
+              <span class="conf-tag">\u2022 ${escapeHtml(t.confidenceLabel[res.confidence])}</span>
+            </div>
+            <div class="verdict-sub">${escapeHtml(verdictText)}</div>
           </div>
         </div>
-        <div class="identity">
-          <div class="player-row">
-            ${avatarHtml}
-            ${titleBadgeHtml}
-            <a class="username-link" href="https://www.chess.com/member/${encodeURIComponent(
-        res.displayName
-      )}" target="_blank" rel="noopener noreferrer">
-              ${escapeHtml(res.displayName)}
-            </a>
-            ${flagEmoji ? `<span>${flagEmoji}</span>` : ""}
+
+        ${this.renderLiveClockHtml(lang)}
+
+        <div class="format-tabs">${formatTabsHtml}</div>
+
+        <div class="stat-grid">
+          <div class="stat-tile">
+            <div class="stat-val">${escapeHtml(ageStr)}</div>
+            <div class="stat-lbl">${escapeHtml(t.stats.accountAge)}</div>
           </div>
-          <div class="tier-badge-row">
-            <span class="tier-pill">${escapeHtml(t.tiers[res.tier].label)}</span>
-            <span class="conf-tag">\u2022 ${escapeHtml(t.confidenceLabel[res.confidence])}</span>
+          <div class="stat-tile">
+            <div class="stat-val ${accClass}">${escapeHtml(accStr)}</div>
+            <div class="stat-lbl">${escapeHtml(t.stats.avgAccuracy)}</div>
           </div>
-          <div class="verdict-sub">${escapeHtml(verdictText)}</div>
+          <div class="stat-tile">
+            <div class="stat-val ${cvClass}">${escapeHtml(cvStr)}</div>
+            <div class="stat-lbl">${escapeHtml(t.stats.moveCV)}</div>
+          </div>
+          <div class="stat-tile">
+            <div class="stat-val ${d7Class}">${escapeHtml(d7Str)}</div>
+            <div class="stat-lbl">${escapeHtml(t.stats.elo7d)}</div>
+          </div>
+        </div>
+
+        ${res.recentForm.length > 0 ? `<div class="form-strip">
+                <div class="form-dots">${formDotsHtml}</div>
+                <div class="wld-summary">${escapeHtml(wldLabel)}</div>
+              </div>` : ""}
+
+        ${flagsHtml ? `<div class="flags-list">${flagsHtml}</div>` : ""}
+
+        <button class="details-toggle" data-toggle-details="1">
+          <span>${escapeHtml(this.detailsExpanded ? t.actions.hideDetails : t.actions.toggleDetails)}</span>
+          <span>${this.detailsExpanded ? "\u25B4" : "\u25BE"}</span>
+        </button>
+
+        <div class="signals-panel ${this.detailsExpanded ? "" : "collapsed"}">
+          ${signalsHtml}
+          ${this.renderHistogramHtml(res, lang)}
+          ${this.renderRecentMatchesHtml(res, lang)}
+          <button class="copy-report-btn ${this.copiedFeedback ? "copied" : ""}" data-copy-report="1">
+            ${escapeHtml(this.copiedFeedback ? t.actions.copiedReport : t.actions.copyReport)}
+          </button>
         </div>
       </div>
-
-      <div class="format-tabs">${formatTabsHtml}</div>
-
-      <div class="stat-grid">
-        <div class="stat-tile">
-          <div class="stat-val">${escapeHtml(ageStr)}</div>
-          <div class="stat-lbl">${escapeHtml(t.stats.accountAge)}</div>
-        </div>
-        <div class="stat-tile">
-          <div class="stat-val ${accClass}">${escapeHtml(accStr)}</div>
-          <div class="stat-lbl">${escapeHtml(t.stats.avgAccuracy)}</div>
-        </div>
-        <div class="stat-tile">
-          <div class="stat-val ${cvClass}">${escapeHtml(cvStr)}</div>
-          <div class="stat-lbl">${escapeHtml(t.stats.moveCV)}</div>
-        </div>
-        <div class="stat-tile">
-          <div class="stat-val ${d7Class}">${escapeHtml(d7Str)}</div>
-          <div class="stat-lbl">${escapeHtml(t.stats.elo7d)}</div>
-        </div>
-      </div>
-
-      ${res.recentForm.length > 0 ? `<div class="form-strip">
-              <div class="form-dots">${formDotsHtml}</div>
-              <div class="wld-summary">${escapeHtml(wldLabel)}</div>
-            </div>` : ""}
-
-      ${flagsHtml ? `<div class="flags-list">${flagsHtml}</div>` : ""}
-
-      <button class="details-toggle" data-toggle-details="1">
-        <span>${escapeHtml(this.detailsExpanded ? t.actions.hideDetails : t.actions.toggleDetails)}</span>
-        <span>${this.detailsExpanded ? "\u25B4" : "\u25BE"}</span>
-      </button>
-
-      <div class="signals-panel ${this.detailsExpanded ? "" : "collapsed"}">
-        ${signalsHtml}
-      </div>
-    `;
+    `
+      );
       const minPctText = lang === "tr" ? `%${displayProb}` : `${displayProb}%`;
-      this.minPillEl.innerHTML = `
+      setSafeHtml(
+        this.minPillEl,
+        `
       <span>\u{1F6E1}\uFE0F</span>
       <span class="min-pct">${minPctText}</span>
       <span class="min-user">@${escapeHtml(res.displayName)}</span>
-    `;
+    `
+      );
       this.bindHeaderEvents();
       this.cardEl.querySelectorAll("button[data-fmt]").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -1802,6 +2261,20 @@
         toggleBtn.addEventListener("click", () => {
           this.detailsExpanded = !this.detailsExpanded;
           this.render();
+        });
+      }
+      const copyBtn = this.cardEl.querySelector('[data-copy-report="1"]');
+      if (copyBtn) {
+        copyBtn.addEventListener("click", () => {
+          const text = buildFairPlayEvidenceReport(res, lang, this.liveClock);
+          void navigator.clipboard?.writeText(text).catch(() => {
+          });
+          this.copiedFeedback = true;
+          this.render();
+          setTimeout(() => {
+            this.copiedFeedback = false;
+            if (!this.isHidden) this.render();
+          }, 2200);
         });
       }
     }
@@ -1930,15 +2403,203 @@
     document.querySelectorAll(`.${BADGE_CLASS}`).forEach((el) => el.remove());
   }
 
+  // src/content/live-clock-monitor.ts
+  var TOP_SELECTORS = [
+    "#board-layout-player-top",
+    "#board-layout-top",
+    ".board-layout-player-top",
+    ".board-layout-top",
+    ".player-component.player-top",
+    ".player-top"
+  ];
+  var BOTTOM_SELECTORS = [
+    "#board-layout-player-bottom",
+    "#board-layout-bottom",
+    ".board-layout-player-bottom",
+    ".board-layout-bottom",
+    ".player-component.player-bottom",
+    ".player-bottom"
+  ];
+  function quantileSorted(sorted, q) {
+    if (sorted.length === 0) return 0;
+    const pos = (sorted.length - 1) * q;
+    const base = Math.floor(pos);
+    const rest = pos - base;
+    if (sorted[base + 1] !== void 0) {
+      return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
+    }
+    return sorted[base];
+  }
+  function summarizeLiveMoveTimes(opponent, allMoveTimesSec) {
+    const recent = allMoveTimesSec.slice(-16);
+    const n = allMoveTimesSec.length;
+    if (n < 3) {
+      return {
+        opponent,
+        movesObserved: n,
+        moveTimesSec: recent,
+        liveMeanSec: null,
+        liveQCD: null,
+        consecutiveRoboticMoves: 0,
+        detectedPauseSec: null,
+        isLiveSuspectPacing: false
+      };
+    }
+    const evalMoves = n >= 5 ? allMoveTimesSec.slice(2) : allMoveTimesSec;
+    const mean = evalMoves.reduce((s, v) => s + v, 0) / evalMoves.length;
+    const sorted = [...evalMoves].sort((a, b) => a - b);
+    const q1 = quantileSorted(sorted, 0.25);
+    const q3 = quantileSorted(sorted, 0.75);
+    const liveQCD = q3 + q1 > 0 ? Number(((q3 - q1) / (q3 + q1)).toFixed(2)) : 0;
+    let consecutiveRoboticMoves = 0;
+    for (let i = allMoveTimesSec.length - 1; i >= 0; i--) {
+      const t = allMoveTimesSec[i];
+      if (t >= 2.4 && t <= 8.8) {
+        consecutiveRoboticMoves++;
+      } else {
+        break;
+      }
+    }
+    let detectedPauseSec = null;
+    if (allMoveTimesSec.length >= 6) {
+      for (let i = 1; i <= allMoveTimesSec.length - 5; i++) {
+        const t = allMoveTimesSec[i];
+        if (t >= 22 && t <= 115) {
+          const after = allMoveTimesSec.slice(i + 1);
+          const roboticAfter = after.filter((x) => x >= 2.3 && x <= 8.8).length / after.length;
+          if (after.length >= 4 && roboticAfter >= 0.8) {
+            detectedPauseSec = Number(t.toFixed(1));
+            break;
+          }
+        }
+      }
+    }
+    const hasFastInstinctMove = evalMoves.some((t) => t <= 1.65);
+    const isLiveSuspectPacing = n >= 6 && liveQCD <= 0.23 && consecutiveRoboticMoves >= 5 && !hasFastInstinctMove && mean >= 2.6 && mean <= 9.5 || detectedPauseSec !== null && consecutiveRoboticMoves >= 4 && liveQCD <= 0.26;
+    return {
+      opponent,
+      movesObserved: n,
+      moveTimesSec: recent,
+      liveMeanSec: Number(mean.toFixed(1)),
+      liveQCD,
+      consecutiveRoboticMoves,
+      detectedPauseSec,
+      isLiveSuspectPacing
+    };
+  }
+  var LiveMatchClockMonitor = class {
+    onUpdate;
+    timer = null;
+    targetOpponent = null;
+    targetSide = "top";
+    moveTimesSec = [];
+    wasTargetTurn = false;
+    turnStartMs = 0;
+    lastKnownPlyCount = 0;
+    constructor(onUpdate) {
+      this.onUpdate = onUpdate;
+    }
+    setTarget(opponent, side) {
+      const normalized = opponent.toLowerCase();
+      if (this.targetOpponent?.toLowerCase() !== normalized || this.targetSide !== side) {
+        this.targetOpponent = opponent;
+        this.targetSide = side;
+        this.moveTimesSec = [];
+        this.wasTargetTurn = false;
+        this.turnStartMs = 0;
+        this.lastKnownPlyCount = this.countDomPlies();
+      }
+      this.ensureRunning();
+    }
+    stop() {
+      if (this.timer) {
+        clearInterval(this.timer);
+        this.timer = null;
+      }
+      this.targetOpponent = null;
+      this.moveTimesSec = [];
+      this.wasTargetTurn = false;
+    }
+    getLatestTelemetry() {
+      if (!this.targetOpponent || this.moveTimesSec.length === 0) return null;
+      return summarizeLiveMoveTimes(this.targetOpponent, this.moveTimesSec);
+    }
+    ensureRunning() {
+      if (this.timer) return;
+      this.timer = setInterval(() => this.sampleClock(), 250);
+    }
+    findZone(side) {
+      const selectors = side === "top" ? TOP_SELECTORS : BOTTOM_SELECTORS;
+      for (const sel of selectors) {
+        const el = document.querySelector(sel);
+        if (el) return el;
+      }
+      return null;
+    }
+    countDomPlies() {
+      return document.querySelectorAll("[data-ply], .move .node, wc-simple-move-list .node").length;
+    }
+    isZoneTurnActive(zone) {
+      if (zone.querySelector(
+        '.clock-player-turn, .clock-component.clock-player-turn, [class*="clock-player-turn"]'
+      )) {
+        return true;
+      }
+      const clockComp = zone.querySelector('.clock-component, [data-cy="clock-time"]');
+      if (clockComp && clockComp.className && String(clockComp.className).includes("player-turn")) {
+        return true;
+      }
+      return false;
+    }
+    sampleClock() {
+      if (!this.targetOpponent) return;
+      if (document.querySelector(
+        '.game-over-modal-content, [data-cy="game-over-modal"], .board-modal-container-container'
+      )) {
+        this.wasTargetTurn = false;
+        return;
+      }
+      const targetZone = this.findZone(this.targetSide);
+      const otherZone = this.findZone(this.targetSide === "top" ? "bottom" : "top");
+      if (!targetZone || !otherZone) return;
+      const isTargetTurn = this.isZoneTurnActive(targetZone);
+      const isOtherTurn = this.isZoneTurnActive(otherZone);
+      const currentPlies = this.countDomPlies();
+      if (currentPlies <= 2 && this.lastKnownPlyCount >= 8) {
+        this.moveTimesSec = [];
+        this.wasTargetTurn = false;
+        this.turnStartMs = 0;
+      }
+      this.lastKnownPlyCount = currentPlies;
+      const nowMs = performance.now();
+      if (isTargetTurn && !this.wasTargetTurn) {
+        this.wasTargetTurn = true;
+        this.turnStartMs = nowMs;
+      } else if (!isTargetTurn && this.wasTargetTurn && isOtherTurn) {
+        this.wasTargetTurn = false;
+        const elapsedSec = Number(((nowMs - this.turnStartMs) / 1e3).toFixed(2));
+        if (elapsedSec >= 0.15 && elapsedSec <= 180 && currentPlies >= 3) {
+          this.moveTimesSec.push(elapsedSec);
+          if (this.moveTimesSec.length > 60) {
+            this.moveTimesSec.shift();
+          }
+          this.onUpdate(summarizeLiveMoveTimes(this.targetOpponent, this.moveTimesSec));
+        }
+      }
+    }
+  };
+
   // src/content/index.ts
   var SentinelContentController = class {
     settings = { ...DEFAULT_SETTINGS };
     hud = null;
     detector = null;
+    clockMonitor = null;
     lastCtx = null;
     targetSide = "top";
     activeUsername = null;
     latestResult = null;
+    alertedUsernames = /* @__PURE__ */ new Set();
     async init() {
       this.settings = await getSettings();
       this.hud = new SentinelHudOverlay(this.settings, {
@@ -1953,12 +2614,18 @@
         onToggleLanguage: (nextLang) => {
           void this.persistSettings({ language: nextLang });
         },
+        onToggleSound: (enabled) => {
+          void this.persistSettings({ soundAlerts: enabled });
+        },
         onToggleWatchlist: (result) => {
           void this.handleWatchlistToggle(result);
         },
         onSavePosition: (pos) => {
           void this.persistSettings({ hudPosition: pos });
         }
+      });
+      this.clockMonitor = new LiveMatchClockMonitor((telemetry) => {
+        this.hud?.updateLiveClock(telemetry);
       });
       this.detector = new ChessComOpponentDetector(
         (ctx) => this.handleMatchContext(ctx),
@@ -1987,6 +2654,7 @@
       const candidate = nextSide === "top" ? this.lastCtx.topPlayer : this.lastCtx.bottomPlayer;
       if (!candidate) return;
       this.targetSide = nextSide;
+      this.clockMonitor?.setTarget(candidate, nextSide);
       void this.analyzeTarget(candidate, this.lastCtx.detectedFormat, false);
     }
     handleMatchContext(ctx) {
@@ -1996,6 +2664,7 @@
         this.targetSide = ctx.opponentSide;
       }
       const target = this.targetSide === "bottom" ? ctx.bottomPlayer || ctx.opponent : ctx.topPlayer || ctx.opponent;
+      this.clockMonitor?.setTarget(target, this.targetSide);
       this.hud?.setAbortWindow(ctx.isAbortWindowOpen);
       if (target.toLowerCase() !== this.activeUsername?.toLowerCase()) {
         void this.analyzeTarget(target, ctx.detectedFormat, false);
@@ -2005,6 +2674,7 @@
       this.activeUsername = null;
       this.latestResult = null;
       this.lastCtx = null;
+      this.clockMonitor?.stop();
       removeInlineUsernameBadges();
       this.hud?.hide();
     }
@@ -2032,8 +2702,14 @@
         const isWatched = watchlist.some(
           (w) => w.username.toLowerCase() === result.username.toLowerCase()
         );
+        if (this.settings.soundAlerts && !this.alertedUsernames.has(result.username.toLowerCase()) && (result.probability >= 68 || result.isBannedFairPlay || isWatched)) {
+          this.alertedUsernames.add(result.username.toLowerCase());
+          playRiskAlertChime(result.probability >= 80 || result.isBannedFairPlay);
+        }
         if (this.settings.autoShowHud || forceRefresh) {
           this.hud?.showResult(result, isWatched, this.lastCtx?.isAbortWindowOpen ?? false);
+          const liveSnap = this.clockMonitor?.getLatestTelemetry() ?? null;
+          if (liveSnap) this.hud?.updateLiveClock(liveSnap);
         }
         if (this.settings.showInlineBadge) {
           renderInlineUsernameBadge(result, this.targetSide, this.settings.language, () => {

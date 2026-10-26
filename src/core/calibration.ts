@@ -140,6 +140,7 @@ export const DEFAULT_SETTINGS: SentinelSettings = {
   compactMode: false,
   showInlineBadge: true,
   ratedOnly: true,
+  soundAlerts: true,
   sensitivity: 'balanced',
   hudPosition: null,
 };

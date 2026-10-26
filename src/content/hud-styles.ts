@@ -18,8 +18,11 @@ export const HUD_SHADOW_CSS = `
     position: fixed;
     top: 72px;
     right: 20px;
-    width: 344px;
-    background: linear-gradient(165deg, rgba(13, 18, 30, 0.93) 0%, rgba(8, 11, 20, 0.96) 100%);
+    width: 356px;
+    max-height: calc(100vh - 88px);
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(165deg, rgba(13, 18, 30, 0.94) 0%, rgba(8, 11, 20, 0.97) 100%);
     backdrop-filter: blur(22px) saturate(165%);
     -webkit-backdrop-filter: blur(22px) saturate(165%);
     border: 1px solid var(--tier-border, rgba(148, 163, 184, 0.22));
@@ -36,6 +39,13 @@ export const HUD_SHADOW_CSS = `
       box-shadow 0.3s ease;
     animation: sentinelSlideIn 0.32s cubic-bezier(0.16, 1, 0.3, 1);
     user-select: none;
+  }
+
+  .hud-scroll-body {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
   }
 
   .sentinel-card.hidden {
@@ -573,6 +583,190 @@ export const HUD_SHADOW_CSS = `
     height: 100%;
     border-radius: 999px;
     transition: width 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* v3.0 Live Match Clock Radar */
+  .live-clock-box {
+    margin: 0 14px 9px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.72);
+    border: 1px solid rgba(56, 189, 248, 0.22);
+  }
+  .live-clock-box.suspect {
+    background: rgba(127, 29, 29, 0.24);
+    border-color: rgba(239, 68, 68, 0.55);
+  }
+  .live-clock-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    color: #7dd3fc;
+    margin-bottom: 5px;
+  }
+  .live-clock-box.suspect .live-clock-head {
+    color: #fca5a5;
+  }
+  .live-spark-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 22px;
+  }
+  .live-spark-col {
+    flex: 1;
+    min-width: 6px;
+    border-radius: 2px 2px 0 0;
+    transition: height 0.2s ease;
+  }
+  .live-suspect-msg {
+    margin-top: 5px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #fecaca;
+  }
+
+  /* v3.0 7-Bin Move-Time Histogram */
+  .hist-card {
+    margin-top: 6px;
+    padding: 8px 10px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .sub-sec-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    color: #94a3b8;
+    margin-bottom: 7px;
+  }
+  .hist-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    align-items: end;
+    height: 44px;
+  }
+  .hist-col-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 100%;
+    gap: 3px;
+  }
+  .hist-bar {
+    width: 100%;
+    border-radius: 3px 3px 1px 1px;
+    min-height: 3px;
+  }
+  .hist-lbl {
+    font-size: 8px;
+    color: #64748b;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* v3.0 Recent 5 Matches Strip */
+  .matches-card {
+    margin-top: 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .match-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 8px;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    text-decoration: none;
+    color: #e2e8f0;
+    font-size: 10px;
+    transition: background 0.14s ease;
+  }
+  .match-row:hover {
+    background: rgba(255, 255, 255, 0.07);
+  }
+  .match-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .match-res {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    font-size: 9.5px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .match-res.W { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+  .match-res.L { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+  .match-res.D { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+  .match-opp {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 145px;
+    font-weight: 600;
+  }
+  .match-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-variant-numeric: tabular-nums;
+    font-size: 9.5px;
+    color: #94a3b8;
+    flex-shrink: 0;
+  }
+  .match-acc {
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-weight: 700;
+    background: rgba(56, 189, 248, 0.12);
+    color: #7dd3fc;
+  }
+  .match-acc.high {
+    background: rgba(239, 68, 68, 0.18);
+    color: #fca5a5;
+  }
+
+  /* v3.0 Copy Fair-Play Evidence Button */
+  .copy-report-btn {
+    margin-top: 6px;
+    width: 100%;
+    padding: 7px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(56, 189, 248, 0.28);
+    background: rgba(56, 189, 248, 0.1);
+    color: #bae6fd;
+    font-size: 10.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.16s ease;
+    text-align: center;
+  }
+  .copy-report-btn:hover {
+    background: rgba(56, 189, 248, 0.19);
+    color: #f8fafc;
+  }
+  .copy-report-btn.copied {
+    border-color: rgba(16, 185, 129, 0.5);
+    background: rgba(16, 185, 129, 0.18);
+    color: #6ee7b7;
   }
 
   /* Loading State */

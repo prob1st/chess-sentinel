@@ -49,9 +49,80 @@ var DEFAULT_SETTINGS = {
   compactMode: false,
   showInlineBadge: true,
   ratedOnly: true,
+  soundAlerts: true,
   sensitivity: "balanced",
   hudPosition: null
 };
+
+// src/core/engine.ts
+function buildFairPlayEvidenceReport(res, lang, liveClock) {
+  const pf = res.formats[res.primaryFormat];
+  const lines = [];
+  if (lang === "tr") {
+    lines.push(`[Chess Sentinel v3.0 \u2014 Adil Oyun Telemetri \xD6zeti]`);
+    lines.push(
+      `Oyuncu: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Hesap Ya\u015F\u0131: ${res.accountAgeDays !== null ? `${res.accountAgeDays} g\xFCn` : "Bilinmiyor"}`
+    );
+    lines.push(
+      `Birincil Format: ${res.primaryFormat.toUpperCase()} (${pf.currentRating ?? "\u2014"} Elo) | \u0130statistiksel Anomali Olas\u0131l\u0131\u011F\u0131: %${res.probability}`
+    );
+    lines.push(
+      `Son Performans: ${pf.recentWins}G / ${pf.recentLosses}M / ${pf.recentDraws}B (%${pf.recentWinPct} galibiyet, Rakip Elo beklentisine g\xF6re ${pf.eloZScore >= 0 ? "+" : ""}${pf.eloZScore}\u03C3 Z-Skoru)`
+    );
+    if (pf.avgAccuracy !== null) {
+      lines.push(
+        `Uzun Ma\xE7 CAPS2 Do\u011Fruluk: %${pf.avgAccuracy} (Elo band\u0131 beklentisi: %${pf.expectedAccuracy}, \u0130ncelenen tam ma\xE7: ${pf.reviewedGames})`
+      );
+    }
+    if (res.pacing.gamesAnalyzed >= 4) {
+      lines.push(
+        `Kronometrik Saat Analizi (%clk): Entropi ${res.pacing.meanEntropyBits ?? "\u2014"} bit | Medyan QCD: ${res.pacing.medianQCD ?? "\u2014"} | Medyan CV: ${res.pacing.medianCV ?? "\u2014"} | Mekanik Ma\xE7 Oran\u0131: %${Math.round(res.pacing.flatlineRate * 100)}`
+      );
+    }
+    if (liveClock && liveClock.movesObserved >= 4) {
+      lines.push(
+        `Canl\u0131 Ma\xE7 Saat Verisi: ${liveClock.movesObserved} hamle izlendi | Ort: ${liveClock.liveMeanSec ?? "\u2014"} sn | Canl\u0131 QCD: ${liveClock.liveQCD ?? "\u2014"} | Ard\u0131\u015F\u0131k mekanik hamle: ${liveClock.consecutiveRoboticMoves}`
+      );
+    }
+    const topUrls = res.recentMatches.filter((m) => m.url && m.result === "W").slice(0, 3).map((m) => `${m.url}${m.accuracy !== null ? ` (%${m.accuracy})` : ""}`);
+    if (topUrls.length > 0) {
+      lines.push(`\u0130ncelenmesi \xD6nerilen Son Ma\xE7lar:
+- ${topUrls.join("\n- ")}`);
+    }
+  } else {
+    lines.push(`[Chess Sentinel v3.0 \u2014 Fair-Play Telemetry Summary]`);
+    lines.push(
+      `Player: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Account Age: ${res.accountAgeDays !== null ? `${res.accountAgeDays} days` : "Unknown"}`
+    );
+    lines.push(
+      `Primary Format: ${res.primaryFormat.toUpperCase()} (${pf.currentRating ?? "\u2014"} Elo) | Statistical Anomaly Probability: ${res.probability}%`
+    );
+    lines.push(
+      `Recent Performance: ${pf.recentWins}W / ${pf.recentLosses}L / ${pf.recentDraws}D (${pf.recentWinPct}% WR, ${pf.eloZScore >= 0 ? "+" : ""}${pf.eloZScore}\u03C3 Elo-adjusted Z-Score)`
+    );
+    if (pf.avgAccuracy !== null) {
+      lines.push(
+        `Long-Game CAPS2 Accuracy: ${pf.avgAccuracy}% (Band expected: ${pf.expectedAccuracy}%, Full-length reviewed games: ${pf.reviewedGames})`
+      );
+    }
+    if (res.pacing.gamesAnalyzed >= 4) {
+      lines.push(
+        `Chronometric PGN [%clk] Profile: Entropy ${res.pacing.meanEntropyBits ?? "\u2014"} bits | Median QCD: ${res.pacing.medianQCD ?? "\u2014"} | Median CV: ${res.pacing.medianCV ?? "\u2014"} | Flatline Rate: ${Math.round(res.pacing.flatlineRate * 100)}%`
+      );
+    }
+    if (liveClock && liveClock.movesObserved >= 4) {
+      lines.push(
+        `Live Match Clock Radar: ${liveClock.movesObserved} moves | Mean: ${liveClock.liveMeanSec ?? "\u2014"}s | Live QCD: ${liveClock.liveQCD ?? "\u2014"} | Consecutive flatline moves: ${liveClock.consecutiveRoboticMoves}`
+      );
+    }
+    const topUrls = res.recentMatches.filter((m) => m.url && m.result === "W").slice(0, 3).map((m) => `${m.url}${m.accuracy !== null ? ` (${m.accuracy}%)` : ""}`);
+    if (topUrls.length > 0) {
+      lines.push(`Recent Games for Review:
+- ${topUrls.join("\n- ")}`);
+    }
+  }
+  return lines.join("\n");
+}
 
 // src/i18n/translations.ts
 var TRANSLATIONS = {
@@ -110,8 +181,20 @@ var TRANSLATIONS = {
       minimize: "K\xFC\xE7\xFClt (Alt+S)",
       expand: "B\xFCy\xFCt",
       openProfile: "Chess.com Profilini A\xE7",
-      toggleDetails: "Detayl\u0131 Telemetriyi G\xF6ster",
-      hideDetails: "Detaylar\u0131 Gizle"
+      toggleDetails: "Adli Detaylar\u0131 & Grafikleri G\xF6ster",
+      hideDetails: "Detaylar\u0131 Gizle",
+      copyReport: "\u{1F4CB} Kan\u0131t Raporunu Kopyala",
+      copiedReport: "\u2713 Rapor Panoya Kopyaland\u0131!",
+      soundOn: "Sesli Risk Uyar\u0131s\u0131: A\xE7\u0131k",
+      soundOff: "Sesli Risk Uyar\u0131s\u0131: Kapal\u0131"
+    },
+    v3: {
+      liveClockTitle: "CANLI MA\xC7 HAMLE RADARI",
+      liveClockMoves: "{count} hamle \u2022 Ort {mean}s \u2022 QCD {qcd}",
+      liveClockSuspect: "\u26A1 Canl\u0131 ma\xE7ta mekanik hamle temposu alg\u0131land\u0131!",
+      pacingHistTitle: "HAMLE S\xDCRES\u0130 DA\u011EILIMI (%clk)",
+      pacingEntropyTag: "Entropi: {ent}b \u2022 QCD: {qcd}",
+      recentMatchesTitle: "SON PUANLI MA\xC7LAR"
     },
     popup: {
       tabScanner: "Oyuncu Tara",
@@ -138,6 +221,8 @@ var TRANSLATIONS = {
       settingsCompactDesc: "HUD kart\u0131n\u0131 varsay\u0131lan olarak daralt\u0131lm\u0131\u015F g\xF6r\xFCn\xFCmde ba\u015Flat\u0131r.",
       settingsRatedOnly: "Sadece Puanl\u0131 (Rated) Ma\xE7lar",
       settingsRatedOnlyDesc: "Arkada\u015Fl\u0131k / puans\u0131z ma\xE7lar\u0131 olas\u0131l\u0131k hesab\u0131ndan hari\xE7 tutar.",
+      settingsSoundAlerts: "Kritik Risk Sesli Uyar\u0131s\u0131",
+      settingsSoundAlertsDesc: "Y\xFCksek/Kritik riskli (%68+) veya takipteki rakip geldi\u011Finde hafif radar sesi \xE7alar.",
       settingsSensitivity: "Alg\u0131lama Hassasiyeti",
       sensitivityConservative: "Esnek",
       sensitivityBalanced: "Dengeli (\xD6nerilen)",
@@ -219,8 +304,20 @@ var TRANSLATIONS = {
       minimize: "Minimize (Alt+S)",
       expand: "Expand HUD",
       openProfile: "Open Chess.com Profile",
-      toggleDetails: "Show Forensic Breakdown",
-      hideDetails: "Hide Breakdown"
+      toggleDetails: "Show Forensic Charts & Breakdown",
+      hideDetails: "Hide Breakdown",
+      copyReport: "\u{1F4CB} Copy Fair-Play Report",
+      copiedReport: "\u2713 Evidence Copied!",
+      soundOn: "Critical Risk Audio Alert: ON",
+      soundOff: "Critical Risk Audio Alert: OFF"
+    },
+    v3: {
+      liveClockTitle: "LIVE MATCH CLOCK RADAR",
+      liveClockMoves: "{count} moves \u2022 Avg {mean}s \u2022 QCD {qcd}",
+      liveClockSuspect: "\u26A1 Mechanical move pacing detected in live game!",
+      pacingHistTitle: "MOVE-TIME HISTOGRAM (%clk)",
+      pacingEntropyTag: "Entropy: {ent}b \u2022 QCD: {qcd}",
+      recentMatchesTitle: "RECENT RATED MATCHES"
     },
     popup: {
       tabScanner: "Live Scanner",
@@ -247,6 +344,8 @@ var TRANSLATIONS = {
       settingsCompactDesc: "Starts the in-page HUD popup with telemetry bars collapsed by default.",
       settingsRatedOnly: "Rated Games Only",
       settingsRatedOnlyDesc: "Excludes casual / unrated games when computing cheat probability.",
+      settingsSoundAlerts: "Critical Risk Audio Chime",
+      settingsSoundAlertsDesc: "Plays a subtle radar tone when matched against a High/Critical (\u226568%) or watched opponent.",
       settingsSensitivity: "Detection Sensitivity",
       sensitivityConservative: "Conservative",
       sensitivityBalanced: "Balanced (Default)",
@@ -291,10 +390,18 @@ function formatAgeShort(days, lang) {
   return `${yrs} ${s.yearsShort}`;
 }
 
-// src/popup/index.ts
+// src/utils/safe-dom.ts
 function escapeHtml(raw) {
   return raw.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
+function setSafeHtml(target, html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(`<!DOCTYPE html><html><body>${html}</body></html>`, "text/html");
+  const nodes = Array.from(doc.body.childNodes).map((node) => document.importNode(node, true));
+  target.replaceChildren(...nodes);
+}
+
+// src/popup/index.ts
 function barColor(score) {
   if (score < 25) return "#10b981";
   if (score < 45) return "#38bdf8";
@@ -311,6 +418,7 @@ var PopupController = class {
   activeResult = null;
   scanning = false;
   checkingBans = false;
+  copiedReport = false;
   errorMsg = null;
   searchQuery = "";
   constructor(root) {
@@ -428,6 +536,9 @@ var PopupController = class {
         </div>
 
         ${flagsHtml ? `<div style="display:flex;flex-direction:column;gap:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,0.06)">${flagsHtml}</div>` : ""}
+        <button id="popup-copy-report-btn" class="pill-btn" style="margin-top:8px;width:100%;justify-content:center;padding:6px 10px;border-color:${this.copiedReport ? "rgba(16,185,129,0.5)" : "rgba(56,189,248,0.3)"};color:${this.copiedReport ? "#6ee7b7" : "#bae6fd"}">
+          ${escapeHtml(this.copiedReport ? t.actions.copiedReport : t.actions.copyReport)}
+        </button>
       </div>
     `;
   }
@@ -570,13 +681,23 @@ var PopupController = class {
         </div>
         <input class="toggle-input" type="checkbox" data-setting-check="ratedOnly" ${s.ratedOnly ? "checked" : ""} />
       </div>
+
+      <div class="setting-item">
+        <div>
+          <div class="setting-title">${escapeHtml(t.popup.settingsSoundAlerts)}</div>
+          <div class="setting-desc">${escapeHtml(t.popup.settingsSoundAlertsDesc)}</div>
+        </div>
+        <input class="toggle-input" type="checkbox" data-setting-check="soundAlerts" ${s.soundAlerts ? "checked" : ""} />
+      </div>
     `;
   }
   render() {
     const lang = this.settings.language;
     const t = TRANSLATIONS[lang];
     const bodyHtml = this.tab === "scanner" ? this.renderScannerTab(lang) : this.tab === "watchlist" ? this.renderWatchlistTab(lang) : this.renderSettingsTab(lang);
-    this.root.innerHTML = `
+    setSafeHtml(
+      this.root,
+      `
       <div class="popup-shell">
         <div class="top-bar">
           <div class="brand-group">
@@ -613,7 +734,8 @@ var PopupController = class {
 
         <div class="footer-note">${escapeHtml(t.popup.privacyNote)}</div>
       </div>
-    `;
+    `
+    );
     this.bindEvents();
   }
   bindEvents() {
@@ -660,6 +782,19 @@ var PopupController = class {
         void this.runPlayerScan(input.value);
       });
     }
+    const copyReportBtn = this.root.querySelector("#popup-copy-report-btn");
+    copyReportBtn?.addEventListener("click", () => {
+      if (!this.activeResult) return;
+      const report = buildFairPlayEvidenceReport(this.activeResult, this.settings.language, null);
+      void navigator.clipboard?.writeText(report).catch(() => {
+      });
+      this.copiedReport = true;
+      this.render();
+      setTimeout(() => {
+        this.copiedReport = false;
+        this.render();
+      }, 2e3);
+    });
     this.root.querySelectorAll("[data-select-scan]").forEach((row) => {
       row.addEventListener("click", () => {
         const u = row.dataset.selectScan;

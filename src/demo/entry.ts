@@ -2,6 +2,7 @@ import { DEFAULT_SETTINGS } from '../core/calibration';
 import { analyzePlayerBundle } from '../core/engine';
 import { SentinelHudOverlay } from '../content/hud-overlay';
 import { renderInlineUsernameBadge } from '../content/inline-badge';
+import { summarizeLiveMoveTimes } from '../content/live-clock-monitor';
 import { CheatAnalysisResult, Language, PlayerRawBundle, SentinelSettings } from '../types';
 
 const settings: SentinelSettings = {
@@ -40,6 +41,10 @@ const hud = new SentinelHudOverlay(settings, {
       );
     }
   },
+  onToggleSound: (enabled: boolean) => {
+    settings.soundAlerts = enabled;
+    hud.updateSettings(settings);
+  },
   onToggleWatchlist: (res) => {
     const key = res.username.toLowerCase();
     if (watchlist.has(key)) watchlist.delete(key);
@@ -75,14 +80,28 @@ function renderBundle(bundle: PlayerRawBundle, nowMs?: number): void {
     }
   }
   if (topAvatarEl) {
+    topAvatarEl.replaceChildren();
     if (result.avatarUrl) {
-      topAvatarEl.innerHTML = `<img src="${result.avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:6px" alt=""/>`;
+      const img = document.createElement('img');
+      img.src = result.avatarUrl;
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:6px';
+      img.alt = '';
+      topAvatarEl.appendChild(img);
     } else {
       topAvatarEl.textContent = result.displayName[0]?.toUpperCase() || '?';
     }
   }
 
   hud.showResult(result, watchlist.has(result.username.toLowerCase()), true);
+  if (result.probability >= 70) {
+    hud.updateLiveClock(
+      summarizeLiveMoveTimes(result.displayName, [1.4, 2.8, 34.5, 4.4, 4.7, 4.3, 4.6, 4.5, 4.4])
+    );
+  } else {
+    hud.updateLiveClock(
+      summarizeLiveMoveTimes(result.displayName, [0.8, 1.2, 6.4, 1.1, 14.2, 2.3, 0.9, 8.7])
+    );
+  }
   renderInlineUsernameBadge(result, 'top', settings.language, () => hud.expandFromBadge());
 }
 

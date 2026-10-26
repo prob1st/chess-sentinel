@@ -107,6 +107,7 @@ export interface PacingGameMetrics {
   cv: number;
   qcd: number; // Robust Quartile Coefficient of Dispersion (Q3-Q1)/(Q3+Q1)
   entropyBits: number; // Shannon entropy across 7 log-time buckets (0 - 2.81 bits)
+  bucketCounts: number[]; // Raw move counts across the 7 logarithmic buckets
   fastMoveRatio: number;
   roboticBandRatio: number;
   isFlatline: boolean;
@@ -122,11 +123,35 @@ export interface PacingSummary {
   minCV: number | null;
   meanFastMoveRatio: number | null;
   meanRoboticBandRatio: number | null;
+  bucketDistribution: number[]; // Normalized 0..1 ratios across 7 log-time buckets
   flatlineGames: number;
   flatlineRate: number;
   toggleGames: number;
   isConfirmedHumanPacing: boolean;
   pacingScore: number; // 0-100
+}
+
+export interface LiveMatchClockTelemetry {
+  opponent: string;
+  movesObserved: number;
+  moveTimesSec: number[]; // Most recent up to 16 move durations in current live game
+  liveMeanSec: number | null;
+  liveQCD: number | null;
+  consecutiveRoboticMoves: number;
+  detectedPauseSec: number | null;
+  isLiveSuspectPacing: boolean;
+}
+
+export interface RecentMatchSummary {
+  result: 'W' | 'L' | 'D';
+  format: TimeClass | string;
+  playerRating: number;
+  opponentUsername: string;
+  opponentRating: number;
+  accuracy: number | null;
+  plies: number;
+  url: string | null;
+  endTime: number;
 }
 
 export interface SignalBreakdown {
@@ -188,6 +213,7 @@ export interface CheatAnalysisResult {
   confidence: ConfidenceLevel;
   winStreak: number;
   recentForm: Array<'W' | 'L' | 'D'>; // Last 8 games
+  recentMatches: RecentMatchSummary[]; // Last 5 detailed matches
   signals: SignalBreakdown;
   pacing: PacingSummary;
   formats: Record<TimeClass, FormatTelemetry>;
@@ -215,6 +241,7 @@ export interface SentinelSettings {
   compactMode: boolean;
   showInlineBadge: boolean;
   ratedOnly: boolean;
+  soundAlerts: boolean;
   sensitivity: SensitivityPreset;
   hudPosition: { right: number; top: number } | null;
 }

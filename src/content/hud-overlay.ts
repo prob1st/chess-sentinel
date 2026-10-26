@@ -1,12 +1,17 @@
 import { LIVE_FORMATS, TIER_THEMES } from '../core/calibration';
+import { buildFairPlayEvidenceReport } from '../core/engine';
 import { formatAgeShort, formatFlag, TRANSLATIONS } from '../i18n/translations';
 import {
   CheatAnalysisResult,
   Language,
+  LiveMatchClockTelemetry,
   SentinelSettings,
   TimeClass,
 } from '../types';
+import { escapeHtml, setSafeHtml } from '../utils/safe-dom';
 import { HUD_SHADOW_CSS } from './hud-styles';
+
+const HIST_LABELS = ['<0.9s', '1.8s', '3.2s', '5.5s', '9.5s', '18s', '18s+'];
 
 function countryToFlagEmoji(code: string | null): string {
   if (!code || code.length !== 2) return '';
@@ -26,19 +31,11 @@ function barColor(score: number): string {
   return '#ef4444';
 }
 
-function escapeHtml(raw: string): string {
-  return raw
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 export interface HudCallbacks {
   onSwapTarget: () => void;
   onRefresh: () => void;
   onToggleLanguage: (nextLang: Language) => void;
+  onToggleSound: (enabled: boolean) => void;
   onToggleWatchlist: (result: CheatAnalysisResult) => void;
   onSavePosition: (pos: { right: number; top: number }) => void;
 }
@@ -52,12 +49,14 @@ export class SentinelHudOverlay {
   private settings: SentinelSettings;
   private callbacks: HudCallbacks;
   private currentResult: CheatAnalysisResult | null = null;
+  private liveClock: LiveMatchClockTelemetry | null = null;
   private selectedFormat: TimeClass = 'blitz';
   private isMinimized = false;
   private isHidden = true;
   private detailsExpanded = true;
   private isAbortWindowOpen = false;
   private isWatched = false;
+  private copiedFeedback = false;
   private loadingUsername: string | null = null;
 
   // Drag state
@@ -116,8 +115,16 @@ export class SentinelHudOverlay {
 
   updateSettings(next: SentinelSettings): void {
     const prevLang = this.settings.language;
+    const prevSound = this.settings.soundAlerts;
     this.settings = next;
-    if (prevLang !== next.language) {
+    if (prevLang !== next.language || prevSound !== next.soundAlerts) {
+      this.render();
+    }
+  }
+
+  updateLiveClock(telemetry: LiveMatchClockTelemetry | null): void {
+    this.liveClock = telemetry;
+    if (this.currentResult && !this.isHidden) {
       this.render();
     }
   }
@@ -138,6 +145,7 @@ export class SentinelHudOverlay {
     this.mount();
     this.loadingUsername = username;
     this.currentResult = null;
+    this.liveClock = null;
     this.isHidden = false;
     this.render();
     this.syncVisibility();
@@ -150,6 +158,7 @@ export class SentinelHudOverlay {
     this.selectedFormat = result.primaryFormat;
     this.isWatched = watched;
     this.isAbortWindowOpen = isAbortWindowOpen;
+    this.copiedFeedback = false;
     this.isHidden = false;
     this.render();
     this.syncVisibility();
@@ -162,7 +171,9 @@ export class SentinelHudOverlay {
     if (!this.cardEl) return;
 
     const lang = this.settings.language;
-    this.cardEl.innerHTML = `
+    setSafeHtml(
+      this.cardEl,
+      `
       <div class="tier-accent-line"></div>
       ${this.renderHeaderHtml(lang)}
       <div class="loading-box">
@@ -171,7 +182,8 @@ export class SentinelHudOverlay {
           <div class="loading-sub">${escapeHtml(message)}</div>
         </div>
       </div>
-    `;
+    `
+    );
     this.bindHeaderEvents();
     this.syncVisibility();
   }
@@ -253,6 +265,9 @@ export class SentinelHudOverlay {
   private renderHeaderHtml(lang: Language): string {
     const t = TRANSLATIONS[lang];
     const nextLang = lang === 'tr' ? 'EN' : 'TR';
+    const soundIcon = this.settings.soundAlerts ? '🔔' : '🔕';
+    const soundTitle = this.settings.soundAlerts ? t.actions.soundOn : t.actions.soundOff;
+
     return `
       <div class="hud-header" data-drag-handle="1">
         <div class="brand">
@@ -264,6 +279,7 @@ export class SentinelHudOverlay {
         </div>
         <div class="header-actions">
           <button class="icon-btn lang-btn" data-action="lang" title="Switch Language / Dil Değiştir">${nextLang}</button>
+          <button class="icon-btn" data-action="sound" title="${escapeHtml(soundTitle)}">${soundIcon}</button>
           <button class="icon-btn" data-action="swap" title="${escapeHtml(t.actions.swapTarget)}">⇅</button>
           ${
             this.currentResult
@@ -302,6 +318,11 @@ export class SentinelHudOverlay {
           this.settings = { ...this.settings, language: next };
           this.render();
           this.callbacks.onToggleLanguage(next);
+        } else if (act === 'sound') {
+          const nextSound = !this.settings.soundAlerts;
+          this.settings = { ...this.settings, soundAlerts: nextSound };
+          this.render();
+          this.callbacks.onToggleSound(nextSound);
         } else if (act === 'swap') {
           this.callbacks.onSwapTarget();
         } else if (act === 'watch' && this.currentResult) {
@@ -318,6 +339,138 @@ export class SentinelHudOverlay {
     });
   }
 
+  private renderLiveClockHtml(lang: Language): string {
+    const lc = this.liveClock;
+    if (!lc || lc.movesObserved < 3) return '';
+    if (
+      this.currentResult &&
+      lc.opponent.toLowerCase() !== this.currentResult.username.toLowerCase() &&
+      lc.opponent.toLowerCase() !== this.currentResult.displayName.toLowerCase()
+    ) {
+      return '';
+    }
+
+    const t = TRANSLATIONS[lang];
+    const maxSec = Math.max(12, ...lc.moveTimesSec);
+    const barsHtml = lc.moveTimesSec
+      .map((sec) => {
+        const hPct = Math.max(14, Math.min(100, Math.round((sec / maxSec) * 100)));
+        const color =
+          sec <= 1.8
+            ? '#34d399'
+            : sec >= 2.4 && sec <= 8.8 && lc.isLiveSuspectPacing
+              ? '#ef4444'
+              : sec >= 18
+                ? '#f59e0b'
+                : '#38bdf8';
+        return `<div class="live-spark-col" style="height:${hPct}%;background:${color}" title="${sec}s"></div>`;
+      })
+      .join('');
+
+    const statsText = t.v3.liveClockMoves
+      .replace('{count}', String(lc.movesObserved))
+      .replace('{mean}', String(lc.liveMeanSec ?? '—'))
+      .replace('{qcd}', String(lc.liveQCD ?? '—'));
+
+    return `
+      <div class="live-clock-box ${lc.isLiveSuspectPacing ? 'suspect' : ''}">
+        <div class="live-clock-head">
+          <span>${escapeHtml(t.v3.liveClockTitle)}</span>
+          <span>${escapeHtml(statsText)}</span>
+        </div>
+        <div class="live-spark-bars">${barsHtml}</div>
+        ${
+          lc.isLiveSuspectPacing
+            ? `<div class="live-suspect-msg">${escapeHtml(t.v3.liveClockSuspect)}</div>`
+            : ''
+        }
+      </div>
+    `;
+  }
+
+  private renderHistogramHtml(res: CheatAnalysisResult, lang: Language): string {
+    if (res.pacing.gamesAnalyzed < 4 || res.pacing.bucketDistribution.length < 7) return '';
+    const t = TRANSLATIONS[lang];
+    const dist = res.pacing.bucketDistribution;
+    const maxRatio = Math.max(0.25, ...dist);
+
+    const colsHtml = dist
+      .map((ratio, idx) => {
+        const hPx = Math.max(3, Math.round((ratio / maxRatio) * 30));
+        const isRoboticZone = (idx === 3 || idx === 4) && res.signals.movePacing >= 55;
+        const color = isRoboticZone
+          ? '#ef4444'
+          : idx <= 1
+            ? '#34d399'
+            : idx >= 5
+              ? '#38bdf8'
+              : '#60a5fa';
+        const pct = Math.round(ratio * 100);
+        return `
+          <div class="hist-col-wrap" title="${HIST_LABELS[idx]}: ${pct}%">
+            <div class="hist-bar" style="height:${hPx}px;background:${color}"></div>
+            <span class="hist-lbl">${HIST_LABELS[idx]}</span>
+          </div>
+        `;
+      })
+      .join('');
+
+    const entTag = t.v3.pacingEntropyTag
+      .replace('{ent}', String(res.pacing.meanEntropyBits ?? '—'))
+      .replace('{qcd}', String(res.pacing.medianQCD ?? '—'));
+
+    return `
+      <div class="hist-card">
+        <div class="sub-sec-head">
+          <span>${escapeHtml(t.v3.pacingHistTitle)}</span>
+          <span>${escapeHtml(entTag)}</span>
+        </div>
+        <div class="hist-grid">${colsHtml}</div>
+      </div>
+    `;
+  }
+
+  private renderRecentMatchesHtml(res: CheatAnalysisResult, lang: Language): string {
+    if (!res.recentMatches || res.recentMatches.length === 0) return '';
+    const t = TRANSLATIONS[lang];
+    const bandCeiling = res.formats[res.primaryFormat]?.highAccCeiling ?? 92;
+
+    const rowsHtml = res.recentMatches
+      .slice(0, 5)
+      .map((m) => {
+        const resLbl = lang === 'tr' ? (m.result === 'W' ? 'G' : m.result === 'L' ? 'M' : 'B') : m.result;
+        const movesCount = Math.max(1, Math.round(m.plies / 2));
+        const accHtml =
+          m.accuracy !== null
+            ? `<span class="match-acc ${m.accuracy >= bandCeiling ? 'high' : ''}">${m.accuracy}%</span>`
+            : '';
+        const href = m.url || `https://www.chess.com/member/${encodeURIComponent(res.displayName)}`;
+        return `
+          <a class="match-row" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">
+            <div class="match-left">
+              <span class="match-res ${m.result}">${resLbl}</span>
+              <span class="match-opp">vs @${escapeHtml(m.opponentUsername)} (${m.opponentRating})</span>
+            </div>
+            <div class="match-right">
+              ${accHtml}
+              <span>${movesCount}m</span>
+            </div>
+          </a>
+        `;
+      })
+      .join('');
+
+    return `
+      <div class="hist-card">
+        <div class="sub-sec-head">
+          <span>${escapeHtml(t.v3.recentMatchesTitle)}</span>
+          <span>${res.analyzedGamesCount} total</span>
+        </div>
+        <div class="matches-card">${rowsHtml}</div>
+      </div>
+    `;
+  }
+
   private render(): void {
     if (!this.cardEl || !this.minPillEl) return;
     const lang = this.settings.language;
@@ -327,7 +480,9 @@ export class SentinelHudOverlay {
       this.cardEl.style.setProperty('--tier-color', '#38bdf8');
       this.cardEl.style.setProperty('--tier-border', 'rgba(56, 189, 248, 0.3)');
       this.cardEl.style.setProperty('--tier-glow', 'rgba(56, 189, 248, 0.25)');
-      this.cardEl.innerHTML = `
+      setSafeHtml(
+        this.cardEl,
+        `
         <div class="tier-accent-line"></div>
         ${this.renderHeaderHtml(lang)}
         <div class="loading-box">
@@ -337,10 +492,12 @@ export class SentinelHudOverlay {
             <div class="loading-sub">${escapeHtml(t.scanningOpponent)}</div>
           </div>
         </div>
-      `;
-      this.minPillEl.innerHTML = `<span class="min-pct">…</span><span class="min-user">@${escapeHtml(
-        this.loadingUsername
-      )}</span>`;
+      `
+      );
+      setSafeHtml(
+        this.minPillEl,
+        `<span class="min-pct">…</span><span class="min-user">@${escapeHtml(this.loadingUsername)}</span>`
+      );
       this.bindHeaderEvents();
       return;
     }
@@ -359,19 +516,16 @@ export class SentinelHudOverlay {
     this.minPillEl.style.setProperty('--tier-glow', theme.glow);
 
     const fmtData = res.formats[this.selectedFormat] || res.formats[res.primaryFormat];
-    const displayProb =
-      res.isBannedFairPlay
-        ? 100
-        : this.selectedFormat === res.primaryFormat
-          ? res.probability
-          : fmtData.formatProbability;
+    const displayProb = res.isBannedFairPlay
+      ? 100
+      : this.selectedFormat === res.primaryFormat
+        ? res.probability
+        : fmtData.formatProbability;
 
-    // SVG gauge geometry (r = 35 => circumference = 219.91)
     const radius = 35;
     const circ = 2 * Math.PI * radius;
     const offset = circ - (Math.min(100, Math.max(0, displayProb)) / 100) * circ;
 
-    // Alert banner logic
     let alertHtml = '';
     if (res.isBannedFairPlay) {
       alertHtml = `<div class="alert-banner banned">🚨 ${escapeHtml(t.bannedFairPlayBanner)}</div>`;
@@ -392,16 +546,14 @@ export class SentinelHudOverlay {
       ? `<span class="title-pill">${escapeHtml(res.title.toUpperCase())}</span>`
       : '';
 
-    const verdictText =
-      res.isBannedFairPlay
-        ? t.tiers.banned.summary
-        : displayProb >= 60
-          ? t.considerAborting
-          : displayProb >= 35
-            ? t.cautionAdvised
-            : t.safeToPlay;
+    const verdictText = res.isBannedFairPlay
+      ? t.tiers.banned.summary
+      : displayProb >= 60
+        ? t.considerAborting
+        : displayProb >= 35
+          ? t.cautionAdvised
+          : t.safeToPlay;
 
-    // Quick Stat Tiles
     const ageStr = formatAgeShort(res.accountAgeDays, lang);
     const accStr = fmtData.avgAccuracy !== null ? `${fmtData.avgAccuracy}%` : '—';
     const accClass =
@@ -422,8 +574,7 @@ export class SentinelHudOverlay {
 
     const formDotsHtml = res.recentForm
       .map((r) => {
-        const lbl =
-          lang === 'tr' ? (r === 'W' ? 'G' : r === 'L' ? 'M' : 'B') : r;
+        const lbl = lang === 'tr' ? (r === 'W' ? 'G' : r === 'L' ? 'M' : 'B') : r;
         return `<span class="form-dot ${r}">${lbl}</span>`;
       })
       .join('');
@@ -485,104 +636,115 @@ export class SentinelHudOverlay {
       `;
     }).join('');
 
-    const pctDisplay =
-      lang === 'tr'
-        ? `<span>%</span>${displayProb}`
-        : `${displayProb}<span>%</span>`;
+    const pctDisplay = lang === 'tr' ? `<span>%</span>${displayProb}` : `${displayProb}<span>%</span>`;
 
-    this.cardEl.innerHTML = `
+    setSafeHtml(
+      this.cardEl,
+      `
       <div class="tier-accent-line"></div>
       ${this.renderHeaderHtml(lang)}
-      ${alertHtml}
-      <div class="hero">
-        <div class="gauge-wrap">
-          <svg class="gauge-svg" viewBox="0 0 86 86">
-            <circle class="gauge-track" cx="43" cy="43" r="${radius}"></circle>
-            <circle
-              class="gauge-progress"
-              cx="43"
-              cy="43"
-              r="${radius}"
-              stroke-dasharray="${circ.toFixed(2)}"
-              stroke-dashoffset="${offset.toFixed(2)}"
-            ></circle>
-          </svg>
-          <div class="gauge-center">
-            <div class="gauge-pct">${pctDisplay}</div>
-            <div class="gauge-caption">${escapeHtml(t.cheatProbability)}</div>
+      <div class="hud-scroll-body">
+        ${alertHtml}
+        <div class="hero">
+          <div class="gauge-wrap">
+            <svg class="gauge-svg" viewBox="0 0 86 86">
+              <circle class="gauge-track" cx="43" cy="43" r="${radius}"></circle>
+              <circle
+                class="gauge-progress"
+                cx="43"
+                cy="43"
+                r="${radius}"
+                stroke-dasharray="${circ.toFixed(2)}"
+                stroke-dashoffset="${offset.toFixed(2)}"
+              ></circle>
+            </svg>
+            <div class="gauge-center">
+              <div class="gauge-pct">${pctDisplay}</div>
+              <div class="gauge-caption">${escapeHtml(t.cheatProbability)}</div>
+            </div>
+          </div>
+          <div class="identity">
+            <div class="player-row">
+              ${avatarHtml}
+              ${titleBadgeHtml}
+              <a class="username-link" href="https://www.chess.com/member/${encodeURIComponent(
+                res.displayName
+              )}" target="_blank" rel="noopener noreferrer">
+                ${escapeHtml(res.displayName)}
+              </a>
+              ${flagEmoji ? `<span>${flagEmoji}</span>` : ''}
+            </div>
+            <div class="tier-badge-row">
+              <span class="tier-pill">${escapeHtml(t.tiers[res.tier].label)}</span>
+              <span class="conf-tag">• ${escapeHtml(t.confidenceLabel[res.confidence])}</span>
+            </div>
+            <div class="verdict-sub">${escapeHtml(verdictText)}</div>
           </div>
         </div>
-        <div class="identity">
-          <div class="player-row">
-            ${avatarHtml}
-            ${titleBadgeHtml}
-            <a class="username-link" href="https://www.chess.com/member/${encodeURIComponent(
-              res.displayName
-            )}" target="_blank" rel="noopener noreferrer">
-              ${escapeHtml(res.displayName)}
-            </a>
-            ${flagEmoji ? `<span>${flagEmoji}</span>` : ''}
+
+        ${this.renderLiveClockHtml(lang)}
+
+        <div class="format-tabs">${formatTabsHtml}</div>
+
+        <div class="stat-grid">
+          <div class="stat-tile">
+            <div class="stat-val">${escapeHtml(ageStr)}</div>
+            <div class="stat-lbl">${escapeHtml(t.stats.accountAge)}</div>
           </div>
-          <div class="tier-badge-row">
-            <span class="tier-pill">${escapeHtml(t.tiers[res.tier].label)}</span>
-            <span class="conf-tag">• ${escapeHtml(t.confidenceLabel[res.confidence])}</span>
+          <div class="stat-tile">
+            <div class="stat-val ${accClass}">${escapeHtml(accStr)}</div>
+            <div class="stat-lbl">${escapeHtml(t.stats.avgAccuracy)}</div>
           </div>
-          <div class="verdict-sub">${escapeHtml(verdictText)}</div>
+          <div class="stat-tile">
+            <div class="stat-val ${cvClass}">${escapeHtml(cvStr)}</div>
+            <div class="stat-lbl">${escapeHtml(t.stats.moveCV)}</div>
+          </div>
+          <div class="stat-tile">
+            <div class="stat-val ${d7Class}">${escapeHtml(d7Str)}</div>
+            <div class="stat-lbl">${escapeHtml(t.stats.elo7d)}</div>
+          </div>
+        </div>
+
+        ${
+          res.recentForm.length > 0
+            ? `<div class="form-strip">
+                <div class="form-dots">${formDotsHtml}</div>
+                <div class="wld-summary">${escapeHtml(wldLabel)}</div>
+              </div>`
+            : ''
+        }
+
+        ${flagsHtml ? `<div class="flags-list">${flagsHtml}</div>` : ''}
+
+        <button class="details-toggle" data-toggle-details="1">
+          <span>${escapeHtml(this.detailsExpanded ? t.actions.hideDetails : t.actions.toggleDetails)}</span>
+          <span>${this.detailsExpanded ? '▴' : '▾'}</span>
+        </button>
+
+        <div class="signals-panel ${this.detailsExpanded ? '' : 'collapsed'}">
+          ${signalsHtml}
+          ${this.renderHistogramHtml(res, lang)}
+          ${this.renderRecentMatchesHtml(res, lang)}
+          <button class="copy-report-btn ${this.copiedFeedback ? 'copied' : ''}" data-copy-report="1">
+            ${escapeHtml(this.copiedFeedback ? t.actions.copiedReport : t.actions.copyReport)}
+          </button>
         </div>
       </div>
-
-      <div class="format-tabs">${formatTabsHtml}</div>
-
-      <div class="stat-grid">
-        <div class="stat-tile">
-          <div class="stat-val">${escapeHtml(ageStr)}</div>
-          <div class="stat-lbl">${escapeHtml(t.stats.accountAge)}</div>
-        </div>
-        <div class="stat-tile">
-          <div class="stat-val ${accClass}">${escapeHtml(accStr)}</div>
-          <div class="stat-lbl">${escapeHtml(t.stats.avgAccuracy)}</div>
-        </div>
-        <div class="stat-tile">
-          <div class="stat-val ${cvClass}">${escapeHtml(cvStr)}</div>
-          <div class="stat-lbl">${escapeHtml(t.stats.moveCV)}</div>
-        </div>
-        <div class="stat-tile">
-          <div class="stat-val ${d7Class}">${escapeHtml(d7Str)}</div>
-          <div class="stat-lbl">${escapeHtml(t.stats.elo7d)}</div>
-        </div>
-      </div>
-
-      ${
-        res.recentForm.length > 0
-          ? `<div class="form-strip">
-              <div class="form-dots">${formDotsHtml}</div>
-              <div class="wld-summary">${escapeHtml(wldLabel)}</div>
-            </div>`
-          : ''
-      }
-
-      ${flagsHtml ? `<div class="flags-list">${flagsHtml}</div>` : ''}
-
-      <button class="details-toggle" data-toggle-details="1">
-        <span>${escapeHtml(this.detailsExpanded ? t.actions.hideDetails : t.actions.toggleDetails)}</span>
-        <span>${this.detailsExpanded ? '▴' : '▾'}</span>
-      </button>
-
-      <div class="signals-panel ${this.detailsExpanded ? '' : 'collapsed'}">
-        ${signalsHtml}
-      </div>
-    `;
+    `
+    );
 
     const minPctText = lang === 'tr' ? `%${displayProb}` : `${displayProb}%`;
-    this.minPillEl.innerHTML = `
+    setSafeHtml(
+      this.minPillEl,
+      `
       <span>🛡️</span>
       <span class="min-pct">${minPctText}</span>
       <span class="min-user">@${escapeHtml(res.displayName)}</span>
-    `;
+    `
+    );
 
     this.bindHeaderEvents();
 
-    // Format tabs listener
     this.cardEl.querySelectorAll('button[data-fmt]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const fmt = (btn as HTMLElement).dataset.fmt as TimeClass;
@@ -593,12 +755,25 @@ export class SentinelHudOverlay {
       });
     });
 
-    // Details expand/collapse listener
     const toggleBtn = this.cardEl.querySelector('[data-toggle-details="1"]');
     if (toggleBtn) {
       toggleBtn.addEventListener('click', () => {
         this.detailsExpanded = !this.detailsExpanded;
         this.render();
+      });
+    }
+
+    const copyBtn = this.cardEl.querySelector('[data-copy-report="1"]');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', () => {
+        const text = buildFairPlayEvidenceReport(res, lang, this.liveClock);
+        void navigator.clipboard?.writeText(text).catch(() => {});
+        this.copiedFeedback = true;
+        this.render();
+        setTimeout(() => {
+          this.copiedFeedback = false;
+          if (!this.isHidden) this.render();
+        }, 2200);
       });
     }
   }

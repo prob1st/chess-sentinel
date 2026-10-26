@@ -6,7 +6,7 @@
 
 [![CI Status](https://github.com/prob1st/chess-sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/prob1st/chess-sentinel/actions)
 [![Release](https://img.shields.io/github/v/release/prob1st/chess-sentinel?color=10b981&label=Latest%20Release)](https://github.com/prob1st/chess-sentinel/releases)
-[![Manifest V3](https://img.shields.io/badge/Chrome-Manifest%20V3-38bdf8?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/develop/migrate/what-is-mv3)
+[![Firefox Add-on](https://img.shields.io/badge/Firefox%20Add--ons-chess--sentinel-ff7139?logo=firefoxbrowser&logoColor=white)](https://addons.mozilla.org/firefox/addon/chess-sentinel/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7%20Strict-3178c6?logo=typescript&logoColor=white)](./tsconfig.json)
 [![Zero Telemetry](https://img.shields.io/badge/Privacy-100%25%20Local%20%2F%20Zero%20Tracking-10b981)](./PRIVACY.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-f59e0b.svg)](./LICENSE)
@@ -43,14 +43,14 @@ Older Chess.com opponent-risk extensions stopped working in 2025–2026 due to f
 
 ## ⚡ Installation
 
-Works out of the box on **Google Chrome, Brave, Microsoft Edge, Arc, Opera, and Vivaldi**.
+Works out of the box on **Mozilla Firefox** (Desktop 140+) as well as **Brave, Google Chrome, Microsoft Edge, Arc, and Opera**.
 
-### Option A — Instant Install from Releases (No Node.js Required)
-1. Download **`chess-sentinel-v2.0.1-chrome.zip`** from [**GitHub Releases**](https://github.com/prob1st/chess-sentinel/releases/latest) and extract the folder. *(Alternatively, clone this repo—the pre-built `./extension` folder is included ready-to-load!)*
-2. Open `chrome://extensions` in your browser.
-3. Toggle **Developer mode** ON in the top-right corner.
-4. Click **Load unpacked** and select the extracted folder (or the `extension/` folder inside this repository).
-5. Open [Chess.com](https://www.chess.com/play/online) and start or spectate any game!
+### Option A — Install on Mozilla Firefox
+1. Install directly from [**Firefox Add-ons (`addons.mozilla.org/firefox/addon/chess-sentinel/`)**](https://addons.mozilla.org/firefox/addon/chess-sentinel/) *(or download **`chess-sentinel-v3.0.0-firefox.zip`** from [**GitHub Releases**](https://github.com/prob1st/chess-sentinel/releases/latest) while initial AMO review completes)*.
+2. Open [Chess.com](https://www.chess.com/play/online) and start or spectate any live game!
+
+### Option B — Unpacked Install on Chromium Browsers
+1. Clone this repository or extract `./extension/` and open `chrome://extensions` → enable **Developer mode** → click **Load unpacked** → select `./extension/`.
 
 ### Option B — Build & Verify from Source (Developers)
 ```bash
@@ -97,12 +97,10 @@ Chess Sentinel v2.0 replaces naive linear heuristics with a **4-Pillar Bayesian 
 - **Şüpheli & Ban Takip Listesi (Watchlist):** Şüpheli rakipleri HUD üzerindeki `👁` ikonuyla listeye ekleyin. Eklenti arka planda bu hesapları kontrol eder ve Chess.com hesabı hileden kapattığında (`BANLANDI - HİLE`) size bildirir!
 - **Tek Tıkla Çift Dil (`TR` / `EN`):** Hem sayfa içi HUD pop-up üzerinden hem de araç çubuğu menüsünden Türkçe ve İngilizce arasında anında geçiş yapabilirsiniz.
 
-### 🚀 Kurulum (30 Saniye)
-1. Sağ taraftaki [**Releases**](https://github.com/prob1st/chess-sentinel/releases/latest) bölümünden **`chess-sentinel-v2.0.1-chrome.zip`** dosyasını indirin ve klasöre çıkartın *(veya bu repoyu klonlayın; hazır derlenmiş `extension/` klasörü doğrudan içindedir)*.
-2. Tarayıcınızda (Chrome, Brave, Edge, Opera) adres çubuğuna `chrome://extensions` yazıp açın.
-3. Sağ üst köşedeki **Geliştirici modu (Developer mode)** anahtarını açın.
-4. Sol üstteki **Paketlenmemiş öğe yükle (Load unpacked)** butonuna tıklayın ve çıkarttığınız klasörü (veya `extension` klasörünü) seçin.
-5. [Chess.com](https://www.chess.com/play/online) üzerinde bir maça girin — HUD pop-up otomatik olarak açılacaktır! (`Alt + S` kısayolu ile istediğiniz an küçültüp büyütebilirsiniz.)
+### 🚀 Kurulum (Firefox & Tarayıcılar)
+1. **Mozilla Firefox:** Doğrudan resmi [**Firefox Add-ons Mağazasından (`chess-sentinel`)**](https://addons.mozilla.org/tr/firefox/addon/chess-sentinel/) kurabilir veya [**Releases**](https://github.com/prob1st/chess-sentinel/releases/latest) bölümünden **`chess-sentinel-v3.0.0-firefox.zip`** dosyasını indirip `about:debugging#/runtime/this-firefox` üzerinden anında yükleyebilirsiniz.
+2. **Chromium Tarayıcılar (Brave / Chrome / Edge):** Bu repodaki hazır `extension/` klasörünü `chrome://extensions` → **Geliştirici modu** → **Paketlenmemiş öğe yükle** adımıyla seçebilirsiniz.
+3. [Chess.com](https://www.chess.com/play/online) üzerinde bir maça girin — **v3.0 Canlı Maç Saat Radarı**, **7-Bölmeli Hamle Süresi Histogramı**, **Son 5 Maç Şeridi** ve **Tek Tıkla Kanıt Raporu Kopyalama** özellikleri otomatik olarak çalışacaktır! (`Alt + S` ile istediğiniz an küçültüp büyütebilirsiniz.)
 
 ---
 
@@ -118,12 +116,12 @@ Chess Sentinel v2.0 replaces naive linear heuristics with a **4-Pillar Bayesian 
 
 ---
 
-## 🏪 Chrome Web Store Submission Kit
+## 🦊 Firefox Add-ons (AMO) Architecture & Reproducible Source
 
-Ready to publish directly to the Google Chrome Web Store? This repository ships with:
-- **CWS-Hardened Manifest V3 (`v2.0.1`)**: Multi-locale `_locales/en` & `_locales/tr` (`≤132`-char descriptions), explicit narrowed host permissions, and zero remote code.
-- **24-bit RGB Store Graphics (`./store-assets/`)**: Pre-rendered `1280x800` screenshots, `440x280` small promo tile, and `1400x560` marquee banner (strict no-alpha PNG24).
-- **Copy-Paste Submission & Privacy Guide**: See [**CHROME_WEB_STORE_GUIDE.md**](./CHROME_WEB_STORE_GUIDE.md) + automated CI/CD workflow (`.github/workflows/chrome-web-store.yml`).
+Chess Sentinel v3.0 is built natively for **Firefox Manifest V3** (`extension-firefox/`):
+- **Zero-Warning Safe DOM Rendering**: Uses `DOMParser` (`src/utils/safe-dom.ts`) with zero `innerHTML` assignments for 100% clean `addons-linter` validation.
+- **2026 Mozilla Privacy Consent Ready**: Declares `browser_specific_settings.gecko.data_collection_permissions.required: ["none"]` — zero personal or telemetry data ever leaves your browser.
+- **Reproducible Builds for AMO Reviewers**: See [**AMO_BUILD_INSTRUCTIONS.md**](./AMO_BUILD_INSTRUCTIONS.md) (`npm ci && npm run build`).
 
 ---
 

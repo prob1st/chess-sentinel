@@ -17,9 +17,10 @@ function quantileSorted(sorted: number[], q: number): number {
   return sorted[base];
 }
 
-function computeShannonEntropyBits(durations: number[]): number {
-  if (durations.length === 0) return 0;
+function computeLogTimeBuckets(durations: number[]): { counts: number[]; entropyBits: number } {
   const counts = new Array<number>(LOG_TIME_BINS.length + 1).fill(0);
+  if (durations.length === 0) return { counts, entropyBits: 0 };
+
   for (const d of durations) {
     let placed = false;
     for (let i = 0; i < LOG_TIME_BINS.length; i++) {
@@ -40,7 +41,7 @@ function computeShannonEntropyBits(durations: number[]): number {
       entropy -= p * Math.log2(p);
     }
   }
-  return entropy;
+  return { counts, entropyBits: entropy };
 }
 
 /**
@@ -140,7 +141,7 @@ export function analyzeSingleGamePacing(
   const q3 = quantileSorted(sortedMid, 0.75);
   const qcd = q3 + q1 > 0 ? (q3 - q1) / (q3 + q1) : 0;
 
-  const entropyBits = computeShannonEntropyBits(midMoves);
+  const { counts: bucketCounts, entropyBits } = computeLogTimeBuckets(midMoves);
 
   const fastThreshold = timeClass === 'bullet' ? 1.0 : timeClass === 'blitz' ? 1.75 : 2.25;
   const fastCount = midMoves.filter((t) => t <= fastThreshold).length;
@@ -212,6 +213,7 @@ export function analyzeSingleGamePacing(
     cv: Number(cv.toFixed(3)),
     qcd: Number(qcd.toFixed(3)),
     entropyBits: Number(entropyBits.toFixed(2)),
+    bucketCounts,
     fastMoveRatio: Number(fastMoveRatio.toFixed(3)),
     roboticBandRatio: Number(roboticBandRatio.toFixed(3)),
     isFlatline,
@@ -252,6 +254,20 @@ export function computeAggregatePacing(
     if (m) metrics.push(m);
   }
 
+  const totalBuckets = new Array<number>(LOG_TIME_BINS.length + 1).fill(0);
+  let totalMoves = 0;
+  for (const m of metrics) {
+    for (let i = 0; i < totalBuckets.length; i++) {
+      const c = m.bucketCounts[i] || 0;
+      totalBuckets[i] += c;
+      totalMoves += c;
+    }
+  }
+  const bucketDistribution =
+    totalMoves > 0
+      ? totalBuckets.map((c) => Number((c / totalMoves).toFixed(3)))
+      : new Array<number>(LOG_TIME_BINS.length + 1).fill(0);
+
   if (metrics.length < 4) {
     return {
       gamesAnalyzed: metrics.length,
@@ -261,6 +277,7 @@ export function computeAggregatePacing(
       minCV: null,
       meanFastMoveRatio: null,
       meanRoboticBandRatio: null,
+      bucketDistribution,
       flatlineGames: 0,
       flatlineRate: 0,
       toggleGames: 0,
@@ -312,6 +329,7 @@ export function computeAggregatePacing(
       minCV,
       meanFastMoveRatio,
       meanRoboticBandRatio,
+      bucketDistribution,
       flatlineGames,
       flatlineRate,
       toggleGames,
@@ -368,6 +386,7 @@ export function computeAggregatePacing(
     minCV,
     meanFastMoveRatio,
     meanRoboticBandRatio,
+    bucketDistribution,
     flatlineGames,
     flatlineRate,
     toggleGames,

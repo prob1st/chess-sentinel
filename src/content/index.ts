@@ -6,18 +6,22 @@ import {
   SentinelSettings,
   TimeClass,
 } from '../types';
+import { playRiskAlertChime } from '../utils/safe-dom';
 import { ChessComOpponentDetector, DetectedMatchContext } from './detector';
 import { SentinelHudOverlay } from './hud-overlay';
 import { removeInlineUsernameBadges, renderInlineUsernameBadge } from './inline-badge';
+import { LiveMatchClockMonitor } from './live-clock-monitor';
 
 class SentinelContentController {
   private settings: SentinelSettings = { ...DEFAULT_SETTINGS };
   private hud: SentinelHudOverlay | null = null;
   private detector: ChessComOpponentDetector | null = null;
+  private clockMonitor: LiveMatchClockMonitor | null = null;
   private lastCtx: DetectedMatchContext | null = null;
   private targetSide: 'top' | 'bottom' = 'top';
   private activeUsername: string | null = null;
   private latestResult: CheatAnalysisResult | null = null;
+  private alertedUsernames = new Set<string>();
 
   async init(): Promise<void> {
     this.settings = await getSettings();
@@ -34,12 +38,19 @@ class SentinelContentController {
       onToggleLanguage: (nextLang) => {
         void this.persistSettings({ language: nextLang });
       },
+      onToggleSound: (enabled) => {
+        void this.persistSettings({ soundAlerts: enabled });
+      },
       onToggleWatchlist: (result) => {
         void this.handleWatchlistToggle(result);
       },
       onSavePosition: (pos) => {
         void this.persistSettings({ hudPosition: pos });
       },
+    });
+
+    this.clockMonitor = new LiveMatchClockMonitor((telemetry) => {
+      this.hud?.updateLiveClock(telemetry);
     });
 
     this.detector = new ChessComOpponentDetector(
@@ -72,6 +83,7 @@ class SentinelContentController {
     const candidate = nextSide === 'top' ? this.lastCtx.topPlayer : this.lastCtx.bottomPlayer;
     if (!candidate) return;
     this.targetSide = nextSide;
+    this.clockMonitor?.setTarget(candidate, nextSide);
     void this.analyzeTarget(candidate, this.lastCtx.detectedFormat, false);
   }
 
@@ -79,7 +91,6 @@ class SentinelContentController {
     const prevOpponent = this.lastCtx?.opponent?.toLowerCase();
     this.lastCtx = ctx;
 
-    // Reset target side to detected opponent side whenever a new opponent appears
     if (ctx.opponent.toLowerCase() !== prevOpponent) {
       this.targetSide = ctx.opponentSide;
     }
@@ -89,6 +100,7 @@ class SentinelContentController {
         ? ctx.bottomPlayer || ctx.opponent
         : ctx.topPlayer || ctx.opponent;
 
+    this.clockMonitor?.setTarget(target, this.targetSide);
     this.hud?.setAbortWindow(ctx.isAbortWindowOpen);
 
     if (target.toLowerCase() !== this.activeUsername?.toLowerCase()) {
@@ -100,6 +112,7 @@ class SentinelContentController {
     this.activeUsername = null;
     this.latestResult = null;
     this.lastCtx = null;
+    this.clockMonitor?.stop();
     removeInlineUsernameBadges();
     this.hud?.hide();
   }
@@ -128,7 +141,6 @@ class SentinelContentController {
         error?: string;
       };
 
-      // Guard against race if opponent changed while request was in flight
       if (this.activeUsername?.toLowerCase() !== username.toLowerCase()) return;
 
       if (!response || !response.ok || !response.result) {
@@ -144,8 +156,19 @@ class SentinelContentController {
         (w) => w.username.toLowerCase() === result.username.toLowerCase()
       );
 
+      if (
+        this.settings.soundAlerts &&
+        !this.alertedUsernames.has(result.username.toLowerCase()) &&
+        (result.probability >= 68 || result.isBannedFairPlay || isWatched)
+      ) {
+        this.alertedUsernames.add(result.username.toLowerCase());
+        playRiskAlertChime(result.probability >= 80 || result.isBannedFairPlay);
+      }
+
       if (this.settings.autoShowHud || forceRefresh) {
         this.hud?.showResult(result, isWatched, this.lastCtx?.isAbortWindowOpen ?? false);
+        const liveSnap = this.clockMonitor?.getLatestTelemetry() ?? null;
+        if (liveSnap) this.hud?.updateLiveClock(liveSnap);
       }
 
       if (this.settings.showInlineBadge) {
@@ -157,7 +180,7 @@ class SentinelContentController {
         removeInlineUsernameBadges();
       }
     } catch {
-      // Service worker asleep or extension reloaded
+      // Background asleep or extension reloaded
     }
   }
 

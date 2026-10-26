@@ -46,6 +46,18 @@ export interface Dictionary {
     openProfile: string;
     toggleDetails: string;
     hideDetails: string;
+    copyReport: string;
+    copiedReport: string;
+    soundOn: string;
+    soundOff: string;
+  };
+  v3: {
+    liveClockTitle: string;
+    liveClockMoves: string;
+    liveClockSuspect: string;
+    pacingHistTitle: string;
+    pacingEntropyTag: string;
+    recentMatchesTitle: string;
   };
   popup: {
     tabScanner: string;
@@ -72,6 +84,8 @@ export interface Dictionary {
     settingsCompactDesc: string;
     settingsRatedOnly: string;
     settingsRatedOnlyDesc: string;
+    settingsSoundAlerts: string;
+    settingsSoundAlertsDesc: string;
     settingsSensitivity: string;
     sensitivityConservative: string;
     sensitivityBalanced: string;
@@ -138,8 +152,20 @@ export const TRANSLATIONS: Record<Language, Dictionary> = {
       minimize: 'Küçült (Alt+S)',
       expand: 'Büyüt',
       openProfile: 'Chess.com Profilini Aç',
-      toggleDetails: 'Detaylı Telemetriyi Göster',
+      toggleDetails: 'Adli Detayları & Grafikleri Göster',
       hideDetails: 'Detayları Gizle',
+      copyReport: '📋 Kanıt Raporunu Kopyala',
+      copiedReport: '✓ Rapor Panoya Kopyalandı!',
+      soundOn: 'Sesli Risk Uyarısı: Açık',
+      soundOff: 'Sesli Risk Uyarısı: Kapalı',
+    },
+    v3: {
+      liveClockTitle: 'CANLI MAÇ HAMLE RADARI',
+      liveClockMoves: '{count} hamle • Ort {mean}s • QCD {qcd}',
+      liveClockSuspect: '⚡ Canlı maçta mekanik hamle temposu algılandı!',
+      pacingHistTitle: 'HAMLE SÜRESİ DAĞILIMI (%clk)',
+      pacingEntropyTag: 'Entropi: {ent}b • QCD: {qcd}',
+      recentMatchesTitle: 'SON PUANLI MAÇLAR',
     },
     popup: {
       tabScanner: 'Oyuncu Tara',
@@ -166,6 +192,8 @@ export const TRANSLATIONS: Record<Language, Dictionary> = {
       settingsCompactDesc: 'HUD kartını varsayılan olarak daraltılmış görünümde başlatır.',
       settingsRatedOnly: 'Sadece Puanlı (Rated) Maçlar',
       settingsRatedOnlyDesc: 'Arkadaşlık / puansız maçları olasılık hesabından hariç tutar.',
+      settingsSoundAlerts: 'Kritik Risk Sesli Uyarısı',
+      settingsSoundAlertsDesc: 'Yüksek/Kritik riskli (%68+) veya takipteki rakip geldiğinde hafif radar sesi çalar.',
       settingsSensitivity: 'Algılama Hassasiyeti',
       sensitivityConservative: 'Esnek',
       sensitivityBalanced: 'Dengeli (Önerilen)',
@@ -247,8 +275,20 @@ export const TRANSLATIONS: Record<Language, Dictionary> = {
       minimize: 'Minimize (Alt+S)',
       expand: 'Expand HUD',
       openProfile: 'Open Chess.com Profile',
-      toggleDetails: 'Show Forensic Breakdown',
+      toggleDetails: 'Show Forensic Charts & Breakdown',
       hideDetails: 'Hide Breakdown',
+      copyReport: '📋 Copy Fair-Play Report',
+      copiedReport: '✓ Evidence Copied!',
+      soundOn: 'Critical Risk Audio Alert: ON',
+      soundOff: 'Critical Risk Audio Alert: OFF',
+    },
+    v3: {
+      liveClockTitle: 'LIVE MATCH CLOCK RADAR',
+      liveClockMoves: '{count} moves • Avg {mean}s • QCD {qcd}',
+      liveClockSuspect: '⚡ Mechanical move pacing detected in live game!',
+      pacingHistTitle: 'MOVE-TIME HISTOGRAM (%clk)',
+      pacingEntropyTag: 'Entropy: {ent}b • QCD: {qcd}',
+      recentMatchesTitle: 'RECENT RATED MATCHES',
     },
     popup: {
       tabScanner: 'Live Scanner',
@@ -275,6 +315,8 @@ export const TRANSLATIONS: Record<Language, Dictionary> = {
       settingsCompactDesc: 'Starts the in-page HUD popup with telemetry bars collapsed by default.',
       settingsRatedOnly: 'Rated Games Only',
       settingsRatedOnlyDesc: 'Excludes casual / unrated games when computing cheat probability.',
+      settingsSoundAlerts: 'Critical Risk Audio Chime',
+      settingsSoundAlertsDesc: 'Plays a subtle radar tone when matched against a High/Critical (≥68%) or watched opponent.',
       settingsSensitivity: 'Detection Sensitivity',
       sensitivityConservative: 'Conservative',
       sensitivityBalanced: 'Balanced (Default)',

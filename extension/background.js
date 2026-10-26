@@ -244,6 +244,7 @@ var DEFAULT_SETTINGS = {
   compactMode: false,
   showInlineBadge: true,
   ratedOnly: true,
+  soundAlerts: true,
   sensitivity: "balanced",
   hudPosition: null
 };
@@ -263,9 +264,9 @@ function quantileSorted(sorted, q) {
   }
   return sorted[base];
 }
-function computeShannonEntropyBits(durations) {
-  if (durations.length === 0) return 0;
+function computeLogTimeBuckets(durations) {
   const counts = new Array(LOG_TIME_BINS.length + 1).fill(0);
+  if (durations.length === 0) return { counts, entropyBits: 0 };
   for (const d of durations) {
     let placed = false;
     for (let i = 0; i < LOG_TIME_BINS.length; i++) {
@@ -285,7 +286,7 @@ function computeShannonEntropyBits(durations) {
       entropy -= p * Math.log2(p);
     }
   }
-  return entropy;
+  return { counts, entropyBits: entropy };
 }
 function extractPlayerMoveTimes(pgn, isWhite) {
   if (!pgn || !pgn.includes("%clk")) return null;
@@ -344,7 +345,7 @@ function analyzeSingleGamePacing(pgn, isWhite, timeClass, won) {
   const q1 = quantileSorted(sortedMid, 0.25);
   const q3 = quantileSorted(sortedMid, 0.75);
   const qcd = q3 + q1 > 0 ? (q3 - q1) / (q3 + q1) : 0;
-  const entropyBits = computeShannonEntropyBits(midMoves);
+  const { counts: bucketCounts, entropyBits } = computeLogTimeBuckets(midMoves);
   const fastThreshold = timeClass === "bullet" ? 1 : timeClass === "blitz" ? 1.75 : 2.25;
   const fastCount = midMoves.filter((t) => t <= fastThreshold).length;
   const fastMoveRatio = fastCount / midMoves.length;
@@ -391,6 +392,7 @@ function analyzeSingleGamePacing(pgn, isWhite, timeClass, won) {
     cv: Number(cv.toFixed(3)),
     qcd: Number(qcd.toFixed(3)),
     entropyBits: Number(entropyBits.toFixed(2)),
+    bucketCounts,
     fastMoveRatio: Number(fastMoveRatio.toFixed(3)),
     roboticBandRatio: Number(roboticBandRatio.toFixed(3)),
     isFlatline,
@@ -413,6 +415,16 @@ function computeAggregatePacing(games, username, ratedOnly = true) {
     const m = analyzeSingleGamePacing(g.pgn || "", isWhite, String(g.time_class || "blitz"), won);
     if (m) metrics.push(m);
   }
+  const totalBuckets = new Array(LOG_TIME_BINS.length + 1).fill(0);
+  let totalMoves = 0;
+  for (const m of metrics) {
+    for (let i = 0; i < totalBuckets.length; i++) {
+      const c = m.bucketCounts[i] || 0;
+      totalBuckets[i] += c;
+      totalMoves += c;
+    }
+  }
+  const bucketDistribution = totalMoves > 0 ? totalBuckets.map((c) => Number((c / totalMoves).toFixed(3))) : new Array(LOG_TIME_BINS.length + 1).fill(0);
   if (metrics.length < 4) {
     return {
       gamesAnalyzed: metrics.length,
@@ -422,6 +434,7 @@ function computeAggregatePacing(games, username, ratedOnly = true) {
       minCV: null,
       meanFastMoveRatio: null,
       meanRoboticBandRatio: null,
+      bucketDistribution,
       flatlineGames: 0,
       flatlineRate: 0,
       toggleGames: 0,
@@ -458,6 +471,7 @@ function computeAggregatePacing(games, username, ratedOnly = true) {
       minCV,
       meanFastMoveRatio,
       meanRoboticBandRatio,
+      bucketDistribution,
       flatlineGames,
       flatlineRate,
       toggleGames,
@@ -501,6 +515,7 @@ function computeAggregatePacing(games, username, ratedOnly = true) {
     minCV,
     meanFastMoveRatio,
     meanRoboticBandRatio,
+    bucketDistribution,
     flatlineGames,
     flatlineRate,
     toggleGames,
@@ -825,6 +840,25 @@ function analyzePlayerBundle(bundle, options = {}) {
     }
     return "D";
   });
+  const recentMatches = validGames.slice(0, 5).map((g) => {
+    const isWhite = g.white?.username?.toLowerCase() === usernameLower;
+    const player = isWhite ? g.white : g.black;
+    const opp = isWhite ? g.black : g.white;
+    const resCode = player?.result === "win" ? "W" : ["checkmated", "resigned", "timeout", "abandoned", "lose"].includes(player?.result || "") ? "L" : "D";
+    const rawAcc = g.accuracies ? isWhite ? g.accuracies.white : g.accuracies.black : null;
+    const accuracy = typeof rawAcc === "number" && !Number.isNaN(rawAcc) ? Number(rawAcc.toFixed(1)) : null;
+    return {
+      result: resCode,
+      format: String(g.time_class || "blitz"),
+      playerRating: player?.rating || 0,
+      opponentUsername: opp?.username || "Opponent",
+      opponentRating: opp?.rating || 0,
+      accuracy,
+      plies: estimateGamePlies(g.pgn),
+      url: g.url || null,
+      endTime: g.end_time || 0
+    };
+  });
   const pacing = computeAggregatePacing(validGames, usernameLower, ratedOnly);
   const formats = {};
   const extMeta = {};
@@ -1114,6 +1148,7 @@ function analyzePlayerBundle(bundle, options = {}) {
     confidence,
     winStreak,
     recentForm,
+    recentMatches,
     signals,
     pacing,
     formats,

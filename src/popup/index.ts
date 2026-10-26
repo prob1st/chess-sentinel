@@ -1,4 +1,5 @@
 import { DEFAULT_SETTINGS, TIER_THEMES } from '../core/calibration';
+import { buildFairPlayEvidenceReport } from '../core/engine';
 import { formatAgeShort, formatFlag, TRANSLATIONS } from '../i18n/translations';
 import {
   CheatAnalysisResult,
@@ -8,17 +9,9 @@ import {
   SentinelSettings,
   WatchlistEntry,
 } from '../types';
+import { escapeHtml, setSafeHtml } from '../utils/safe-dom';
 
 type ActiveTab = 'scanner' | 'watchlist' | 'settings';
-
-function escapeHtml(raw: string): string {
-  return raw
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
 
 function barColor(score: number): string {
   if (score < 25) return '#10b981';
@@ -37,6 +30,7 @@ class PopupController {
   private activeResult: CheatAnalysisResult | null = null;
   private scanning = false;
   private checkingBans = false;
+  private copiedReport = false;
   private errorMsg: string | null = null;
   private searchQuery = '';
 
@@ -185,6 +179,9 @@ class PopupController {
         </div>
 
         ${flagsHtml ? `<div style="display:flex;flex-direction:column;gap:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,0.06)">${flagsHtml}</div>` : ''}
+        <button id="popup-copy-report-btn" class="pill-btn" style="margin-top:8px;width:100%;justify-content:center;padding:6px 10px;border-color:${this.copiedReport ? 'rgba(16,185,129,0.5)' : 'rgba(56,189,248,0.3)'};color:${this.copiedReport ? '#6ee7b7' : '#bae6fd'}">
+          ${escapeHtml(this.copiedReport ? t.actions.copiedReport : t.actions.copyReport)}
+        </button>
       </div>
     `;
   }
@@ -359,6 +356,16 @@ class PopupController {
           s.ratedOnly ? 'checked' : ''
         } />
       </div>
+
+      <div class="setting-item">
+        <div>
+          <div class="setting-title">${escapeHtml(t.popup.settingsSoundAlerts)}</div>
+          <div class="setting-desc">${escapeHtml(t.popup.settingsSoundAlertsDesc)}</div>
+        </div>
+        <input class="toggle-input" type="checkbox" data-setting-check="soundAlerts" ${
+          s.soundAlerts ? 'checked' : ''
+        } />
+      </div>
     `;
   }
 
@@ -373,7 +380,9 @@ class PopupController {
           ? this.renderWatchlistTab(lang)
           : this.renderSettingsTab(lang);
 
-    this.root.innerHTML = `
+    setSafeHtml(
+      this.root,
+      `
       <div class="popup-shell">
         <div class="top-bar">
           <div class="brand-group">
@@ -410,7 +419,8 @@ class PopupController {
 
         <div class="footer-note">${escapeHtml(t.popup.privacyNote)}</div>
       </div>
-    `;
+    `
+    );
 
     this.bindEvents();
   }
@@ -463,6 +473,19 @@ class PopupController {
         void this.runPlayerScan(input.value);
       });
     }
+
+    const copyReportBtn = this.root.querySelector('#popup-copy-report-btn');
+    copyReportBtn?.addEventListener('click', () => {
+      if (!this.activeResult) return;
+      const report = buildFairPlayEvidenceReport(this.activeResult, this.settings.language, null);
+      void navigator.clipboard?.writeText(report).catch(() => {});
+      this.copiedReport = true;
+      this.render();
+      setTimeout(() => {
+        this.copiedReport = false;
+        this.render();
+      }, 2000);
+    });
 
     this.root.querySelectorAll('[data-select-scan]').forEach((row) => {
       row.addEventListener('click', () => {

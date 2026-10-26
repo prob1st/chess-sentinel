@@ -5,7 +5,10 @@ import {
   ConfidenceLevel,
   FormatTelemetry,
   InsightFlag,
+  Language,
+  LiveMatchClockTelemetry,
   PlayerRawBundle,
+  RecentMatchSummary,
   SensitivityPreset,
   SignalBreakdown,
   TimeClass,
@@ -507,6 +510,33 @@ export function analyzePlayerBundle(
     return 'D';
   });
 
+  const recentMatches: RecentMatchSummary[] = validGames.slice(0, 5).map((g) => {
+    const isWhite = g.white?.username?.toLowerCase() === usernameLower;
+    const player = isWhite ? g.white : g.black;
+    const opp = isWhite ? g.black : g.white;
+    const resCode: 'W' | 'L' | 'D' =
+      player?.result === 'win'
+        ? 'W'
+        : ['checkmated', 'resigned', 'timeout', 'abandoned', 'lose'].includes(player?.result || '')
+          ? 'L'
+          : 'D';
+    const rawAcc = g.accuracies ? (isWhite ? g.accuracies.white : g.accuracies.black) : null;
+    const accuracy =
+      typeof rawAcc === 'number' && !Number.isNaN(rawAcc) ? Number(rawAcc.toFixed(1)) : null;
+
+    return {
+      result: resCode,
+      format: String(g.time_class || 'blitz'),
+      playerRating: player?.rating || 0,
+      opponentUsername: opp?.username || 'Opponent',
+      opponentRating: opp?.rating || 0,
+      accuracy,
+      plies: estimateGamePlies(g.pgn),
+      url: g.url || null,
+      endTime: g.end_time || 0,
+    };
+  });
+
   const pacing = computeAggregatePacing(validGames, usernameLower, ratedOnly);
 
   const formats = {} as Record<TimeClass, FormatTelemetry>;
@@ -896,6 +926,7 @@ export function analyzePlayerBundle(
     confidence,
     winStreak,
     recentForm,
+    recentMatches,
     signals,
     pacing,
     formats,
@@ -903,4 +934,91 @@ export function analyzePlayerBundle(
     analyzedGamesCount: validGames.length,
     timestamp: nowMs,
   };
+}
+
+/**
+ * Generates a factual, structured Fair-Play telemetry summary suitable for pasting
+ * directly into Chess.com's Fair Play Report description box.
+ */
+export function buildFairPlayEvidenceReport(
+  res: CheatAnalysisResult,
+  lang: Language,
+  liveClock?: LiveMatchClockTelemetry | null
+): string {
+  const pf = res.formats[res.primaryFormat];
+  const lines: string[] = [];
+
+  if (lang === 'tr') {
+    lines.push(`[Chess Sentinel v3.0 — Adil Oyun Telemetri Özeti]`);
+    lines.push(
+      `Oyuncu: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Hesap Yaşı: ${
+        res.accountAgeDays !== null ? `${res.accountAgeDays} gün` : 'Bilinmiyor'
+      }`
+    );
+    lines.push(
+      `Birincil Format: ${res.primaryFormat.toUpperCase()} (${pf.currentRating ?? '—'} Elo) | İstatistiksel Anomali Olasılığı: %${res.probability}`
+    );
+    lines.push(
+      `Son Performans: ${pf.recentWins}G / ${pf.recentLosses}M / ${pf.recentDraws}B (%${pf.recentWinPct} galibiyet, Rakip Elo beklentisine göre ${pf.eloZScore >= 0 ? '+' : ''}${pf.eloZScore}σ Z-Skoru)`
+    );
+    if (pf.avgAccuracy !== null) {
+      lines.push(
+        `Uzun Maç CAPS2 Doğruluk: %${pf.avgAccuracy} (Elo bandı beklentisi: %${pf.expectedAccuracy}, İncelenen tam maç: ${pf.reviewedGames})`
+      );
+    }
+    if (res.pacing.gamesAnalyzed >= 4) {
+      lines.push(
+        `Kronometrik Saat Analizi (%clk): Entropi ${res.pacing.meanEntropyBits ?? '—'} bit | Medyan QCD: ${res.pacing.medianQCD ?? '—'} | Medyan CV: ${res.pacing.medianCV ?? '—'} | Mekanik Maç Oranı: %${Math.round(res.pacing.flatlineRate * 100)}`
+      );
+    }
+    if (liveClock && liveClock.movesObserved >= 4) {
+      lines.push(
+        `Canlı Maç Saat Verisi: ${liveClock.movesObserved} hamle izlendi | Ort: ${liveClock.liveMeanSec ?? '—'} sn | Canlı QCD: ${liveClock.liveQCD ?? '—'} | Ardışık mekanik hamle: ${liveClock.consecutiveRoboticMoves}`
+      );
+    }
+    const topUrls = res.recentMatches
+      .filter((m) => m.url && m.result === 'W')
+      .slice(0, 3)
+      .map((m) => `${m.url}${m.accuracy !== null ? ` (%${m.accuracy})` : ''}`);
+    if (topUrls.length > 0) {
+      lines.push(`İncelenmesi Önerilen Son Maçlar:\n- ${topUrls.join('\n- ')}`);
+    }
+  } else {
+    lines.push(`[Chess Sentinel v3.0 — Fair-Play Telemetry Summary]`);
+    lines.push(
+      `Player: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Account Age: ${
+        res.accountAgeDays !== null ? `${res.accountAgeDays} days` : 'Unknown'
+      }`
+    );
+    lines.push(
+      `Primary Format: ${res.primaryFormat.toUpperCase()} (${pf.currentRating ?? '—'} Elo) | Statistical Anomaly Probability: ${res.probability}%`
+    );
+    lines.push(
+      `Recent Performance: ${pf.recentWins}W / ${pf.recentLosses}L / ${pf.recentDraws}D (${pf.recentWinPct}% WR, ${pf.eloZScore >= 0 ? '+' : ''}${pf.eloZScore}σ Elo-adjusted Z-Score)`
+    );
+    if (pf.avgAccuracy !== null) {
+      lines.push(
+        `Long-Game CAPS2 Accuracy: ${pf.avgAccuracy}% (Band expected: ${pf.expectedAccuracy}%, Full-length reviewed games: ${pf.reviewedGames})`
+      );
+    }
+    if (res.pacing.gamesAnalyzed >= 4) {
+      lines.push(
+        `Chronometric PGN [%clk] Profile: Entropy ${res.pacing.meanEntropyBits ?? '—'} bits | Median QCD: ${res.pacing.medianQCD ?? '—'} | Median CV: ${res.pacing.medianCV ?? '—'} | Flatline Rate: ${Math.round(res.pacing.flatlineRate * 100)}%`
+      );
+    }
+    if (liveClock && liveClock.movesObserved >= 4) {
+      lines.push(
+        `Live Match Clock Radar: ${liveClock.movesObserved} moves | Mean: ${liveClock.liveMeanSec ?? '—'}s | Live QCD: ${liveClock.liveQCD ?? '—'} | Consecutive flatline moves: ${liveClock.consecutiveRoboticMoves}`
+      );
+    }
+    const topUrls = res.recentMatches
+      .filter((m) => m.url && m.result === 'W')
+      .slice(0, 3)
+      .map((m) => `${m.url}${m.accuracy !== null ? ` (${m.accuracy}%)` : ''}`);
+    if (topUrls.length > 0) {
+      lines.push(`Recent Games for Review:\n- ${topUrls.join('\n- ')}`);
+    }
+  }
+
+  return lines.join('\n');
 }
