@@ -46,20 +46,40 @@ export function parseClockTextSec(raw: string | null | undefined): number | null
 
 export function summarizeLiveMoveTimes(
   opponent: string,
-  allMoveTimesSec: number[]
+  allMoveTimesSec: number[],
+  allMoveNumbers?: number[],
+  allSanLabels?: string[]
 ): LiveMatchClockTelemetry {
-  const recent = allMoveTimesSec.slice(-16);
   const n = allMoveTimesSec.length;
+  const resolvedMoveNums =
+    allMoveNumbers && allMoveNumbers.length === n
+      ? allMoveNumbers
+      : Array.from({ length: n }, (_, idx) => idx + 2);
+  const resolvedSan =
+    allSanLabels && allSanLabels.length === n
+      ? allSanLabels
+      : Array.from({ length: n }, () => '');
+
+  const recentTimes = allMoveTimesSec.slice(-16);
+  const recentNums = resolvedMoveNums.slice(-16);
+  const recentSan = resolvedSan.slice(-16);
 
   if (n < 4) {
     return {
       opponent,
       movesObserved: n,
-      moveTimesSec: recent,
+      moveTimesSec: recentTimes,
+      moveNumbers: recentNums,
+      moveSanLabels: recentSan,
       liveMeanSec: null,
       liveQCD: null,
       consecutiveRoboticMoves: 0,
       detectedPauseSec: null,
+      pauseMoveNumber: null,
+      roboticStartMove: null,
+      roboticEndMove: null,
+      roboticMinSec: null,
+      roboticMaxSec: null,
       isLiveSuspectPacing: false,
     };
   }
@@ -73,24 +93,38 @@ export function summarizeLiveMoveTimes(
   const liveQCD = q3 + q1 > 0 ? Number(((q3 - q1) / (q3 + q1)).toFixed(2)) : 0;
 
   let consecutiveRoboticMoves = 0;
-  for (let i = allMoveTimesSec.length - 1; i >= 0; i--) {
+  const streakSlice: number[] = [];
+  for (let i = n - 1; i >= 0; i--) {
     const t = allMoveTimesSec[i];
     if (t >= 2.6 && t <= 8.2) {
       consecutiveRoboticMoves++;
+      streakSlice.push(t);
     } else {
       break;
     }
   }
 
+  const roboticStartIdx = consecutiveRoboticMoves > 0 ? n - consecutiveRoboticMoves : -1;
+  const roboticStartMove =
+    roboticStartIdx >= 0 ? resolvedMoveNums[roboticStartIdx] : null;
+  const roboticEndMove =
+    consecutiveRoboticMoves > 0 ? resolvedMoveNums[n - 1] : null;
+  const roboticMinSec =
+    streakSlice.length > 0 ? Number(Math.min(...streakSlice).toFixed(1)) : null;
+  const roboticMaxSec =
+    streakSlice.length > 0 ? Number(Math.max(...streakSlice).toFixed(1)) : null;
+
   let detectedPauseSec: number | null = null;
-  if (allMoveTimesSec.length >= 10) {
-    for (let i = 1; i <= allMoveTimesSec.length - 8; i++) {
+  let pauseMoveNumber: number | null = null;
+  if (n >= 10) {
+    for (let i = 1; i <= n - 8; i++) {
       const t = allMoveTimesSec[i];
       if (t >= 25 && t <= 115) {
         const after = allMoveTimesSec.slice(i + 1);
         const roboticAfter = after.filter((x) => x >= 2.6 && x <= 8.2).length / after.length;
         if (after.length >= 7 && roboticAfter >= 0.88) {
           detectedPauseSec = Number(t.toFixed(1));
+          pauseMoveNumber = resolvedMoveNums[i];
           break;
         }
       }
@@ -114,18 +148,26 @@ export function summarizeLiveMoveTimes(
   return {
     opponent,
     movesObserved: n,
-    moveTimesSec: recent,
+    moveTimesSec: recentTimes,
+    moveNumbers: recentNums,
+    moveSanLabels: recentSan,
     liveMeanSec: Number(mean.toFixed(1)),
     liveQCD,
     consecutiveRoboticMoves,
     detectedPauseSec,
+    pauseMoveNumber,
+    roboticStartMove,
+    roboticEndMove,
+    roboticMinSec,
+    roboticMaxSec,
     isLiveSuspectPacing,
   };
 }
 
 /**
  * Passively observes the active Chess.com game clock DOM to measure real-time
- * opponent move durations (`Δt`) during an ongoing live match.
+ * opponent move durations (`Δt`) AND exact move numbers (`#2..#N`) during a live match.
+ * Strictly read-only passive clock/ply telemetry — zero chess engine / zero board evaluation.
  */
 export class LiveMatchClockMonitor {
   private onUpdate: (telemetry: LiveMatchClockTelemetry) => void;
@@ -133,6 +175,8 @@ export class LiveMatchClockMonitor {
   private targetOpponent: string | null = null;
   private targetSide: 'top' | 'bottom' = 'top';
   private moveTimesSec: number[] = [];
+  private moveNumbers: number[] = [];
+  private moveSanLabels: string[] = [];
   private wasTargetTurn = false;
   private turnStartMs = 0;
   private lastKnownPlyCount = 0;
@@ -147,6 +191,8 @@ export class LiveMatchClockMonitor {
       this.targetOpponent = opponent;
       this.targetSide = side;
       this.moveTimesSec = [];
+      this.moveNumbers = [];
+      this.moveSanLabels = [];
       this.wasTargetTurn = false;
       this.turnStartMs = 0;
       this.lastKnownPlyCount = this.countDomPlies();
@@ -161,12 +207,19 @@ export class LiveMatchClockMonitor {
     }
     this.targetOpponent = null;
     this.moveTimesSec = [];
+    this.moveNumbers = [];
+    this.moveSanLabels = [];
     this.wasTargetTurn = false;
   }
 
   getLatestTelemetry(): LiveMatchClockTelemetry | null {
     if (!this.targetOpponent || this.moveTimesSec.length === 0) return null;
-    return summarizeLiveMoveTimes(this.targetOpponent, this.moveTimesSec);
+    return summarizeLiveMoveTimes(
+      this.targetOpponent,
+      this.moveTimesSec,
+      this.moveNumbers,
+      this.moveSanLabels
+    );
   }
 
   private ensureRunning(): void {
@@ -183,8 +236,20 @@ export class LiveMatchClockMonitor {
     return null;
   }
 
+  private getMoveNodes(): NodeListOf<Element> {
+    return document.querySelectorAll('[data-ply], .move .node, wc-simple-move-list .node');
+  }
+
   private countDomPlies(): number {
-    return document.querySelectorAll('[data-ply], .move .node, wc-simple-move-list .node').length;
+    return this.getMoveNodes().length;
+  }
+
+  private readLatestPlayedSan(): string {
+    const nodes = this.getMoveNodes();
+    if (nodes.length === 0) return '';
+    const last = nodes[nodes.length - 1];
+    const txt = (last.textContent || '').replace(/\s+/g, '').trim();
+    return txt.slice(0, 10);
   }
 
   private isZoneTurnActive(zone: Element): boolean {
@@ -205,7 +270,6 @@ export class LiveMatchClockMonitor {
   private sampleClock(): void {
     if (!this.targetOpponent) return;
 
-    // Stop recording if game over modal/result exists
     if (
       document.querySelector(
         '.game-over-modal-content, [data-cy="game-over-modal"], .board-modal-container-container'
@@ -226,6 +290,8 @@ export class LiveMatchClockMonitor {
     // Detect rematch / brand new game reset on same opponent
     if (currentPlies <= 2 && this.lastKnownPlyCount >= 8) {
       this.moveTimesSec = [];
+      this.moveNumbers = [];
+      this.moveSanLabels = [];
       this.wasTargetTurn = false;
       this.turnStartMs = 0;
     }
@@ -239,13 +305,29 @@ export class LiveMatchClockMonitor {
     } else if (!isTargetTurn && this.wasTargetTurn && isOtherTurn) {
       this.wasTargetTurn = false;
       const elapsedSec = Number(((nowMs - this.turnStartMs) / 1000).toFixed(2));
-      // Ignore pre-game abort countdowns or sub-100ms DOM glitches; skip ply <= 2
       if (elapsedSec >= 0.15 && elapsedSec <= 180 && currentPlies >= 3) {
+        const fullMoveNo = Math.max(
+          (this.moveNumbers[this.moveNumbers.length - 1] ?? 1) + 1,
+          Math.ceil(currentPlies / 2)
+        );
+        const san = this.readLatestPlayedSan();
         this.moveTimesSec.push(elapsedSec);
+        this.moveNumbers.push(fullMoveNo);
+        this.moveSanLabels.push(san);
+
         if (this.moveTimesSec.length > 60) {
           this.moveTimesSec.shift();
+          this.moveNumbers.shift();
+          this.moveSanLabels.shift();
         }
-        this.onUpdate(summarizeLiveMoveTimes(this.targetOpponent, this.moveTimesSec));
+        this.onUpdate(
+          summarizeLiveMoveTimes(
+            this.targetOpponent,
+            this.moveTimesSec,
+            this.moveNumbers,
+            this.moveSanLabels
+          )
+        );
       }
     }
   }

@@ -585,7 +585,100 @@ export const HUD_SHADOW_CSS = `
     transition: width 0.55s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  /* v3.0 Live Match Clock Radar */
+  /* v3.2 Automatic Plain-Language Verdict Card */
+  .auto-verdict-card {
+    margin: 0 14px 9px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(16, 185, 129, 0.32);
+    background: rgba(16, 185, 129, 0.1);
+    color: #d1fae5;
+    font-size: 10.5px;
+    line-height: 1.38;
+  }
+  .auto-verdict-card.smurf {
+    border-color: rgba(56, 189, 248, 0.35);
+    background: rgba(56, 189, 248, 0.11);
+    color: #e0f2fe;
+  }
+  .auto-verdict-card.warn {
+    border-color: rgba(245, 158, 11, 0.42);
+    background: rgba(245, 158, 11, 0.12);
+    color: #fef3c7;
+  }
+  .auto-verdict-card.danger {
+    border-color: rgba(239, 68, 68, 0.58);
+    background: rgba(127, 29, 29, 0.32);
+    color: #fee2e2;
+  }
+  .auto-verdict-head {
+    font-size: 8.5px;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    opacity: 0.82;
+    margin-bottom: 3px;
+  }
+  .auto-verdict-text {
+    font-weight: 600;
+  }
+
+  /* v3.2 Pinpointed Suspect Games & Exact Move Ranges Panel */
+  .pinpoint-panel {
+    margin: 0 14px 9px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(127, 29, 29, 0.18);
+    border: 1px solid rgba(248, 113, 113, 0.35);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .pinpoint-title {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    color: #fca5a5;
+  }
+  .pinpoint-item {
+    padding: 6px 8px;
+    border-radius: 7px;
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .pinpoint-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10px;
+    font-weight: 700;
+    color: #f8fafc;
+  }
+  .pinpoint-open {
+    font-size: 9.5px;
+    font-weight: 700;
+    color: #7dd3fc;
+    text-decoration: none;
+  }
+  .pinpoint-open:hover {
+    text-decoration: underline;
+  }
+  .pinpoint-body {
+    font-size: 10px;
+    line-height: 1.32;
+    color: #fecaca;
+    font-weight: 600;
+  }
+  .pinpoint-san {
+    font-size: 9px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #cbd5e1;
+    opacity: 0.9;
+  }
+
+  /* v3.0 / v3.2 Live Match Clock Radar with Move Numbers */
   .live-clock-box {
     margin: 0 14px 9px;
     padding: 8px 10px;
@@ -614,19 +707,52 @@ export const HUD_SHADOW_CSS = `
     display: flex;
     align-items: flex-end;
     gap: 3px;
-    height: 22px;
+    height: 32px;
+  }
+  .live-spark-item {
+    flex: 1;
+    min-width: 8px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 2px;
   }
   .live-spark-col {
-    flex: 1;
-    min-width: 6px;
+    width: 100%;
     border-radius: 2px 2px 0 0;
     transition: height 0.2s ease;
   }
+  .live-spark-num {
+    font-size: 7.5px;
+    color: #94a3b8;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .live-spark-num.suspect {
+    color: #fca5a5;
+    font-weight: 800;
+  }
+  .live-spark-num.pause {
+    color: #fcd34d;
+    font-weight: 800;
+  }
   .live-suspect-msg {
-    margin-top: 5px;
+    margin-top: 6px;
     font-size: 10px;
     font-weight: 700;
     color: #fecaca;
+    line-height: 1.35;
+  }
+  .match-pin-tag {
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 8.5px;
+    font-weight: 800;
+    background: rgba(239, 68, 68, 0.22);
+    color: #fecaca;
+    border: 1px solid rgba(248, 113, 113, 0.35);
   }
 
   /* v3.0 7-Bin Move-Time Histogram */

@@ -251,7 +251,8 @@ var DEFAULT_SETTINGS = {
 var LIVE_FORMATS = ["rapid", "blitz", "bullet"];
 
 // src/core/pgn-pacing.ts
-var CLK_REGEX = /\[%clk\s+(\d+):(\d+):(\d+(?:\.\d+)?)\]/g;
+var CLK_REGEX = /\{[^}]*\[%clk\s+(\d+):(\d+):(\d+(?:\.\d+)?)\][^}]*\}/g;
+var SAN_TOKEN_REGEX = /(?:O-O-O|O-O|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?)/g;
 var TC_HEADER_REGEX = /\[TimeControl\s+"(\d+)(?:\+(\d+))?"\]/;
 var LOG_TIME_BINS = [0.9, 1.8, 3.2, 5.5, 9.5, 18];
 function quantileSorted(sorted, q) {
@@ -293,19 +294,37 @@ function extractPlayerMoveTimes(pgn, isWhite) {
   const tcMatch = pgn.match(TC_HEADER_REGEX);
   const baseSec = tcMatch ? Number(tcMatch[1]) : 180;
   const incrementSec = tcMatch && tcMatch[2] ? Number(tcMatch[2]) : 0;
+  const movetextStart = pgn.indexOf("\n\n");
+  const body = movetextStart >= 0 ? pgn.slice(movetextStart + 2) : pgn.replace(/\[[^\]]*\]/g, " ");
   const allClocks = [];
+  const allSan = [];
+  let prevEnd = 0;
   let match;
   CLK_REGEX.lastIndex = 0;
-  while ((match = CLK_REGEX.exec(pgn)) !== null) {
+  while ((match = CLK_REGEX.exec(body)) !== null) {
     const hours = Number(match[1]);
     const mins = Number(match[2]);
     const secs = Number(match[3]);
     allClocks.push(hours * 3600 + mins * 60 + secs);
+    const segment = body.slice(prevEnd, match.index).replace(/\{[^}]*\}/g, " ").replace(/\d+\.+/g, " ");
+    const sanMatches = segment.match(SAN_TOKEN_REGEX);
+    allSan.push(sanMatches && sanMatches.length > 0 ? sanMatches[sanMatches.length - 1] : "");
+    prevEnd = match.index + match[0].length;
   }
   if (allClocks.length < 30) {
     return null;
   }
-  const playerClocks = allClocks.filter((_, idx) => isWhite ? idx % 2 === 0 : idx % 2 === 1);
+  const playerClocks = [];
+  const playerSanMoves = [];
+  for (let idx = 0; idx < allClocks.length; idx++) {
+    const belongs = isWhite ? idx % 2 === 0 : idx % 2 === 1;
+    if (belongs) {
+      playerClocks.push(allClocks[idx]);
+      const fullMoveNo = Math.floor(idx / 2) + 1;
+      const prefix = isWhite ? `${fullMoveNo}.` : `${fullMoveNo}...`;
+      playerSanMoves.push(allSan[idx] ? `${prefix}${allSan[idx]}` : `${prefix}?`);
+    }
+  }
   if (playerClocks.length < 15) return null;
   const moveDurationsSec = [];
   for (let i = 1; i < playerClocks.length; i++) {
@@ -318,23 +337,26 @@ function extractPlayerMoveTimes(pgn, isWhite) {
     baseSec,
     totalPlies: allClocks.length,
     clocksSec: playerClocks,
-    moveDurationsSec
+    moveDurationsSec,
+    playerSanMoves
   };
 }
 function analyzeSingleGamePacing(pgn, isWhite, timeClass, won) {
   if (timeClass === "daily") return null;
   const parsed = extractPlayerMoveTimes(pgn, isWhite);
   if (!parsed) return null;
-  const { baseSec, clocksSec, moveDurationsSec } = parsed;
+  const { baseSec, clocksSec, moveDurationsSec, playerSanMoves } = parsed;
   const isUltraFastBullet = timeClass === "bullet" && baseSec <= 120;
   const scrambleThreshold = timeClass === "bullet" ? 10 : timeClass === "blitz" ? 22 : 35;
   const midMoves = [];
   const startIdx = Math.min(8, Math.floor(moveDurationsSec.length * 0.25));
   const endIdx = Math.min(42, moveDurationsSec.length);
+  let lastValidMidIdx = startIdx;
   for (let i = startIdx; i < endIdx; i++) {
     const clockRemaining = clocksSec[i + 1] ?? 0;
     if (clockRemaining < scrambleThreshold) break;
     midMoves.push(moveDurationsSec[i]);
+    lastValidMidIdx = i;
   }
   if (midMoves.length < 10) return null;
   const mean = midMoves.reduce((sum, v) => sum + v, 0) / midMoves.length;
@@ -355,6 +377,13 @@ function analyzeSingleGamePacing(pgn, isWhite, timeClass, won) {
   const roboticBandRatio = roboticCount / midMoves.length;
   const isFlatline = won && !isUltraFastBullet && (cv <= 0.36 && qcd <= 0.21 || qcd <= 0.17 && entropyBits <= 1.28) && mean >= 2.8 && mean <= 10.5 && fastMoveRatio <= 0.04 && roboticBandRatio >= 0.72;
   let hasMidgameToggle = false;
+  let pauseMoveNumber = null;
+  let pauseSec = null;
+  let suspectStartMove = startIdx + 2;
+  let suspectEndMove = lastValidMidIdx + 2;
+  let minBandSec = isFlatline ? Number(q1.toFixed(1)) : null;
+  let maxBandSec = isFlatline ? Number(q3.toFixed(1)) : null;
+  let sampleMoves = isFlatline ? playerSanMoves.slice(startIdx + 1, startIdx + 4).filter((s) => !s.endsWith("?")) : [];
   if (won && !isUltraFastBullet && timeClass !== "bullet" && moveDurationsSec.length >= 20) {
     const pauseMin = timeClass === "blitz" ? 24 : 32;
     const pauseMax = timeClass === "blitz" ? 95 : 130;
@@ -363,7 +392,8 @@ function analyzeSingleGamePacing(pgn, isWhite, timeClass, won) {
       if (moveDurationsSec[i] >= pauseMin && moveDurationsSec[i] <= pauseMax) {
         const preSlice = moveDurationsSec.slice(0, i);
         const preHasFast = preSlice.some((t) => t <= 2.1);
-        const postSlice = moveDurationsSec.slice(i + 1, Math.min(i + 15, moveDurationsSec.length));
+        const postEndIdx = Math.min(i + 15, moveDurationsSec.length);
+        const postSlice = moveDurationsSec.slice(i + 1, postEndIdx);
         if (preHasFast && postSlice.length >= 10) {
           const pMean = postSlice.reduce((a, b) => a + b, 0) / postSlice.length;
           const pStd = Math.sqrt(
@@ -378,6 +408,13 @@ function analyzeSingleGamePacing(pgn, isWhite, timeClass, won) {
           const bandHits = postSlice.filter((t) => t >= 2.5 && t <= 8.5).length / postSlice.length;
           if (pCv <= 0.32 && pQcd <= 0.19 && pFastCount === 0 && bandHits >= 0.85 && pMean >= 2.8) {
             hasMidgameToggle = true;
+            pauseMoveNumber = i + 2;
+            pauseSec = Number(moveDurationsSec[i].toFixed(1));
+            suspectStartMove = i + 3;
+            suspectEndMove = i + 2 + postSlice.length;
+            minBandSec = Number(pQ1.toFixed(1));
+            maxBandSec = Number(pQ3.toFixed(1));
+            sampleMoves = playerSanMoves.slice(i + 2, i + 5).filter((s) => !s.endsWith("?"));
             break;
           }
         }
@@ -397,8 +434,87 @@ function analyzeSingleGamePacing(pgn, isWhite, timeClass, won) {
     roboticBandRatio: Number(roboticBandRatio.toFixed(3)),
     isFlatline,
     hasMidgameToggle,
-    won
+    won,
+    pauseMoveNumber,
+    pauseSec,
+    suspectStartMove,
+    suspectEndMove,
+    minBandSec,
+    maxBandSec,
+    sampleMoves
   };
+}
+function extractSuspectGamePinpoints(games, username, ratedOnly, getAccuracyCeiling) {
+  const userLower = username.toLowerCase();
+  const sorted = [...games].filter((g) => {
+    if (ratedOnly && g.rated === false) return false;
+    if (g.time_class === "daily") return false;
+    return g.white?.username?.toLowerCase() === userLower || g.black?.username?.toLowerCase() === userLower;
+  }).sort((a, b) => (b.end_time || 0) - (a.end_time || 0)).slice(0, 40);
+  const candidates = [];
+  const byUrlOrEndTime = /* @__PURE__ */ new Map();
+  for (const g of sorted) {
+    const isWhite = g.white?.username?.toLowerCase() === userLower;
+    const player = isWhite ? g.white : g.black;
+    const opp = isWhite ? g.black : g.white;
+    const won = player?.result === "win";
+    const format = String(g.time_class || "blitz");
+    const accRaw = g.accuracies ? isWhite ? g.accuracies.white : g.accuracies.black : null;
+    const accuracy = typeof accRaw === "number" && accRaw > 0 && accRaw <= 100 ? Number(accRaw.toFixed(1)) : null;
+    const m = g.pgn ? analyzeSingleGamePacing(g.pgn, isWhite, format, won) : null;
+    const key = g.url || String(g.end_time || "");
+    if (m && (m.hasMidgameToggle || m.isFlatline)) {
+      const p = {
+        kind: m.hasMidgameToggle ? "midgame_toggle" : "robotic_flatline",
+        format,
+        opponentUsername: opp?.username || "Opponent",
+        opponentRating: opp?.rating || 0,
+        gameUrl: g.url || null,
+        endTime: g.end_time || 0,
+        accuracy,
+        pauseMoveNumber: m.pauseMoveNumber,
+        pauseSec: m.pauseSec,
+        suspectStartMove: m.suspectStartMove,
+        suspectEndMove: m.suspectEndMove,
+        roboticMoveCount: Math.max(1, m.suspectEndMove - m.suspectStartMove + 1),
+        minBandSec: m.minBandSec,
+        maxBandSec: m.maxBandSec,
+        sampleMoves: m.sampleMoves
+      };
+      candidates.push(p);
+      if (key) byUrlOrEndTime.set(key, p);
+      continue;
+    }
+    const ceiling = getAccuracyCeiling(format, player?.rating || 1500);
+    if (won && accuracy !== null && accuracy >= Math.max(94, ceiling + 1.5) && g.pgn) {
+      const moveNums = g.pgn.match(/\b(\d+)\.\s+\S+/g);
+      const totalFullMoves = moveNums ? moveNums.length : 0;
+      if (totalFullMoves >= 22) {
+        const p = {
+          kind: "caps2_spike",
+          format,
+          opponentUsername: opp?.username || "Opponent",
+          opponentRating: opp?.rating || 0,
+          gameUrl: g.url || null,
+          endTime: g.end_time || 0,
+          accuracy,
+          pauseMoveNumber: null,
+          pauseSec: null,
+          suspectStartMove: 1,
+          suspectEndMove: totalFullMoves,
+          roboticMoveCount: totalFullMoves,
+          minBandSec: null,
+          maxBandSec: null,
+          sampleMoves: []
+        };
+        candidates.push(p);
+        if (key) byUrlOrEndTime.set(key, p);
+      }
+    }
+  }
+  const priority = (p) => p.kind === "midgame_toggle" ? 3 : p.kind === "robotic_flatline" ? 2 : 1;
+  const pinpoints = candidates.sort((a, b) => priority(b) - priority(a) || b.endTime - a.endTime).slice(0, 4);
+  return { pinpoints, byUrlOrEndTime };
 }
 function computeAggregatePacing(games, username, ratedOnly = true) {
   const userLower = username.toLowerCase();
@@ -425,20 +541,23 @@ function computeAggregatePacing(games, username, ratedOnly = true) {
     }
   }
   const bucketDistribution = totalMoves > 0 ? totalBuckets.map((c) => Number((c / totalMoves).toFixed(3))) : new Array(LOG_TIME_BINS.length + 1).fill(0);
-  if (metrics.length < 6) {
+  const nonBulletCount = metrics.filter((m) => m.timeClass !== "bullet").length;
+  if (metrics.length < 6 || nonBulletCount < 5) {
+    const cvs2 = metrics.map((m) => m.cv).sort((a, b) => a - b);
+    const qcds2 = metrics.map((m) => m.qcd).sort((a, b) => a - b);
     return {
       gamesAnalyzed: metrics.length,
-      medianCV: metrics.length > 0 ? Number(quantileSorted(metrics.map((m) => m.cv).sort((a, b) => a - b), 0.5).toFixed(2)) : null,
-      medianQCD: metrics.length > 0 ? Number(quantileSorted(metrics.map((m) => m.qcd).sort((a, b) => a - b), 0.5).toFixed(2)) : null,
-      meanEntropyBits: metrics.length > 0 ? Number((metrics.reduce((s, m) => s + m.entropyBits, 0) / metrics.length).toFixed(2)) : null,
-      minCV: metrics.length > 0 ? Number(Math.min(...metrics.map((m) => m.cv)).toFixed(2)) : null,
+      medianCV: cvs2.length ? Number(quantileSorted(cvs2, 0.5).toFixed(2)) : null,
+      medianQCD: qcds2.length ? Number(quantileSorted(qcds2, 0.5).toFixed(2)) : null,
+      meanEntropyBits: metrics.length ? Number((metrics.reduce((s, m) => s + m.entropyBits, 0) / metrics.length).toFixed(2)) : null,
+      minCV: cvs2.length ? Number(cvs2[0].toFixed(2)) : null,
       meanFastMoveRatio: null,
       meanRoboticBandRatio: null,
       bucketDistribution,
       flatlineGames: 0,
       flatlineRate: 0,
       toggleGames: 0,
-      isConfirmedHumanPacing: false,
+      isConfirmedHumanPacing: metrics.length >= 3 && quantileSorted(cvs2, 0.5) >= 0.72 && quantileSorted(qcds2, 0.5) >= 0.34,
       pacingScore: 0
     };
   }
@@ -459,24 +578,6 @@ function computeAggregatePacing(games, username, ratedOnly = true) {
   const flatlineGames = metrics.filter((m) => m.isFlatline).length;
   const flatlineRate = Number((flatlineGames / metrics.length).toFixed(3));
   const toggleGames = metrics.filter((m) => m.hasMidgameToggle).length;
-  const nonBulletCount = metrics.filter((m) => m.timeClass !== "bullet").length;
-  if (nonBulletCount < 5) {
-    return {
-      gamesAnalyzed: metrics.length,
-      medianCV,
-      medianQCD,
-      meanEntropyBits,
-      minCV,
-      meanFastMoveRatio,
-      meanRoboticBandRatio,
-      bucketDistribution,
-      flatlineGames,
-      flatlineRate,
-      toggleGames,
-      isConfirmedHumanPacing: medianCV >= 0.65 && medianQCD >= 0.3,
-      pacingScore: 0
-    };
-  }
   const isConfirmedHumanPacing = medianCV >= 0.68 && medianQCD >= 0.33 && meanEntropyBits >= 1.7 && flatlineGames <= 1 && toggleGames === 0;
   if (isConfirmedHumanPacing) {
     return {
@@ -860,6 +961,15 @@ function analyzePlayerBundle(bundle, options = {}) {
     }
     return "D";
   });
+  const { pinpoints: rawPinpoints, byUrlOrEndTime } = extractSuspectGamePinpoints(
+    validGames,
+    usernameLower,
+    ratedOnly,
+    (fmtStr, rating) => {
+      const validFmt = ["bullet", "blitz", "rapid", "daily"].includes(fmtStr) ? fmtStr : "blitz";
+      return getAccuracyBand(validFmt, rating).ceiling;
+    }
+  );
   const recentMatches = validGames.slice(0, 5).map((g) => {
     const isWhite = g.white?.username?.toLowerCase() === usernameLower;
     const player = isWhite ? g.white : g.black;
@@ -867,6 +977,8 @@ function analyzePlayerBundle(bundle, options = {}) {
     const resCode = player?.result === "win" ? "W" : ["checkmated", "resigned", "timeout", "abandoned", "lose"].includes(player?.result || "") ? "L" : "D";
     const rawAcc = g.accuracies ? isWhite ? g.accuracies.white : g.accuracies.black : null;
     const accuracy = typeof rawAcc === "number" && !Number.isNaN(rawAcc) ? Number(rawAcc.toFixed(1)) : null;
+    const pinKey = g.url || String(g.end_time || "");
+    const pin = pinKey ? byUrlOrEndTime.get(pinKey) : void 0;
     return {
       result: resCode,
       format: String(g.time_class || "blitz"),
@@ -876,7 +988,9 @@ function analyzePlayerBundle(bundle, options = {}) {
       accuracy,
       plies: estimateGamePlies(g.pgn),
       url: g.url || null,
-      endTime: g.end_time || 0
+      endTime: g.end_time || 0,
+      pinpointKind: pin ? pin.kind : null,
+      pinpointMoveRange: pin ? `#${pin.suspectStartMove}\u2013#${pin.suspectEndMove}` : null
     };
   });
   const pacing = computeAggregatePacing(validGames, usernameLower, ratedOnly);
@@ -1155,6 +1269,9 @@ function analyzePlayerBundle(bundle, options = {}) {
     }
   }
   const tier = probabilityToTier(probability, isBannedFairPlay);
+  const shouldExposePinpoints = isBannedFairPlay || probability >= 45 || signals.movePacing >= 45 || signals.accuracyAnomaly >= 45;
+  const suspectPinpoints = shouldExposePinpoints ? rawPinpoints : [];
+  const finalRecentMatches = shouldExposePinpoints ? recentMatches : recentMatches.map((m) => ({ ...m, pinpointKind: null, pinpointMoveRange: null }));
   return {
     username: usernameLower,
     displayName,
@@ -1171,7 +1288,8 @@ function analyzePlayerBundle(bundle, options = {}) {
     confidence,
     winStreak,
     recentForm,
-    recentMatches,
+    recentMatches: finalRecentMatches,
+    suspectPinpoints,
     signals,
     pacing,
     formats,

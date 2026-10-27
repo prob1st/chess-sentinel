@@ -1,6 +1,6 @@
 {
   "name": "chess-sentinel",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "Real-time Opponent Cheat Probability & Fair-Play Forensic HUD for Chess.com (Firefox & Manifest V3)",
   "type": "module",
   "license": "MIT",

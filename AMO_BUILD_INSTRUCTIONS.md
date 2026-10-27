@@ -1,6 +1,6 @@
-# Mozilla Add-ons (AMO) Reproducible Build Instructions — Chess Sentinel v3.1.0
+# Mozilla Add-ons (AMO) Reproducible Build Instructions — Chess Sentinel v3.2.0
 
-This document provides exact step-by-step instructions for Mozilla Add-ons reviewers to reproduce the submitted Firefox extension package (`chess-sentinel-v3.1.0-firefox.zip`) from TypeScript source code.
+This document provides exact step-by-step instructions for Mozilla Add-ons reviewers to reproduce the submitted Firefox extension package (`chess-sentinel-v3.2.0-firefox.zip`) from TypeScript source code.
 
 ## Build Environment
 - **Operating System:** Linux (Ubuntu 22.04 / 24.04 x86_64) or macOS / Windows

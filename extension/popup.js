@@ -59,7 +59,7 @@ function buildFairPlayEvidenceReport(res, lang, liveClock) {
   const pf = res.formats[res.primaryFormat];
   const lines = [];
   if (lang === "tr") {
-    lines.push(`[Chess Sentinel v3.1 (Zero-FP) \u2014 Adil Oyun Telemetri \xD6zeti]`);
+    lines.push(`[Chess Sentinel v3.2 (Zero-FP) \u2014 Adil Oyun & Hamle Bazl\u0131 Kan\u0131t \xD6zeti]`);
     lines.push(
       `Oyuncu: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Hesap Ya\u015F\u0131: ${res.accountAgeDays !== null ? `${res.accountAgeDays} g\xFCn` : "Bilinmiyor"}`
     );
@@ -80,17 +80,39 @@ function buildFairPlayEvidenceReport(res, lang, liveClock) {
       );
     }
     if (liveClock && liveClock.movesObserved >= 4) {
+      const livePin = liveClock.pauseMoveNumber !== null && liveClock.roboticStartMove !== null ? ` | Nokta At\u0131\u015F\u0131: ${liveClock.pauseMoveNumber}. hamlede ${liveClock.detectedPauseSec}sn duraksama -> ${liveClock.roboticStartMove}.-${liveClock.roboticEndMove}. hamleler robotik (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}sn)` : liveClock.roboticStartMove !== null && liveClock.consecutiveRoboticMoves >= 6 ? ` | Nokta At\u0131\u015F\u0131: ${liveClock.roboticStartMove}.-${liveClock.roboticEndMove}. hamleler kesintisiz mekanik (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}sn)` : "";
       lines.push(
-        `Canl\u0131 Ma\xE7 Saat Verisi: ${liveClock.movesObserved} hamle izlendi | Ort: ${liveClock.liveMeanSec ?? "\u2014"} sn | Canl\u0131 QCD: ${liveClock.liveQCD ?? "\u2014"} | Ard\u0131\u015F\u0131k mekanik hamle: ${liveClock.consecutiveRoboticMoves}`
+        `Canl\u0131 Ma\xE7 Saat Verisi: ${liveClock.movesObserved} hamle izlendi | Ort: ${liveClock.liveMeanSec ?? "\u2014"} sn | Canl\u0131 QCD: ${liveClock.liveQCD ?? "\u2014"}${livePin}`
       );
     }
-    const topUrls = res.recentMatches.filter((m) => m.url && m.result === "W").slice(0, 3).map((m) => `${m.url}${m.accuracy !== null ? ` (%${m.accuracy})` : ""}`);
-    if (topUrls.length > 0) {
-      lines.push(`\u0130ncelenmesi \xD6nerilen Son Ma\xE7lar:
+    if (res.suspectPinpoints && res.suspectPinpoints.length > 0) {
+      lines.push(`Tespit Edilen \u015E\xFCpheli Ma\xE7 & Hamle Aral\u0131klar\u0131:`);
+      for (const p of res.suspectPinpoints) {
+        const urlPart = p.gameUrl ? ` \u2014 ${p.gameUrl}` : "";
+        const samples = p.sampleMoves.length > 0 ? ` [${p.sampleMoves.join(" ")}]` : "";
+        if (p.kind === "midgame_toggle") {
+          lines.push(
+            `- vs @${p.opponentUsername}: ${p.pauseMoveNumber}. hamlede ${p.pauseSec}sn duraksama -> ${p.suspectStartMove}.-${p.suspectEndMove}. hamleler sabit robotik tempo (${p.minBandSec}-${p.maxBandSec}sn)${samples}${urlPart}`
+          );
+        } else if (p.kind === "robotic_flatline") {
+          lines.push(
+            `- vs @${p.opponentUsername}: ${p.suspectStartMove}.-${p.suspectEndMove}. hamleler s\u0131f\u0131r refleksli mekanik tempo (${p.minBandSec}-${p.maxBandSec}sn)${p.accuracy !== null ? ` [%${p.accuracy}]` : ""}${samples}${urlPart}`
+          );
+        } else {
+          lines.push(
+            `- vs @${p.opponentUsername}: ${p.suspectEndMove} hamlelik tam ma\xE7ta %${p.accuracy} CAPS2 do\u011Fruluk${urlPart}`
+          );
+        }
+      }
+    } else {
+      const topUrls = res.recentMatches.filter((m) => m.url && m.result === "W").slice(0, 3).map((m) => `${m.url}${m.accuracy !== null ? ` (%${m.accuracy})` : ""}`);
+      if (topUrls.length > 0) {
+        lines.push(`\u0130ncelenmesi \xD6nerilen Son Ma\xE7lar:
 - ${topUrls.join("\n- ")}`);
+      }
     }
   } else {
-    lines.push(`[Chess Sentinel v3.1 (Zero-FP) \u2014 Fair-Play Telemetry Summary]`);
+    lines.push(`[Chess Sentinel v3.2 (Zero-FP) \u2014 Fair-Play & Move-Range Evidence Summary]`);
     lines.push(
       `Player: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Account Age: ${res.accountAgeDays !== null ? `${res.accountAgeDays} days` : "Unknown"}`
     );
@@ -111,14 +133,36 @@ function buildFairPlayEvidenceReport(res, lang, liveClock) {
       );
     }
     if (liveClock && liveClock.movesObserved >= 4) {
+      const livePin = liveClock.pauseMoveNumber !== null && liveClock.roboticStartMove !== null ? ` | Pinpoint: Move #${liveClock.pauseMoveNumber} (${liveClock.detectedPauseSec}s pause) -> Moves #${liveClock.roboticStartMove}-#${liveClock.roboticEndMove} mechanical (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}s)` : liveClock.roboticStartMove !== null && liveClock.consecutiveRoboticMoves >= 6 ? ` | Pinpoint: Moves #${liveClock.roboticStartMove}-#${liveClock.roboticEndMove} continuous mechanical band (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}s)` : "";
       lines.push(
-        `Live Match Clock Radar: ${liveClock.movesObserved} moves | Mean: ${liveClock.liveMeanSec ?? "\u2014"}s | Live QCD: ${liveClock.liveQCD ?? "\u2014"} | Consecutive flatline moves: ${liveClock.consecutiveRoboticMoves}`
+        `Live Match Clock Radar: ${liveClock.movesObserved} moves | Mean: ${liveClock.liveMeanSec ?? "\u2014"}s | Live QCD: ${liveClock.liveQCD ?? "\u2014"}${livePin}`
       );
     }
-    const topUrls = res.recentMatches.filter((m) => m.url && m.result === "W").slice(0, 3).map((m) => `${m.url}${m.accuracy !== null ? ` (${m.accuracy}%)` : ""}`);
-    if (topUrls.length > 0) {
-      lines.push(`Recent Games for Review:
+    if (res.suspectPinpoints && res.suspectPinpoints.length > 0) {
+      lines.push(`Pinpointed Suspect Games & Move Ranges:`);
+      for (const p of res.suspectPinpoints) {
+        const urlPart = p.gameUrl ? ` \u2014 ${p.gameUrl}` : "";
+        const samples = p.sampleMoves.length > 0 ? ` [${p.sampleMoves.join(" ")}]` : "";
+        if (p.kind === "midgame_toggle") {
+          lines.push(
+            `- vs @${p.opponentUsername}: Move #${p.pauseMoveNumber} (${p.pauseSec}s pause) -> Moves #${p.suspectStartMove}-#${p.suspectEndMove} mechanical band (${p.minBandSec}-${p.maxBandSec}s)${samples}${urlPart}`
+          );
+        } else if (p.kind === "robotic_flatline") {
+          lines.push(
+            `- vs @${p.opponentUsername}: Moves #${p.suspectStartMove}-#${p.suspectEndMove} zero-reflex mechanical pacing (${p.minBandSec}-${p.maxBandSec}s)${p.accuracy !== null ? ` [${p.accuracy}%]` : ""}${samples}${urlPart}`
+          );
+        } else {
+          lines.push(
+            `- vs @${p.opponentUsername}: ${p.accuracy}% CAPS2 accuracy over ${p.suspectEndMove} full moves${urlPart}`
+          );
+        }
+      }
+    } else {
+      const topUrls = res.recentMatches.filter((m) => m.url && m.result === "W").slice(0, 3).map((m) => `${m.url}${m.accuracy !== null ? ` (${m.accuracy}%)` : ""}`);
+      if (topUrls.length > 0) {
+        lines.push(`Recent Games for Review:
 - ${topUrls.join("\n- ")}`);
+      }
     }
   }
   return lines.join("\n");
@@ -192,9 +236,25 @@ var TRANSLATIONS = {
       liveClockTitle: "CANLI MA\xC7 HAMLE RADARI",
       liveClockMoves: "{count} hamle \u2022 Ort {mean}s \u2022 QCD {qcd}",
       liveClockSuspect: "\u26A1 Canl\u0131 ma\xE7ta mekanik hamle temposu alg\u0131land\u0131!",
+      livePinpointToggle: "\u{1F3AF} {pauseMove}. hamlede {pauseSec}sn duraksad\u0131 \u2192 {start}.\u2013{end}. hamleler sabit robotik ({min}\u2013{max}sn)",
+      livePinpointFlatline: "\u{1F3AF} {start}.\u2013{end}. hamleler aras\u0131 \xFCst \xFCste {count} hamle sabit robotik ({min}\u2013{max}sn)",
       pacingHistTitle: "HAMLE S\xDCRES\u0130 DA\u011EILIMI (%clk)",
       pacingEntropyTag: "Entropi: {ent}b \u2022 QCD: {qcd}",
-      recentMatchesTitle: "SON PUANLI MA\xC7LAR"
+      recentMatchesTitle: "SON PUANLI MA\xC7LAR",
+      autoVerdictTitle: "OTOMAT\u0130K S\u0130STEM KARARI",
+      verdictBanned: "\u{1F6A8} Bu hesap Chess.com taraf\u0131ndan Adil Oyun (Hile) ihlali nedeniyle resmen kapat\u0131lm\u0131\u015Ft\u0131r.",
+      verdictLiveToggle: "\u{1F3AF} CANLI TESP\u0130T: Rakip {pauseMove}. hamlede {pauseSec}sn bekleyip {start}.\u2013{end}. hamleleri sabit makine ritminde ({min}\u2013{max}sn) oynad\u0131! Ma\xE7 sonu alttan kan\u0131t raporunu kopyalay\u0131n.",
+      verdictLiveFlatline: "\u{1F3AF} CANLI TESP\u0130T: Rakip {start}.\u2013{end}. hamleler boyunca \xFCst \xFCste {count} hamleyi s\u0131f\u0131r refleksli sabit robotik s\xFCrede ({min}\u2013{max}sn) oynuyor!",
+      verdictAbortNow: "\u26D4 \xC7OKLU MOTOR KANITI ({pins} \u015F\xFCpheli ma\xE7 aral\u0131\u011F\u0131): Hen\xFCz ilk hamlelerdesiniz \u2014 puan kaybetmeden MA\xC7I \u0130PTAL ED\u0130N (Abort).",
+      verdictHighWatch: "\u26A0\uFE0F Ge\xE7mi\u015F ma\xE7larda \xE7oklu motor imzas\u0131 bulundu (a\u015Fa\u011F\u0131da tam hamle numaralar\u0131 listelendi). Canl\u0131 saat radar\u0131 \u015Fu an her hamleyi izliyor.",
+      verdictElevatedWatch: "\u{1F536} \u015E\xFCpheli hamle ritmi/do\u011Fruluk sinyalleri var. Canl\u0131 radar aktif \u2014 robotik seri olu\u015Fursa tam hamle numaras\u0131yla burada otomatik yazacak.",
+      verdictSmurfHuman: "\u{1F9ED} Kazanma serisi y\xFCksek ancak hamle s\xFCreleri tamamen do\u011Fal insan ritminde. Motor kan\u0131t\u0131 YOK (el ile oynayan g\xFC\xE7l\xFC oyuncu / smurf).",
+      verdictCleanSafe: "\u2705 \u0130ncelenen ma\xE7larda \u015F\xFCpheli hamle aral\u0131\u011F\u0131 veya motor ge\xE7i\u015Fi yok. Do\u011Fal insan profili \u2014 g\xFCvenle oynayabilirsiniz.",
+      pinpointSectionTitle: "TESP\u0130T ED\u0130LEN \u015E\xDCPHEL\u0130 MA\xC7 & HAMLE ARALIKLARI",
+      pinpointOpenGame: "Ma\xE7\u0131 A\xE7 \u2197",
+      pinpointToggleRow: "{pauseMove}. hamlede {pauseSec}sn duraksama \u2192 {start}.\u2013{end}. hamleler robotik ({min}\u2013{max}sn)",
+      pinpointFlatlineRow: "{start}.\u2013{end}. hamleler aras\u0131 {count} hamle sabit mekanik tempo ({min}\u2013{max}sn)",
+      pinpointCapsRow: "1.\u2013{end}. hamleler boyunca %{acc} motor seviyesi CAPS2 do\u011Fruluk"
     },
     popup: {
       tabScanner: "Oyuncu Tara",
@@ -315,9 +375,25 @@ var TRANSLATIONS = {
       liveClockTitle: "LIVE MATCH CLOCK RADAR",
       liveClockMoves: "{count} moves \u2022 Avg {mean}s \u2022 QCD {qcd}",
       liveClockSuspect: "\u26A1 Mechanical move pacing detected in live game!",
+      livePinpointToggle: "\u{1F3AF} Move #{pauseMove} ({pauseSec}s pause) \u2192 Moves #{start}\u2013#{end} mechanical ({min}\u2013{max}s)",
+      livePinpointFlatline: "\u{1F3AF} Moves #{start}\u2013#{end} ({count} straight moves) locked in mechanical band ({min}\u2013{max}s)",
       pacingHistTitle: "MOVE-TIME HISTOGRAM (%clk)",
       pacingEntropyTag: "Entropy: {ent}b \u2022 QCD: {qcd}",
-      recentMatchesTitle: "RECENT RATED MATCHES"
+      recentMatchesTitle: "RECENT RATED MATCHES",
+      autoVerdictTitle: "AUTOMATIC SYSTEM VERDICT",
+      verdictBanned: "\u{1F6A8} This account has been officially closed by Chess.com for Fair Play violations.",
+      verdictLiveToggle: "\u{1F3AF} LIVE PINPOINT: Opponent paused {pauseSec}s on Move #{pauseMove}, then played Moves #{start}\u2013#{end} at fixed robotic pace ({min}\u2013{max}s)! Copy the evidence report after the game.",
+      verdictLiveFlatline: "\u{1F3AF} LIVE PINPOINT: Opponent played {count} consecutive moves (#{start}\u2013#{end}) in a zero-reflex mechanical band ({min}\u2013{max}s)!",
+      verdictAbortNow: "\u26D4 CORROBORATED ENGINE EVIDENCE ({pins} suspect game spans): Safe abort window is open \u2014 ABORT MATCH NOW to protect your Elo.",
+      verdictHighWatch: "\u26A0\uFE0F Corroborated engine signatures found in match history (exact move numbers listed below). Live radar is tracking every move.",
+      verdictElevatedWatch: "\u{1F536} Elevated chronometric/accuracy signals. Live radar is active and will pinpoint exact move numbers automatically if triggered.",
+      verdictSmurfHuman: "\u{1F9ED} High win rate, but move times follow natural human variance. NO engine proof (likely hand-played smurf or hot streak).",
+      verdictCleanSafe: "\u2705 Zero suspect move ranges or engine toggles found across match history. Organic human profile \u2014 safe to play.",
+      pinpointSectionTitle: "PINPOINTED SUSPECT GAMES & MOVE RANGES",
+      pinpointOpenGame: "Open \u2197",
+      pinpointToggleRow: "Move #{pauseMove} ({pauseSec}s pause) \u2192 Moves #{start}\u2013#{end} robotic ({min}\u2013{max}s)",
+      pinpointFlatlineRow: "Moves #{start}\u2013#{end} ({count} moves) zero-reflex mechanical pace ({min}\u2013{max}s)",
+      pinpointCapsRow: "Moves #1\u2013#{end} played at {acc}% ceiling CAPS2 accuracy"
     },
     popup: {
       tabScanner: "Live Scanner",

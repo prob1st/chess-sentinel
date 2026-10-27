@@ -93,11 +93,13 @@ function renderBundle(bundle: PlayerRawBundle, nowMs?: number): void {
   }
 
   hud.showResult(result, watchlist.has(result.username.toLowerCase()), true);
-  if (result.probability >= 70) {
+  if (result.probability >= 55) {
     hud.updateLiveClock(
       summarizeLiveMoveTimes(
         result.displayName,
-        [1.4, 2.2, 1.6, 34.5, 4.4, 4.7, 4.3, 4.6, 4.5, 4.4, 4.6, 4.5]
+        [1.4, 2.2, 1.6, 34.5, 4.4, 4.7, 4.3, 4.6, 4.5, 4.4, 4.6, 4.5],
+        [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        ['Nf6', 'd6', 'Be7', 'O-O', 'Re8', 'Bf8', 'h6', 'Nb8', 'Nbd7', 'Bb7', 'c5', 'Qc7']
       )
     );
   } else {

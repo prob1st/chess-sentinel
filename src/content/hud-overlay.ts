@@ -339,6 +339,126 @@ export class SentinelHudOverlay {
     });
   }
 
+  private renderAutoVerdictHtml(
+    res: CheatAnalysisResult,
+    displayProb: number,
+    lang: Language
+  ): string {
+    const t = TRANSLATIONS[lang].v3;
+    const lc =
+      this.liveClock &&
+      (this.liveClock.opponent.toLowerCase() === res.username.toLowerCase() ||
+        this.liveClock.opponent.toLowerCase() === res.displayName.toLowerCase())
+        ? this.liveClock
+        : null;
+
+    let variant = 'safe';
+    let message = t.verdictCleanSafe;
+
+    if (res.isBannedFairPlay) {
+      variant = 'danger';
+      message = t.verdictBanned;
+    } else if (lc && lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null) {
+      variant = 'danger';
+      if (lc.pauseMoveNumber !== null && lc.detectedPauseSec !== null) {
+        message = t.verdictLiveToggle
+          .replace('{pauseMove}', String(lc.pauseMoveNumber))
+          .replace('{pauseSec}', String(lc.detectedPauseSec))
+          .replace('{start}', String(lc.roboticStartMove))
+          .replace('{end}', String(lc.roboticEndMove))
+          .replace('{min}', String(lc.roboticMinSec ?? '—'))
+          .replace('{max}', String(lc.roboticMaxSec ?? '—'));
+      } else {
+        message = t.verdictLiveFlatline
+          .replace('{start}', String(lc.roboticStartMove))
+          .replace('{end}', String(lc.roboticEndMove))
+          .replace('{count}', String(lc.consecutiveRoboticMoves))
+          .replace('{min}', String(lc.roboticMinSec ?? '—'))
+          .replace('{max}', String(lc.roboticMaxSec ?? '—'));
+      }
+    } else if (displayProb >= 75) {
+      variant = 'danger';
+      message = this.isAbortWindowOpen
+        ? t.verdictAbortNow.replace('{pins}', String(Math.max(1, res.suspectPinpoints.length)))
+        : t.verdictHighWatch;
+    } else if (displayProb >= 55) {
+      variant = 'warn';
+      message = t.verdictElevatedWatch;
+    } else if (res.flags.some((f) => f.id === 'smurf_human_pacing')) {
+      variant = 'smurf';
+      message = t.verdictSmurfHuman;
+    }
+
+    return `
+      <div class="auto-verdict-card ${variant}">
+        <div class="auto-verdict-head">${escapeHtml(t.autoVerdictTitle)}</div>
+        <div class="auto-verdict-text">${escapeHtml(message)}</div>
+      </div>
+    `;
+  }
+
+  private renderSuspectPinpointsHtml(res: CheatAnalysisResult, lang: Language): string {
+    if (!res.suspectPinpoints || res.suspectPinpoints.length === 0) return '';
+    const t = TRANSLATIONS[lang].v3;
+
+    const itemsHtml = res.suspectPinpoints
+      .map((p) => {
+        const href =
+          p.gameUrl || `https://www.chess.com/member/${encodeURIComponent(res.displayName)}`;
+        let desc = '';
+        if (p.kind === 'midgame_toggle') {
+          desc = `⏸→🤖 ${t.pinpointToggleRow
+            .replace('{pauseMove}', String(p.pauseMoveNumber ?? '?'))
+            .replace('{pauseSec}', String(p.pauseSec ?? '?'))
+            .replace('{start}', String(p.suspectStartMove))
+            .replace('{end}', String(p.suspectEndMove))
+            .replace('{min}', String(p.minBandSec ?? '—'))
+            .replace('{max}', String(p.maxBandSec ?? '—'))}`;
+        } else if (p.kind === 'robotic_flatline') {
+          desc = `🤖 ${t.pinpointFlatlineRow
+            .replace('{start}', String(p.suspectStartMove))
+            .replace('{end}', String(p.suspectEndMove))
+            .replace('{count}', String(p.roboticMoveCount))
+            .replace('{min}', String(p.minBandSec ?? '—'))
+            .replace('{max}', String(p.maxBandSec ?? '—'))}`;
+        } else {
+          desc = `🎯 ${t.pinpointCapsRow
+            .replace('{end}', String(p.suspectEndMove))
+            .replace('{acc}', String(p.accuracy ?? '—'))}`;
+        }
+
+        const sanHtml =
+          p.sampleMoves && p.sampleMoves.length > 0
+            ? `<div class="pinpoint-san">${escapeHtml(p.sampleMoves.join('  '))}${
+                p.accuracy !== null ? ` • CAPS2: %${p.accuracy}` : ''
+              }</div>`
+            : p.accuracy !== null && p.kind !== 'caps2_spike'
+              ? `<div class="pinpoint-san">CAPS2: %${p.accuracy}</div>`
+              : '';
+
+        return `
+          <div class="pinpoint-item">
+            <div class="pinpoint-head">
+              <span>vs @${escapeHtml(p.opponentUsername)} (${p.opponentRating})</span>
+              <a class="pinpoint-open" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(
+                t.pinpointOpenGame
+              )}</a>
+            </div>
+            <div class="pinpoint-body">${escapeHtml(desc)}</div>
+            ${sanHtml}
+          </div>
+        `;
+      })
+      .join('');
+
+    return `
+      <div class="pinpoint-panel">
+        <div class="pinpoint-title">${escapeHtml(t.pinpointSectionTitle)}</div>
+        ${itemsHtml}
+      </div>
+    `;
+  }
+
   private renderLiveClockHtml(lang: Language): string {
     const lc = this.liveClock;
     if (!lc || lc.movesObserved < 3) return '';
@@ -353,17 +473,36 @@ export class SentinelHudOverlay {
     const t = TRANSLATIONS[lang];
     const maxSec = Math.max(12, ...lc.moveTimesSec);
     const barsHtml = lc.moveTimesSec
-      .map((sec) => {
-        const hPct = Math.max(14, Math.min(100, Math.round((sec / maxSec) * 100)));
-        const color =
-          sec <= 1.8
-            ? '#34d399'
-            : sec >= 2.4 && sec <= 8.8 && lc.isLiveSuspectPacing
-              ? '#ef4444'
+      .map((sec, idx) => {
+        const moveNo = lc.moveNumbers?.[idx] ?? idx + 2;
+        const san = lc.moveSanLabels?.[idx] || '';
+        const isPauseMove = lc.pauseMoveNumber !== null && moveNo === lc.pauseMoveNumber;
+        const isInRoboticRange =
+          lc.isLiveSuspectPacing &&
+          lc.roboticStartMove !== null &&
+          lc.roboticEndMove !== null &&
+          moveNo >= lc.roboticStartMove &&
+          moveNo <= lc.roboticEndMove;
+
+        const hPx = Math.max(4, Math.min(20, Math.round((sec / maxSec) * 20)));
+        const color = isPauseMove
+          ? '#f59e0b'
+          : isInRoboticRange
+            ? '#ef4444'
+            : sec <= 1.8
+              ? '#34d399'
               : sec >= 18
                 ? '#f59e0b'
                 : '#38bdf8';
-        return `<div class="live-spark-col" style="height:${hPct}%;background:${color}" title="${sec}s"></div>`;
+        const numCls = isPauseMove ? 'pause' : isInRoboticRange ? 'suspect' : '';
+        const tip = `#${moveNo}${san ? ` (${san})` : ''}: ${sec}s`;
+
+        return `
+          <div class="live-spark-item" title="${escapeHtml(tip)}">
+            <div class="live-spark-col" style="height:${hPx}px;background:${color}"></div>
+            <span class="live-spark-num ${numCls}">${moveNo}</span>
+          </div>
+        `;
       })
       .join('');
 
@@ -372,6 +511,28 @@ export class SentinelHudOverlay {
       .replace('{mean}', String(lc.liveMeanSec ?? '—'))
       .replace('{qcd}', String(lc.liveQCD ?? '—'));
 
+    let pinpointMsg = '';
+    if (lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null) {
+      if (lc.pauseMoveNumber !== null && lc.detectedPauseSec !== null) {
+        pinpointMsg = t.v3.livePinpointToggle
+          .replace('{pauseMove}', String(lc.pauseMoveNumber))
+          .replace('{pauseSec}', String(lc.detectedPauseSec))
+          .replace('{start}', String(lc.roboticStartMove))
+          .replace('{end}', String(lc.roboticEndMove))
+          .replace('{min}', String(lc.roboticMinSec ?? '—'))
+          .replace('{max}', String(lc.roboticMaxSec ?? '—'));
+      } else {
+        pinpointMsg = t.v3.livePinpointFlatline
+          .replace('{start}', String(lc.roboticStartMove))
+          .replace('{end}', String(lc.roboticEndMove))
+          .replace('{count}', String(lc.consecutiveRoboticMoves))
+          .replace('{min}', String(lc.roboticMinSec ?? '—'))
+          .replace('{max}', String(lc.roboticMaxSec ?? '—'));
+      }
+    } else if (lc.isLiveSuspectPacing) {
+      pinpointMsg = t.v3.liveClockSuspect;
+    }
+
     return `
       <div class="live-clock-box ${lc.isLiveSuspectPacing ? 'suspect' : ''}">
         <div class="live-clock-head">
@@ -379,11 +540,7 @@ export class SentinelHudOverlay {
           <span>${escapeHtml(statsText)}</span>
         </div>
         <div class="live-spark-bars">${barsHtml}</div>
-        ${
-          lc.isLiveSuspectPacing
-            ? `<div class="live-suspect-msg">${escapeHtml(t.v3.liveClockSuspect)}</div>`
-            : ''
-        }
+        ${pinpointMsg ? `<div class="live-suspect-msg">${escapeHtml(pinpointMsg)}</div>` : ''}
       </div>
     `;
   }
@@ -444,6 +601,9 @@ export class SentinelHudOverlay {
           m.accuracy !== null
             ? `<span class="match-acc ${m.accuracy >= bandCeiling ? 'high' : ''}">${m.accuracy}%</span>`
             : '';
+        const pinHtml = m.pinpointMoveRange
+          ? `<span class="match-pin-tag">🎯 ${escapeHtml(m.pinpointMoveRange)}</span>`
+          : '';
         const href = m.url || `https://www.chess.com/member/${encodeURIComponent(res.displayName)}`;
         return `
           <a class="match-row" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">
@@ -452,6 +612,7 @@ export class SentinelHudOverlay {
               <span class="match-opp">vs @${escapeHtml(m.opponentUsername)} (${m.opponentRating})</span>
             </div>
             <div class="match-right">
+              ${pinHtml}
               ${accHtml}
               <span>${movesCount}m</span>
             </div>
@@ -682,7 +843,9 @@ export class SentinelHudOverlay {
           </div>
         </div>
 
+        ${this.renderAutoVerdictHtml(res, displayProb, lang)}
         ${this.renderLiveClockHtml(lang)}
+        ${this.renderSuspectPinpointsHtml(res, lang)}
 
         <div class="format-tabs">${formatTabsHtml}</div>
 

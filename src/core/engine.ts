@@ -20,7 +20,7 @@ import {
   probabilityToTier,
   SENSITIVITY_MULTIPLIERS,
 } from './calibration';
-import { computeAggregatePacing } from './pgn-pacing';
+import { computeAggregatePacing, extractSuspectGamePinpoints } from './pgn-pacing';
 
 const ALL_FORMATS: TimeClass[] = ['rapid', 'blitz', 'bullet', 'daily'];
 const CLK_COUNT_REGEX = /\[%clk\s+/g;
@@ -519,6 +519,18 @@ export function analyzePlayerBundle(
     return 'D';
   });
 
+  const { pinpoints: rawPinpoints, byUrlOrEndTime } = extractSuspectGamePinpoints(
+    validGames,
+    usernameLower,
+    ratedOnly,
+    (fmtStr, rating) => {
+      const validFmt = (['bullet', 'blitz', 'rapid', 'daily'].includes(fmtStr)
+        ? fmtStr
+        : 'blitz') as TimeClass;
+      return getAccuracyBand(validFmt, rating).ceiling;
+    }
+  );
+
   const recentMatches: RecentMatchSummary[] = validGames.slice(0, 5).map((g) => {
     const isWhite = g.white?.username?.toLowerCase() === usernameLower;
     const player = isWhite ? g.white : g.black;
@@ -532,6 +544,8 @@ export function analyzePlayerBundle(
     const rawAcc = g.accuracies ? (isWhite ? g.accuracies.white : g.accuracies.black) : null;
     const accuracy =
       typeof rawAcc === 'number' && !Number.isNaN(rawAcc) ? Number(rawAcc.toFixed(1)) : null;
+    const pinKey = g.url || String(g.end_time || '');
+    const pin = pinKey ? byUrlOrEndTime.get(pinKey) : undefined;
 
     return {
       result: resCode,
@@ -543,6 +557,8 @@ export function analyzePlayerBundle(
       plies: estimateGamePlies(g.pgn),
       url: g.url || null,
       endTime: g.end_time || 0,
+      pinpointKind: pin ? pin.kind : null,
+      pinpointMoveRange: pin ? `#${pin.suspectStartMove}–#${pin.suspectEndMove}` : null,
     };
   });
 
@@ -928,6 +944,18 @@ export function analyzePlayerBundle(
 
   const tier = probabilityToTier(probability, isBannedFairPlay);
 
+  // Zero-FP Gate on Pinpoints: only surface suspect move-range pinpoints when backed by
+  // corroborated engine probability or hard chronometric/accuracy pillar evidence!
+  const shouldExposePinpoints =
+    isBannedFairPlay ||
+    probability >= 45 ||
+    signals.movePacing >= 45 ||
+    signals.accuracyAnomaly >= 45;
+  const suspectPinpoints = shouldExposePinpoints ? rawPinpoints : [];
+  const finalRecentMatches = shouldExposePinpoints
+    ? recentMatches
+    : recentMatches.map((m) => ({ ...m, pinpointKind: null, pinpointMoveRange: null }));
+
   return {
     username: usernameLower,
     displayName,
@@ -944,7 +972,8 @@ export function analyzePlayerBundle(
     confidence,
     winStreak,
     recentForm,
-    recentMatches,
+    recentMatches: finalRecentMatches,
+    suspectPinpoints,
     signals,
     pacing,
     formats,
@@ -956,7 +985,8 @@ export function analyzePlayerBundle(
 
 /**
  * Generates a factual, structured Fair-Play telemetry summary suitable for pasting
- * directly into Chess.com's Fair Play Report description box.
+ * directly into Chess.com's Fair Play Report description box, including exact
+ * game URLs and exact suspect move numbers (`#start–#end`).
  */
 export function buildFairPlayEvidenceReport(
   res: CheatAnalysisResult,
@@ -967,7 +997,7 @@ export function buildFairPlayEvidenceReport(
   const lines: string[] = [];
 
   if (lang === 'tr') {
-    lines.push(`[Chess Sentinel v3.1 (Zero-FP) — Adil Oyun Telemetri Özeti]`);
+    lines.push(`[Chess Sentinel v3.2 (Zero-FP) — Adil Oyun & Hamle Bazlı Kanıt Özeti]`);
     lines.push(
       `Oyuncu: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Hesap Yaşı: ${
         res.accountAgeDays !== null ? `${res.accountAgeDays} gün` : 'Bilinmiyor'
@@ -990,19 +1020,46 @@ export function buildFairPlayEvidenceReport(
       );
     }
     if (liveClock && liveClock.movesObserved >= 4) {
+      const livePin =
+        liveClock.pauseMoveNumber !== null && liveClock.roboticStartMove !== null
+          ? ` | Nokta Atışı: ${liveClock.pauseMoveNumber}. hamlede ${liveClock.detectedPauseSec}sn duraksama -> ${liveClock.roboticStartMove}.-${liveClock.roboticEndMove}. hamleler robotik (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}sn)`
+          : liveClock.roboticStartMove !== null && liveClock.consecutiveRoboticMoves >= 6
+            ? ` | Nokta Atışı: ${liveClock.roboticStartMove}.-${liveClock.roboticEndMove}. hamleler kesintisiz mekanik (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}sn)`
+            : '';
       lines.push(
-        `Canlı Maç Saat Verisi: ${liveClock.movesObserved} hamle izlendi | Ort: ${liveClock.liveMeanSec ?? '—'} sn | Canlı QCD: ${liveClock.liveQCD ?? '—'} | Ardışık mekanik hamle: ${liveClock.consecutiveRoboticMoves}`
+        `Canlı Maç Saat Verisi: ${liveClock.movesObserved} hamle izlendi | Ort: ${liveClock.liveMeanSec ?? '—'} sn | Canlı QCD: ${liveClock.liveQCD ?? '—'}${livePin}`
       );
     }
-    const topUrls = res.recentMatches
-      .filter((m) => m.url && m.result === 'W')
-      .slice(0, 3)
-      .map((m) => `${m.url}${m.accuracy !== null ? ` (%${m.accuracy})` : ''}`);
-    if (topUrls.length > 0) {
-      lines.push(`İncelenmesi Önerilen Son Maçlar:\n- ${topUrls.join('\n- ')}`);
+    if (res.suspectPinpoints && res.suspectPinpoints.length > 0) {
+      lines.push(`Tespit Edilen Şüpheli Maç & Hamle Aralıkları:`);
+      for (const p of res.suspectPinpoints) {
+        const urlPart = p.gameUrl ? ` — ${p.gameUrl}` : '';
+        const samples = p.sampleMoves.length > 0 ? ` [${p.sampleMoves.join(' ')}]` : '';
+        if (p.kind === 'midgame_toggle') {
+          lines.push(
+            `- vs @${p.opponentUsername}: ${p.pauseMoveNumber}. hamlede ${p.pauseSec}sn duraksama -> ${p.suspectStartMove}.-${p.suspectEndMove}. hamleler sabit robotik tempo (${p.minBandSec}-${p.maxBandSec}sn)${samples}${urlPart}`
+          );
+        } else if (p.kind === 'robotic_flatline') {
+          lines.push(
+            `- vs @${p.opponentUsername}: ${p.suspectStartMove}.-${p.suspectEndMove}. hamleler sıfır refleksli mekanik tempo (${p.minBandSec}-${p.maxBandSec}sn)${p.accuracy !== null ? ` [%${p.accuracy}]` : ''}${samples}${urlPart}`
+          );
+        } else {
+          lines.push(
+            `- vs @${p.opponentUsername}: ${p.suspectEndMove} hamlelik tam maçta %${p.accuracy} CAPS2 doğruluk${urlPart}`
+          );
+        }
+      }
+    } else {
+      const topUrls = res.recentMatches
+        .filter((m) => m.url && m.result === 'W')
+        .slice(0, 3)
+        .map((m) => `${m.url}${m.accuracy !== null ? ` (%${m.accuracy})` : ''}`);
+      if (topUrls.length > 0) {
+        lines.push(`İncelenmesi Önerilen Son Maçlar:\n- ${topUrls.join('\n- ')}`);
+      }
     }
   } else {
-    lines.push(`[Chess Sentinel v3.1 (Zero-FP) — Fair-Play Telemetry Summary]`);
+    lines.push(`[Chess Sentinel v3.2 (Zero-FP) — Fair-Play & Move-Range Evidence Summary]`);
     lines.push(
       `Player: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Account Age: ${
         res.accountAgeDays !== null ? `${res.accountAgeDays} days` : 'Unknown'
@@ -1025,16 +1082,43 @@ export function buildFairPlayEvidenceReport(
       );
     }
     if (liveClock && liveClock.movesObserved >= 4) {
+      const livePin =
+        liveClock.pauseMoveNumber !== null && liveClock.roboticStartMove !== null
+          ? ` | Pinpoint: Move #${liveClock.pauseMoveNumber} (${liveClock.detectedPauseSec}s pause) -> Moves #${liveClock.roboticStartMove}-#${liveClock.roboticEndMove} mechanical (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}s)`
+          : liveClock.roboticStartMove !== null && liveClock.consecutiveRoboticMoves >= 6
+            ? ` | Pinpoint: Moves #${liveClock.roboticStartMove}-#${liveClock.roboticEndMove} continuous mechanical band (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}s)`
+            : '';
       lines.push(
-        `Live Match Clock Radar: ${liveClock.movesObserved} moves | Mean: ${liveClock.liveMeanSec ?? '—'}s | Live QCD: ${liveClock.liveQCD ?? '—'} | Consecutive flatline moves: ${liveClock.consecutiveRoboticMoves}`
+        `Live Match Clock Radar: ${liveClock.movesObserved} moves | Mean: ${liveClock.liveMeanSec ?? '—'}s | Live QCD: ${liveClock.liveQCD ?? '—'}${livePin}`
       );
     }
-    const topUrls = res.recentMatches
-      .filter((m) => m.url && m.result === 'W')
-      .slice(0, 3)
-      .map((m) => `${m.url}${m.accuracy !== null ? ` (${m.accuracy}%)` : ''}`);
-    if (topUrls.length > 0) {
-      lines.push(`Recent Games for Review:\n- ${topUrls.join('\n- ')}`);
+    if (res.suspectPinpoints && res.suspectPinpoints.length > 0) {
+      lines.push(`Pinpointed Suspect Games & Move Ranges:`);
+      for (const p of res.suspectPinpoints) {
+        const urlPart = p.gameUrl ? ` — ${p.gameUrl}` : '';
+        const samples = p.sampleMoves.length > 0 ? ` [${p.sampleMoves.join(' ')}]` : '';
+        if (p.kind === 'midgame_toggle') {
+          lines.push(
+            `- vs @${p.opponentUsername}: Move #${p.pauseMoveNumber} (${p.pauseSec}s pause) -> Moves #${p.suspectStartMove}-#${p.suspectEndMove} mechanical band (${p.minBandSec}-${p.maxBandSec}s)${samples}${urlPart}`
+          );
+        } else if (p.kind === 'robotic_flatline') {
+          lines.push(
+            `- vs @${p.opponentUsername}: Moves #${p.suspectStartMove}-#${p.suspectEndMove} zero-reflex mechanical pacing (${p.minBandSec}-${p.maxBandSec}s)${p.accuracy !== null ? ` [${p.accuracy}%]` : ''}${samples}${urlPart}`
+          );
+        } else {
+          lines.push(
+            `- vs @${p.opponentUsername}: ${p.accuracy}% CAPS2 accuracy over ${p.suspectEndMove} full moves${urlPart}`
+          );
+        }
+      }
+    } else {
+      const topUrls = res.recentMatches
+        .filter((m) => m.url && m.result === 'W')
+        .slice(0, 3)
+        .map((m) => `${m.url}${m.accuracy !== null ? ` (${m.accuracy}%)` : ''}`);
+      if (topUrls.length > 0) {
+        lines.push(`Recent Games for Review:\n- ${topUrls.join('\n- ')}`);
+      }
     }
   }
 

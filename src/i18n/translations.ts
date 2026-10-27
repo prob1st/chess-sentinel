@@ -55,9 +55,25 @@ export interface Dictionary {
     liveClockTitle: string;
     liveClockMoves: string;
     liveClockSuspect: string;
+    livePinpointToggle: string;
+    livePinpointFlatline: string;
     pacingHistTitle: string;
     pacingEntropyTag: string;
     recentMatchesTitle: string;
+    autoVerdictTitle: string;
+    verdictBanned: string;
+    verdictLiveToggle: string;
+    verdictLiveFlatline: string;
+    verdictAbortNow: string;
+    verdictHighWatch: string;
+    verdictElevatedWatch: string;
+    verdictSmurfHuman: string;
+    verdictCleanSafe: string;
+    pinpointSectionTitle: string;
+    pinpointOpenGame: string;
+    pinpointToggleRow: string;
+    pinpointFlatlineRow: string;
+    pinpointCapsRow: string;
   };
   popup: {
     tabScanner: string;
@@ -163,9 +179,25 @@ export const TRANSLATIONS: Record<Language, Dictionary> = {
       liveClockTitle: 'CANLI MAÇ HAMLE RADARI',
       liveClockMoves: '{count} hamle • Ort {mean}s • QCD {qcd}',
       liveClockSuspect: '⚡ Canlı maçta mekanik hamle temposu algılandı!',
+      livePinpointToggle: '🎯 {pauseMove}. hamlede {pauseSec}sn duraksadı → {start}.–{end}. hamleler sabit robotik ({min}–{max}sn)',
+      livePinpointFlatline: '🎯 {start}.–{end}. hamleler arası üst üste {count} hamle sabit robotik ({min}–{max}sn)',
       pacingHistTitle: 'HAMLE SÜRESİ DAĞILIMI (%clk)',
       pacingEntropyTag: 'Entropi: {ent}b • QCD: {qcd}',
       recentMatchesTitle: 'SON PUANLI MAÇLAR',
+      autoVerdictTitle: 'OTOMATİK SİSTEM KARARI',
+      verdictBanned: '🚨 Bu hesap Chess.com tarafından Adil Oyun (Hile) ihlali nedeniyle resmen kapatılmıştır.',
+      verdictLiveToggle: '🎯 CANLI TESPİT: Rakip {pauseMove}. hamlede {pauseSec}sn bekleyip {start}.–{end}. hamleleri sabit makine ritminde ({min}–{max}sn) oynadı! Maç sonu alttan kanıt raporunu kopyalayın.',
+      verdictLiveFlatline: '🎯 CANLI TESPİT: Rakip {start}.–{end}. hamleler boyunca üst üste {count} hamleyi sıfır refleksli sabit robotik sürede ({min}–{max}sn) oynuyor!',
+      verdictAbortNow: '⛔ ÇOKLU MOTOR KANITI ({pins} şüpheli maç aralığı): Henüz ilk hamlelerdesiniz — puan kaybetmeden MAÇI İPTAL EDİN (Abort).',
+      verdictHighWatch: '⚠️ Geçmiş maçlarda çoklu motor imzası bulundu (aşağıda tam hamle numaraları listelendi). Canlı saat radarı şu an her hamleyi izliyor.',
+      verdictElevatedWatch: '🔶 Şüpheli hamle ritmi/doğruluk sinyalleri var. Canlı radar aktif — robotik seri oluşursa tam hamle numarasıyla burada otomatik yazacak.',
+      verdictSmurfHuman: '🧭 Kazanma serisi yüksek ancak hamle süreleri tamamen doğal insan ritminde. Motor kanıtı YOK (el ile oynayan güçlü oyuncu / smurf).',
+      verdictCleanSafe: '✅ İncelenen maçlarda şüpheli hamle aralığı veya motor geçişi yok. Doğal insan profili — güvenle oynayabilirsiniz.',
+      pinpointSectionTitle: 'TESPİT EDİLEN ŞÜPHELİ MAÇ & HAMLE ARALIKLARI',
+      pinpointOpenGame: 'Maçı Aç ↗',
+      pinpointToggleRow: '{pauseMove}. hamlede {pauseSec}sn duraksama → {start}.–{end}. hamleler robotik ({min}–{max}sn)',
+      pinpointFlatlineRow: '{start}.–{end}. hamleler arası {count} hamle sabit mekanik tempo ({min}–{max}sn)',
+      pinpointCapsRow: '1.–{end}. hamleler boyunca %{acc} motor seviyesi CAPS2 doğruluk',
     },
     popup: {
       tabScanner: 'Oyuncu Tara',
@@ -286,9 +318,25 @@ export const TRANSLATIONS: Record<Language, Dictionary> = {
       liveClockTitle: 'LIVE MATCH CLOCK RADAR',
       liveClockMoves: '{count} moves • Avg {mean}s • QCD {qcd}',
       liveClockSuspect: '⚡ Mechanical move pacing detected in live game!',
+      livePinpointToggle: '🎯 Move #{pauseMove} ({pauseSec}s pause) → Moves #{start}–#{end} mechanical ({min}–{max}s)',
+      livePinpointFlatline: '🎯 Moves #{start}–#{end} ({count} straight moves) locked in mechanical band ({min}–{max}s)',
       pacingHistTitle: 'MOVE-TIME HISTOGRAM (%clk)',
       pacingEntropyTag: 'Entropy: {ent}b • QCD: {qcd}',
       recentMatchesTitle: 'RECENT RATED MATCHES',
+      autoVerdictTitle: 'AUTOMATIC SYSTEM VERDICT',
+      verdictBanned: '🚨 This account has been officially closed by Chess.com for Fair Play violations.',
+      verdictLiveToggle: '🎯 LIVE PINPOINT: Opponent paused {pauseSec}s on Move #{pauseMove}, then played Moves #{start}–#{end} at fixed robotic pace ({min}–{max}s)! Copy the evidence report after the game.',
+      verdictLiveFlatline: '🎯 LIVE PINPOINT: Opponent played {count} consecutive moves (#{start}–#{end}) in a zero-reflex mechanical band ({min}–{max}s)!',
+      verdictAbortNow: '⛔ CORROBORATED ENGINE EVIDENCE ({pins} suspect game spans): Safe abort window is open — ABORT MATCH NOW to protect your Elo.',
+      verdictHighWatch: '⚠️ Corroborated engine signatures found in match history (exact move numbers listed below). Live radar is tracking every move.',
+      verdictElevatedWatch: '🔶 Elevated chronometric/accuracy signals. Live radar is active and will pinpoint exact move numbers automatically if triggered.',
+      verdictSmurfHuman: '🧭 High win rate, but move times follow natural human variance. NO engine proof (likely hand-played smurf or hot streak).',
+      verdictCleanSafe: '✅ Zero suspect move ranges or engine toggles found across match history. Organic human profile — safe to play.',
+      pinpointSectionTitle: 'PINPOINTED SUSPECT GAMES & MOVE RANGES',
+      pinpointOpenGame: 'Open ↗',
+      pinpointToggleRow: 'Move #{pauseMove} ({pauseSec}s pause) → Moves #{start}–#{end} robotic ({min}–{max}s)',
+      pinpointFlatlineRow: 'Moves #{start}–#{end} ({count} moves) zero-reflex mechanical pace ({min}–{max}s)',
+      pinpointCapsRow: 'Moves #1–#{end} played at {acc}% ceiling CAPS2 accuracy',
     },
     popup: {
       tabScanner: 'Live Scanner',

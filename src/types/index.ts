@@ -8,6 +8,8 @@ export type RiskTierId = 'low' | 'guarded' | 'elevated' | 'high' | 'critical' | 
 
 export type ConfidenceLevel = 'low' | 'medium' | 'high';
 
+export type PinpointAnomalyKind = 'midgame_toggle' | 'robotic_flatline' | 'caps2_spike';
+
 export interface ChessComProfile {
   player_id?: number;
   '@id'?: string;
@@ -113,6 +115,31 @@ export interface PacingGameMetrics {
   isFlatline: boolean;
   hasMidgameToggle: boolean;
   won: boolean;
+  pauseMoveNumber: number | null;
+  pauseSec: number | null;
+  suspectStartMove: number;
+  suspectEndMove: number;
+  minBandSec: number | null;
+  maxBandSec: number | null;
+  sampleMoves: string[];
+}
+
+export interface SuspectGamePinpoint {
+  kind: PinpointAnomalyKind;
+  format: TimeClass | string;
+  opponentUsername: string;
+  opponentRating: number;
+  gameUrl: string | null;
+  endTime: number;
+  accuracy: number | null;
+  pauseMoveNumber: number | null;
+  pauseSec: number | null;
+  suspectStartMove: number;
+  suspectEndMove: number;
+  roboticMoveCount: number;
+  minBandSec: number | null;
+  maxBandSec: number | null;
+  sampleMoves: string[];
 }
 
 export interface PacingSummary {
@@ -135,10 +162,17 @@ export interface LiveMatchClockTelemetry {
   opponent: string;
   movesObserved: number;
   moveTimesSec: number[]; // Most recent up to 16 move durations in current live game
+  moveNumbers: number[]; // Exact full-move numbers aligned with moveTimesSec
+  moveSanLabels: string[]; // Optional SAN labels aligned with moveTimesSec
   liveMeanSec: number | null;
   liveQCD: number | null;
   consecutiveRoboticMoves: number;
   detectedPauseSec: number | null;
+  pauseMoveNumber: number | null;
+  roboticStartMove: number | null;
+  roboticEndMove: number | null;
+  roboticMinSec: number | null;
+  roboticMaxSec: number | null;
   isLiveSuspectPacing: boolean;
 }
 
@@ -152,6 +186,8 @@ export interface RecentMatchSummary {
   plies: number;
   url: string | null;
   endTime: number;
+  pinpointKind?: PinpointAnomalyKind | null;
+  pinpointMoveRange?: string | null;
 }
 
 export interface SignalBreakdown {
@@ -214,6 +250,7 @@ export interface CheatAnalysisResult {
   winStreak: number;
   recentForm: Array<'W' | 'L' | 'D'>; // Last 8 games
   recentMatches: RecentMatchSummary[]; // Last 5 detailed matches
+  suspectPinpoints: SuspectGamePinpoint[]; // Pinpointed suspect games & exact move ranges
   signals: SignalBreakdown;
   pacing: PacingSummary;
   formats: Record<TimeClass, FormatTelemetry>;

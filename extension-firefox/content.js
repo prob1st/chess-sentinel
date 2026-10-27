@@ -484,7 +484,7 @@
     const pf = res.formats[res.primaryFormat];
     const lines = [];
     if (lang === "tr") {
-      lines.push(`[Chess Sentinel v3.1 (Zero-FP) \u2014 Adil Oyun Telemetri \xD6zeti]`);
+      lines.push(`[Chess Sentinel v3.2 (Zero-FP) \u2014 Adil Oyun & Hamle Bazl\u0131 Kan\u0131t \xD6zeti]`);
       lines.push(
         `Oyuncu: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Hesap Ya\u015F\u0131: ${res.accountAgeDays !== null ? `${res.accountAgeDays} g\xFCn` : "Bilinmiyor"}`
       );
@@ -505,17 +505,39 @@
         );
       }
       if (liveClock && liveClock.movesObserved >= 4) {
+        const livePin = liveClock.pauseMoveNumber !== null && liveClock.roboticStartMove !== null ? ` | Nokta At\u0131\u015F\u0131: ${liveClock.pauseMoveNumber}. hamlede ${liveClock.detectedPauseSec}sn duraksama -> ${liveClock.roboticStartMove}.-${liveClock.roboticEndMove}. hamleler robotik (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}sn)` : liveClock.roboticStartMove !== null && liveClock.consecutiveRoboticMoves >= 6 ? ` | Nokta At\u0131\u015F\u0131: ${liveClock.roboticStartMove}.-${liveClock.roboticEndMove}. hamleler kesintisiz mekanik (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}sn)` : "";
         lines.push(
-          `Canl\u0131 Ma\xE7 Saat Verisi: ${liveClock.movesObserved} hamle izlendi | Ort: ${liveClock.liveMeanSec ?? "\u2014"} sn | Canl\u0131 QCD: ${liveClock.liveQCD ?? "\u2014"} | Ard\u0131\u015F\u0131k mekanik hamle: ${liveClock.consecutiveRoboticMoves}`
+          `Canl\u0131 Ma\xE7 Saat Verisi: ${liveClock.movesObserved} hamle izlendi | Ort: ${liveClock.liveMeanSec ?? "\u2014"} sn | Canl\u0131 QCD: ${liveClock.liveQCD ?? "\u2014"}${livePin}`
         );
       }
-      const topUrls = res.recentMatches.filter((m) => m.url && m.result === "W").slice(0, 3).map((m) => `${m.url}${m.accuracy !== null ? ` (%${m.accuracy})` : ""}`);
-      if (topUrls.length > 0) {
-        lines.push(`\u0130ncelenmesi \xD6nerilen Son Ma\xE7lar:
+      if (res.suspectPinpoints && res.suspectPinpoints.length > 0) {
+        lines.push(`Tespit Edilen \u015E\xFCpheli Ma\xE7 & Hamle Aral\u0131klar\u0131:`);
+        for (const p of res.suspectPinpoints) {
+          const urlPart = p.gameUrl ? ` \u2014 ${p.gameUrl}` : "";
+          const samples = p.sampleMoves.length > 0 ? ` [${p.sampleMoves.join(" ")}]` : "";
+          if (p.kind === "midgame_toggle") {
+            lines.push(
+              `- vs @${p.opponentUsername}: ${p.pauseMoveNumber}. hamlede ${p.pauseSec}sn duraksama -> ${p.suspectStartMove}.-${p.suspectEndMove}. hamleler sabit robotik tempo (${p.minBandSec}-${p.maxBandSec}sn)${samples}${urlPart}`
+            );
+          } else if (p.kind === "robotic_flatline") {
+            lines.push(
+              `- vs @${p.opponentUsername}: ${p.suspectStartMove}.-${p.suspectEndMove}. hamleler s\u0131f\u0131r refleksli mekanik tempo (${p.minBandSec}-${p.maxBandSec}sn)${p.accuracy !== null ? ` [%${p.accuracy}]` : ""}${samples}${urlPart}`
+            );
+          } else {
+            lines.push(
+              `- vs @${p.opponentUsername}: ${p.suspectEndMove} hamlelik tam ma\xE7ta %${p.accuracy} CAPS2 do\u011Fruluk${urlPart}`
+            );
+          }
+        }
+      } else {
+        const topUrls = res.recentMatches.filter((m) => m.url && m.result === "W").slice(0, 3).map((m) => `${m.url}${m.accuracy !== null ? ` (%${m.accuracy})` : ""}`);
+        if (topUrls.length > 0) {
+          lines.push(`\u0130ncelenmesi \xD6nerilen Son Ma\xE7lar:
 - ${topUrls.join("\n- ")}`);
+        }
       }
     } else {
-      lines.push(`[Chess Sentinel v3.1 (Zero-FP) \u2014 Fair-Play Telemetry Summary]`);
+      lines.push(`[Chess Sentinel v3.2 (Zero-FP) \u2014 Fair-Play & Move-Range Evidence Summary]`);
       lines.push(
         `Player: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Account Age: ${res.accountAgeDays !== null ? `${res.accountAgeDays} days` : "Unknown"}`
       );
@@ -536,14 +558,36 @@
         );
       }
       if (liveClock && liveClock.movesObserved >= 4) {
+        const livePin = liveClock.pauseMoveNumber !== null && liveClock.roboticStartMove !== null ? ` | Pinpoint: Move #${liveClock.pauseMoveNumber} (${liveClock.detectedPauseSec}s pause) -> Moves #${liveClock.roboticStartMove}-#${liveClock.roboticEndMove} mechanical (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}s)` : liveClock.roboticStartMove !== null && liveClock.consecutiveRoboticMoves >= 6 ? ` | Pinpoint: Moves #${liveClock.roboticStartMove}-#${liveClock.roboticEndMove} continuous mechanical band (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}s)` : "";
         lines.push(
-          `Live Match Clock Radar: ${liveClock.movesObserved} moves | Mean: ${liveClock.liveMeanSec ?? "\u2014"}s | Live QCD: ${liveClock.liveQCD ?? "\u2014"} | Consecutive flatline moves: ${liveClock.consecutiveRoboticMoves}`
+          `Live Match Clock Radar: ${liveClock.movesObserved} moves | Mean: ${liveClock.liveMeanSec ?? "\u2014"}s | Live QCD: ${liveClock.liveQCD ?? "\u2014"}${livePin}`
         );
       }
-      const topUrls = res.recentMatches.filter((m) => m.url && m.result === "W").slice(0, 3).map((m) => `${m.url}${m.accuracy !== null ? ` (${m.accuracy}%)` : ""}`);
-      if (topUrls.length > 0) {
-        lines.push(`Recent Games for Review:
+      if (res.suspectPinpoints && res.suspectPinpoints.length > 0) {
+        lines.push(`Pinpointed Suspect Games & Move Ranges:`);
+        for (const p of res.suspectPinpoints) {
+          const urlPart = p.gameUrl ? ` \u2014 ${p.gameUrl}` : "";
+          const samples = p.sampleMoves.length > 0 ? ` [${p.sampleMoves.join(" ")}]` : "";
+          if (p.kind === "midgame_toggle") {
+            lines.push(
+              `- vs @${p.opponentUsername}: Move #${p.pauseMoveNumber} (${p.pauseSec}s pause) -> Moves #${p.suspectStartMove}-#${p.suspectEndMove} mechanical band (${p.minBandSec}-${p.maxBandSec}s)${samples}${urlPart}`
+            );
+          } else if (p.kind === "robotic_flatline") {
+            lines.push(
+              `- vs @${p.opponentUsername}: Moves #${p.suspectStartMove}-#${p.suspectEndMove} zero-reflex mechanical pacing (${p.minBandSec}-${p.maxBandSec}s)${p.accuracy !== null ? ` [${p.accuracy}%]` : ""}${samples}${urlPart}`
+            );
+          } else {
+            lines.push(
+              `- vs @${p.opponentUsername}: ${p.accuracy}% CAPS2 accuracy over ${p.suspectEndMove} full moves${urlPart}`
+            );
+          }
+        }
+      } else {
+        const topUrls = res.recentMatches.filter((m) => m.url && m.result === "W").slice(0, 3).map((m) => `${m.url}${m.accuracy !== null ? ` (${m.accuracy}%)` : ""}`);
+        if (topUrls.length > 0) {
+          lines.push(`Recent Games for Review:
 - ${topUrls.join("\n- ")}`);
+        }
       }
     }
     return lines.join("\n");
@@ -617,9 +661,25 @@
         liveClockTitle: "CANLI MA\xC7 HAMLE RADARI",
         liveClockMoves: "{count} hamle \u2022 Ort {mean}s \u2022 QCD {qcd}",
         liveClockSuspect: "\u26A1 Canl\u0131 ma\xE7ta mekanik hamle temposu alg\u0131land\u0131!",
+        livePinpointToggle: "\u{1F3AF} {pauseMove}. hamlede {pauseSec}sn duraksad\u0131 \u2192 {start}.\u2013{end}. hamleler sabit robotik ({min}\u2013{max}sn)",
+        livePinpointFlatline: "\u{1F3AF} {start}.\u2013{end}. hamleler aras\u0131 \xFCst \xFCste {count} hamle sabit robotik ({min}\u2013{max}sn)",
         pacingHistTitle: "HAMLE S\xDCRES\u0130 DA\u011EILIMI (%clk)",
         pacingEntropyTag: "Entropi: {ent}b \u2022 QCD: {qcd}",
-        recentMatchesTitle: "SON PUANLI MA\xC7LAR"
+        recentMatchesTitle: "SON PUANLI MA\xC7LAR",
+        autoVerdictTitle: "OTOMAT\u0130K S\u0130STEM KARARI",
+        verdictBanned: "\u{1F6A8} Bu hesap Chess.com taraf\u0131ndan Adil Oyun (Hile) ihlali nedeniyle resmen kapat\u0131lm\u0131\u015Ft\u0131r.",
+        verdictLiveToggle: "\u{1F3AF} CANLI TESP\u0130T: Rakip {pauseMove}. hamlede {pauseSec}sn bekleyip {start}.\u2013{end}. hamleleri sabit makine ritminde ({min}\u2013{max}sn) oynad\u0131! Ma\xE7 sonu alttan kan\u0131t raporunu kopyalay\u0131n.",
+        verdictLiveFlatline: "\u{1F3AF} CANLI TESP\u0130T: Rakip {start}.\u2013{end}. hamleler boyunca \xFCst \xFCste {count} hamleyi s\u0131f\u0131r refleksli sabit robotik s\xFCrede ({min}\u2013{max}sn) oynuyor!",
+        verdictAbortNow: "\u26D4 \xC7OKLU MOTOR KANITI ({pins} \u015F\xFCpheli ma\xE7 aral\u0131\u011F\u0131): Hen\xFCz ilk hamlelerdesiniz \u2014 puan kaybetmeden MA\xC7I \u0130PTAL ED\u0130N (Abort).",
+        verdictHighWatch: "\u26A0\uFE0F Ge\xE7mi\u015F ma\xE7larda \xE7oklu motor imzas\u0131 bulundu (a\u015Fa\u011F\u0131da tam hamle numaralar\u0131 listelendi). Canl\u0131 saat radar\u0131 \u015Fu an her hamleyi izliyor.",
+        verdictElevatedWatch: "\u{1F536} \u015E\xFCpheli hamle ritmi/do\u011Fruluk sinyalleri var. Canl\u0131 radar aktif \u2014 robotik seri olu\u015Fursa tam hamle numaras\u0131yla burada otomatik yazacak.",
+        verdictSmurfHuman: "\u{1F9ED} Kazanma serisi y\xFCksek ancak hamle s\xFCreleri tamamen do\u011Fal insan ritminde. Motor kan\u0131t\u0131 YOK (el ile oynayan g\xFC\xE7l\xFC oyuncu / smurf).",
+        verdictCleanSafe: "\u2705 \u0130ncelenen ma\xE7larda \u015F\xFCpheli hamle aral\u0131\u011F\u0131 veya motor ge\xE7i\u015Fi yok. Do\u011Fal insan profili \u2014 g\xFCvenle oynayabilirsiniz.",
+        pinpointSectionTitle: "TESP\u0130T ED\u0130LEN \u015E\xDCPHEL\u0130 MA\xC7 & HAMLE ARALIKLARI",
+        pinpointOpenGame: "Ma\xE7\u0131 A\xE7 \u2197",
+        pinpointToggleRow: "{pauseMove}. hamlede {pauseSec}sn duraksama \u2192 {start}.\u2013{end}. hamleler robotik ({min}\u2013{max}sn)",
+        pinpointFlatlineRow: "{start}.\u2013{end}. hamleler aras\u0131 {count} hamle sabit mekanik tempo ({min}\u2013{max}sn)",
+        pinpointCapsRow: "1.\u2013{end}. hamleler boyunca %{acc} motor seviyesi CAPS2 do\u011Fruluk"
       },
       popup: {
         tabScanner: "Oyuncu Tara",
@@ -740,9 +800,25 @@
         liveClockTitle: "LIVE MATCH CLOCK RADAR",
         liveClockMoves: "{count} moves \u2022 Avg {mean}s \u2022 QCD {qcd}",
         liveClockSuspect: "\u26A1 Mechanical move pacing detected in live game!",
+        livePinpointToggle: "\u{1F3AF} Move #{pauseMove} ({pauseSec}s pause) \u2192 Moves #{start}\u2013#{end} mechanical ({min}\u2013{max}s)",
+        livePinpointFlatline: "\u{1F3AF} Moves #{start}\u2013#{end} ({count} straight moves) locked in mechanical band ({min}\u2013{max}s)",
         pacingHistTitle: "MOVE-TIME HISTOGRAM (%clk)",
         pacingEntropyTag: "Entropy: {ent}b \u2022 QCD: {qcd}",
-        recentMatchesTitle: "RECENT RATED MATCHES"
+        recentMatchesTitle: "RECENT RATED MATCHES",
+        autoVerdictTitle: "AUTOMATIC SYSTEM VERDICT",
+        verdictBanned: "\u{1F6A8} This account has been officially closed by Chess.com for Fair Play violations.",
+        verdictLiveToggle: "\u{1F3AF} LIVE PINPOINT: Opponent paused {pauseSec}s on Move #{pauseMove}, then played Moves #{start}\u2013#{end} at fixed robotic pace ({min}\u2013{max}s)! Copy the evidence report after the game.",
+        verdictLiveFlatline: "\u{1F3AF} LIVE PINPOINT: Opponent played {count} consecutive moves (#{start}\u2013#{end}) in a zero-reflex mechanical band ({min}\u2013{max}s)!",
+        verdictAbortNow: "\u26D4 CORROBORATED ENGINE EVIDENCE ({pins} suspect game spans): Safe abort window is open \u2014 ABORT MATCH NOW to protect your Elo.",
+        verdictHighWatch: "\u26A0\uFE0F Corroborated engine signatures found in match history (exact move numbers listed below). Live radar is tracking every move.",
+        verdictElevatedWatch: "\u{1F536} Elevated chronometric/accuracy signals. Live radar is active and will pinpoint exact move numbers automatically if triggered.",
+        verdictSmurfHuman: "\u{1F9ED} High win rate, but move times follow natural human variance. NO engine proof (likely hand-played smurf or hot streak).",
+        verdictCleanSafe: "\u2705 Zero suspect move ranges or engine toggles found across match history. Organic human profile \u2014 safe to play.",
+        pinpointSectionTitle: "PINPOINTED SUSPECT GAMES & MOVE RANGES",
+        pinpointOpenGame: "Open \u2197",
+        pinpointToggleRow: "Move #{pauseMove} ({pauseSec}s pause) \u2192 Moves #{start}\u2013#{end} robotic ({min}\u2013{max}s)",
+        pinpointFlatlineRow: "Moves #{start}\u2013#{end} ({count} moves) zero-reflex mechanical pace ({min}\u2013{max}s)",
+        pinpointCapsRow: "Moves #1\u2013#{end} played at {acc}% ceiling CAPS2 accuracy"
       },
       popup: {
         tabScanner: "Live Scanner",
@@ -1403,7 +1479,100 @@
     transition: width 0.55s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  /* v3.0 Live Match Clock Radar */
+  /* v3.2 Automatic Plain-Language Verdict Card */
+  .auto-verdict-card {
+    margin: 0 14px 9px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(16, 185, 129, 0.32);
+    background: rgba(16, 185, 129, 0.1);
+    color: #d1fae5;
+    font-size: 10.5px;
+    line-height: 1.38;
+  }
+  .auto-verdict-card.smurf {
+    border-color: rgba(56, 189, 248, 0.35);
+    background: rgba(56, 189, 248, 0.11);
+    color: #e0f2fe;
+  }
+  .auto-verdict-card.warn {
+    border-color: rgba(245, 158, 11, 0.42);
+    background: rgba(245, 158, 11, 0.12);
+    color: #fef3c7;
+  }
+  .auto-verdict-card.danger {
+    border-color: rgba(239, 68, 68, 0.58);
+    background: rgba(127, 29, 29, 0.32);
+    color: #fee2e2;
+  }
+  .auto-verdict-head {
+    font-size: 8.5px;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    opacity: 0.82;
+    margin-bottom: 3px;
+  }
+  .auto-verdict-text {
+    font-weight: 600;
+  }
+
+  /* v3.2 Pinpointed Suspect Games & Exact Move Ranges Panel */
+  .pinpoint-panel {
+    margin: 0 14px 9px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(127, 29, 29, 0.18);
+    border: 1px solid rgba(248, 113, 113, 0.35);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .pinpoint-title {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    color: #fca5a5;
+  }
+  .pinpoint-item {
+    padding: 6px 8px;
+    border-radius: 7px;
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .pinpoint-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10px;
+    font-weight: 700;
+    color: #f8fafc;
+  }
+  .pinpoint-open {
+    font-size: 9.5px;
+    font-weight: 700;
+    color: #7dd3fc;
+    text-decoration: none;
+  }
+  .pinpoint-open:hover {
+    text-decoration: underline;
+  }
+  .pinpoint-body {
+    font-size: 10px;
+    line-height: 1.32;
+    color: #fecaca;
+    font-weight: 600;
+  }
+  .pinpoint-san {
+    font-size: 9px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #cbd5e1;
+    opacity: 0.9;
+  }
+
+  /* v3.0 / v3.2 Live Match Clock Radar with Move Numbers */
   .live-clock-box {
     margin: 0 14px 9px;
     padding: 8px 10px;
@@ -1432,19 +1601,52 @@
     display: flex;
     align-items: flex-end;
     gap: 3px;
-    height: 22px;
+    height: 32px;
+  }
+  .live-spark-item {
+    flex: 1;
+    min-width: 8px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 2px;
   }
   .live-spark-col {
-    flex: 1;
-    min-width: 6px;
+    width: 100%;
     border-radius: 2px 2px 0 0;
     transition: height 0.2s ease;
   }
+  .live-spark-num {
+    font-size: 7.5px;
+    color: #94a3b8;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .live-spark-num.suspect {
+    color: #fca5a5;
+    font-weight: 800;
+  }
+  .live-spark-num.pause {
+    color: #fcd34d;
+    font-weight: 800;
+  }
   .live-suspect-msg {
-    margin-top: 5px;
+    margin-top: 6px;
     font-size: 10px;
     font-weight: 700;
     color: #fecaca;
+    line-height: 1.35;
+  }
+  .match-pin-tag {
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 8.5px;
+    font-weight: 800;
+    background: rgba(239, 68, 68, 0.22);
+    color: #fecaca;
+    border: 1px solid rgba(248, 113, 113, 0.35);
   }
 
   /* v3.0 7-Bin Move-Time Histogram */
@@ -1949,6 +2151,72 @@
         });
       });
     }
+    renderAutoVerdictHtml(res, displayProb, lang) {
+      const t = TRANSLATIONS[lang].v3;
+      const lc = this.liveClock && (this.liveClock.opponent.toLowerCase() === res.username.toLowerCase() || this.liveClock.opponent.toLowerCase() === res.displayName.toLowerCase()) ? this.liveClock : null;
+      let variant = "safe";
+      let message = t.verdictCleanSafe;
+      if (res.isBannedFairPlay) {
+        variant = "danger";
+        message = t.verdictBanned;
+      } else if (lc && lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null) {
+        variant = "danger";
+        if (lc.pauseMoveNumber !== null && lc.detectedPauseSec !== null) {
+          message = t.verdictLiveToggle.replace("{pauseMove}", String(lc.pauseMoveNumber)).replace("{pauseSec}", String(lc.detectedPauseSec)).replace("{start}", String(lc.roboticStartMove)).replace("{end}", String(lc.roboticEndMove)).replace("{min}", String(lc.roboticMinSec ?? "\u2014")).replace("{max}", String(lc.roboticMaxSec ?? "\u2014"));
+        } else {
+          message = t.verdictLiveFlatline.replace("{start}", String(lc.roboticStartMove)).replace("{end}", String(lc.roboticEndMove)).replace("{count}", String(lc.consecutiveRoboticMoves)).replace("{min}", String(lc.roboticMinSec ?? "\u2014")).replace("{max}", String(lc.roboticMaxSec ?? "\u2014"));
+        }
+      } else if (displayProb >= 75) {
+        variant = "danger";
+        message = this.isAbortWindowOpen ? t.verdictAbortNow.replace("{pins}", String(Math.max(1, res.suspectPinpoints.length))) : t.verdictHighWatch;
+      } else if (displayProb >= 55) {
+        variant = "warn";
+        message = t.verdictElevatedWatch;
+      } else if (res.flags.some((f) => f.id === "smurf_human_pacing")) {
+        variant = "smurf";
+        message = t.verdictSmurfHuman;
+      }
+      return `
+      <div class="auto-verdict-card ${variant}">
+        <div class="auto-verdict-head">${escapeHtml(t.autoVerdictTitle)}</div>
+        <div class="auto-verdict-text">${escapeHtml(message)}</div>
+      </div>
+    `;
+    }
+    renderSuspectPinpointsHtml(res, lang) {
+      if (!res.suspectPinpoints || res.suspectPinpoints.length === 0) return "";
+      const t = TRANSLATIONS[lang].v3;
+      const itemsHtml = res.suspectPinpoints.map((p) => {
+        const href = p.gameUrl || `https://www.chess.com/member/${encodeURIComponent(res.displayName)}`;
+        let desc = "";
+        if (p.kind === "midgame_toggle") {
+          desc = `\u23F8\u2192\u{1F916} ${t.pinpointToggleRow.replace("{pauseMove}", String(p.pauseMoveNumber ?? "?")).replace("{pauseSec}", String(p.pauseSec ?? "?")).replace("{start}", String(p.suspectStartMove)).replace("{end}", String(p.suspectEndMove)).replace("{min}", String(p.minBandSec ?? "\u2014")).replace("{max}", String(p.maxBandSec ?? "\u2014"))}`;
+        } else if (p.kind === "robotic_flatline") {
+          desc = `\u{1F916} ${t.pinpointFlatlineRow.replace("{start}", String(p.suspectStartMove)).replace("{end}", String(p.suspectEndMove)).replace("{count}", String(p.roboticMoveCount)).replace("{min}", String(p.minBandSec ?? "\u2014")).replace("{max}", String(p.maxBandSec ?? "\u2014"))}`;
+        } else {
+          desc = `\u{1F3AF} ${t.pinpointCapsRow.replace("{end}", String(p.suspectEndMove)).replace("{acc}", String(p.accuracy ?? "\u2014"))}`;
+        }
+        const sanHtml = p.sampleMoves && p.sampleMoves.length > 0 ? `<div class="pinpoint-san">${escapeHtml(p.sampleMoves.join("  "))}${p.accuracy !== null ? ` \u2022 CAPS2: %${p.accuracy}` : ""}</div>` : p.accuracy !== null && p.kind !== "caps2_spike" ? `<div class="pinpoint-san">CAPS2: %${p.accuracy}</div>` : "";
+        return `
+          <div class="pinpoint-item">
+            <div class="pinpoint-head">
+              <span>vs @${escapeHtml(p.opponentUsername)} (${p.opponentRating})</span>
+              <a class="pinpoint-open" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(
+          t.pinpointOpenGame
+        )}</a>
+            </div>
+            <div class="pinpoint-body">${escapeHtml(desc)}</div>
+            ${sanHtml}
+          </div>
+        `;
+      }).join("");
+      return `
+      <div class="pinpoint-panel">
+        <div class="pinpoint-title">${escapeHtml(t.pinpointSectionTitle)}</div>
+        ${itemsHtml}
+      </div>
+    `;
+    }
     renderLiveClockHtml(lang) {
       const lc = this.liveClock;
       if (!lc || lc.movesObserved < 3) return "";
@@ -1957,12 +2225,33 @@
       }
       const t = TRANSLATIONS[lang];
       const maxSec = Math.max(12, ...lc.moveTimesSec);
-      const barsHtml = lc.moveTimesSec.map((sec) => {
-        const hPct = Math.max(14, Math.min(100, Math.round(sec / maxSec * 100)));
-        const color = sec <= 1.8 ? "#34d399" : sec >= 2.4 && sec <= 8.8 && lc.isLiveSuspectPacing ? "#ef4444" : sec >= 18 ? "#f59e0b" : "#38bdf8";
-        return `<div class="live-spark-col" style="height:${hPct}%;background:${color}" title="${sec}s"></div>`;
+      const barsHtml = lc.moveTimesSec.map((sec, idx) => {
+        const moveNo = lc.moveNumbers?.[idx] ?? idx + 2;
+        const san = lc.moveSanLabels?.[idx] || "";
+        const isPauseMove = lc.pauseMoveNumber !== null && moveNo === lc.pauseMoveNumber;
+        const isInRoboticRange = lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null && moveNo >= lc.roboticStartMove && moveNo <= lc.roboticEndMove;
+        const hPx = Math.max(4, Math.min(20, Math.round(sec / maxSec * 20)));
+        const color = isPauseMove ? "#f59e0b" : isInRoboticRange ? "#ef4444" : sec <= 1.8 ? "#34d399" : sec >= 18 ? "#f59e0b" : "#38bdf8";
+        const numCls = isPauseMove ? "pause" : isInRoboticRange ? "suspect" : "";
+        const tip = `#${moveNo}${san ? ` (${san})` : ""}: ${sec}s`;
+        return `
+          <div class="live-spark-item" title="${escapeHtml(tip)}">
+            <div class="live-spark-col" style="height:${hPx}px;background:${color}"></div>
+            <span class="live-spark-num ${numCls}">${moveNo}</span>
+          </div>
+        `;
       }).join("");
       const statsText = t.v3.liveClockMoves.replace("{count}", String(lc.movesObserved)).replace("{mean}", String(lc.liveMeanSec ?? "\u2014")).replace("{qcd}", String(lc.liveQCD ?? "\u2014"));
+      let pinpointMsg = "";
+      if (lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null) {
+        if (lc.pauseMoveNumber !== null && lc.detectedPauseSec !== null) {
+          pinpointMsg = t.v3.livePinpointToggle.replace("{pauseMove}", String(lc.pauseMoveNumber)).replace("{pauseSec}", String(lc.detectedPauseSec)).replace("{start}", String(lc.roboticStartMove)).replace("{end}", String(lc.roboticEndMove)).replace("{min}", String(lc.roboticMinSec ?? "\u2014")).replace("{max}", String(lc.roboticMaxSec ?? "\u2014"));
+        } else {
+          pinpointMsg = t.v3.livePinpointFlatline.replace("{start}", String(lc.roboticStartMove)).replace("{end}", String(lc.roboticEndMove)).replace("{count}", String(lc.consecutiveRoboticMoves)).replace("{min}", String(lc.roboticMinSec ?? "\u2014")).replace("{max}", String(lc.roboticMaxSec ?? "\u2014"));
+        }
+      } else if (lc.isLiveSuspectPacing) {
+        pinpointMsg = t.v3.liveClockSuspect;
+      }
       return `
       <div class="live-clock-box ${lc.isLiveSuspectPacing ? "suspect" : ""}">
         <div class="live-clock-head">
@@ -1970,7 +2259,7 @@
           <span>${escapeHtml(statsText)}</span>
         </div>
         <div class="live-spark-bars">${barsHtml}</div>
-        ${lc.isLiveSuspectPacing ? `<div class="live-suspect-msg">${escapeHtml(t.v3.liveClockSuspect)}</div>` : ""}
+        ${pinpointMsg ? `<div class="live-suspect-msg">${escapeHtml(pinpointMsg)}</div>` : ""}
       </div>
     `;
     }
@@ -2010,6 +2299,7 @@
         const resLbl = lang === "tr" ? m.result === "W" ? "G" : m.result === "L" ? "M" : "B" : m.result;
         const movesCount = Math.max(1, Math.round(m.plies / 2));
         const accHtml = m.accuracy !== null ? `<span class="match-acc ${m.accuracy >= bandCeiling ? "high" : ""}">${m.accuracy}%</span>` : "";
+        const pinHtml = m.pinpointMoveRange ? `<span class="match-pin-tag">\u{1F3AF} ${escapeHtml(m.pinpointMoveRange)}</span>` : "";
         const href = m.url || `https://www.chess.com/member/${encodeURIComponent(res.displayName)}`;
         return `
           <a class="match-row" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">
@@ -2018,6 +2308,7 @@
               <span class="match-opp">vs @${escapeHtml(m.opponentUsername)} (${m.opponentRating})</span>
             </div>
             <div class="match-right">
+              ${pinHtml}
               ${accHtml}
               <span>${movesCount}m</span>
             </div>
@@ -2191,7 +2482,9 @@
           </div>
         </div>
 
+        ${this.renderAutoVerdictHtml(res, displayProb, lang)}
         ${this.renderLiveClockHtml(lang)}
+        ${this.renderSuspectPinpointsHtml(res, lang)}
 
         <div class="format-tabs">${formatTabsHtml}</div>
 
@@ -2430,18 +2723,29 @@
     }
     return sorted[base];
   }
-  function summarizeLiveMoveTimes(opponent, allMoveTimesSec) {
-    const recent = allMoveTimesSec.slice(-16);
+  function summarizeLiveMoveTimes(opponent, allMoveTimesSec, allMoveNumbers, allSanLabels) {
     const n = allMoveTimesSec.length;
+    const resolvedMoveNums = allMoveNumbers && allMoveNumbers.length === n ? allMoveNumbers : Array.from({ length: n }, (_, idx) => idx + 2);
+    const resolvedSan = allSanLabels && allSanLabels.length === n ? allSanLabels : Array.from({ length: n }, () => "");
+    const recentTimes = allMoveTimesSec.slice(-16);
+    const recentNums = resolvedMoveNums.slice(-16);
+    const recentSan = resolvedSan.slice(-16);
     if (n < 4) {
       return {
         opponent,
         movesObserved: n,
-        moveTimesSec: recent,
+        moveTimesSec: recentTimes,
+        moveNumbers: recentNums,
+        moveSanLabels: recentSan,
         liveMeanSec: null,
         liveQCD: null,
         consecutiveRoboticMoves: 0,
         detectedPauseSec: null,
+        pauseMoveNumber: null,
+        roboticStartMove: null,
+        roboticEndMove: null,
+        roboticMinSec: null,
+        roboticMaxSec: null,
         isLiveSuspectPacing: false
       };
     }
@@ -2452,23 +2756,32 @@
     const q3 = quantileSorted(sorted, 0.75);
     const liveQCD = q3 + q1 > 0 ? Number(((q3 - q1) / (q3 + q1)).toFixed(2)) : 0;
     let consecutiveRoboticMoves = 0;
-    for (let i = allMoveTimesSec.length - 1; i >= 0; i--) {
+    const streakSlice = [];
+    for (let i = n - 1; i >= 0; i--) {
       const t = allMoveTimesSec[i];
       if (t >= 2.6 && t <= 8.2) {
         consecutiveRoboticMoves++;
+        streakSlice.push(t);
       } else {
         break;
       }
     }
+    const roboticStartIdx = consecutiveRoboticMoves > 0 ? n - consecutiveRoboticMoves : -1;
+    const roboticStartMove = roboticStartIdx >= 0 ? resolvedMoveNums[roboticStartIdx] : null;
+    const roboticEndMove = consecutiveRoboticMoves > 0 ? resolvedMoveNums[n - 1] : null;
+    const roboticMinSec = streakSlice.length > 0 ? Number(Math.min(...streakSlice).toFixed(1)) : null;
+    const roboticMaxSec = streakSlice.length > 0 ? Number(Math.max(...streakSlice).toFixed(1)) : null;
     let detectedPauseSec = null;
-    if (allMoveTimesSec.length >= 10) {
-      for (let i = 1; i <= allMoveTimesSec.length - 8; i++) {
+    let pauseMoveNumber = null;
+    if (n >= 10) {
+      for (let i = 1; i <= n - 8; i++) {
         const t = allMoveTimesSec[i];
         if (t >= 25 && t <= 115) {
           const after = allMoveTimesSec.slice(i + 1);
           const roboticAfter = after.filter((x) => x >= 2.6 && x <= 8.2).length / after.length;
           if (after.length >= 7 && roboticAfter >= 0.88) {
             detectedPauseSec = Number(t.toFixed(1));
+            pauseMoveNumber = resolvedMoveNums[i];
             break;
           }
         }
@@ -2480,11 +2793,18 @@
     return {
       opponent,
       movesObserved: n,
-      moveTimesSec: recent,
+      moveTimesSec: recentTimes,
+      moveNumbers: recentNums,
+      moveSanLabels: recentSan,
       liveMeanSec: Number(mean.toFixed(1)),
       liveQCD,
       consecutiveRoboticMoves,
       detectedPauseSec,
+      pauseMoveNumber,
+      roboticStartMove,
+      roboticEndMove,
+      roboticMinSec,
+      roboticMaxSec,
       isLiveSuspectPacing
     };
   }
@@ -2494,6 +2814,8 @@
     targetOpponent = null;
     targetSide = "top";
     moveTimesSec = [];
+    moveNumbers = [];
+    moveSanLabels = [];
     wasTargetTurn = false;
     turnStartMs = 0;
     lastKnownPlyCount = 0;
@@ -2506,6 +2828,8 @@
         this.targetOpponent = opponent;
         this.targetSide = side;
         this.moveTimesSec = [];
+        this.moveNumbers = [];
+        this.moveSanLabels = [];
         this.wasTargetTurn = false;
         this.turnStartMs = 0;
         this.lastKnownPlyCount = this.countDomPlies();
@@ -2519,11 +2843,18 @@
       }
       this.targetOpponent = null;
       this.moveTimesSec = [];
+      this.moveNumbers = [];
+      this.moveSanLabels = [];
       this.wasTargetTurn = false;
     }
     getLatestTelemetry() {
       if (!this.targetOpponent || this.moveTimesSec.length === 0) return null;
-      return summarizeLiveMoveTimes(this.targetOpponent, this.moveTimesSec);
+      return summarizeLiveMoveTimes(
+        this.targetOpponent,
+        this.moveTimesSec,
+        this.moveNumbers,
+        this.moveSanLabels
+      );
     }
     ensureRunning() {
       if (this.timer) return;
@@ -2537,8 +2868,18 @@
       }
       return null;
     }
+    getMoveNodes() {
+      return document.querySelectorAll("[data-ply], .move .node, wc-simple-move-list .node");
+    }
     countDomPlies() {
-      return document.querySelectorAll("[data-ply], .move .node, wc-simple-move-list .node").length;
+      return this.getMoveNodes().length;
+    }
+    readLatestPlayedSan() {
+      const nodes = this.getMoveNodes();
+      if (nodes.length === 0) return "";
+      const last = nodes[nodes.length - 1];
+      const txt = (last.textContent || "").replace(/\s+/g, "").trim();
+      return txt.slice(0, 10);
     }
     isZoneTurnActive(zone) {
       if (zone.querySelector(
@@ -2568,6 +2909,8 @@
       const currentPlies = this.countDomPlies();
       if (currentPlies <= 2 && this.lastKnownPlyCount >= 8) {
         this.moveTimesSec = [];
+        this.moveNumbers = [];
+        this.moveSanLabels = [];
         this.wasTargetTurn = false;
         this.turnStartMs = 0;
       }
@@ -2580,11 +2923,27 @@
         this.wasTargetTurn = false;
         const elapsedSec = Number(((nowMs - this.turnStartMs) / 1e3).toFixed(2));
         if (elapsedSec >= 0.15 && elapsedSec <= 180 && currentPlies >= 3) {
+          const fullMoveNo = Math.max(
+            (this.moveNumbers[this.moveNumbers.length - 1] ?? 1) + 1,
+            Math.ceil(currentPlies / 2)
+          );
+          const san = this.readLatestPlayedSan();
           this.moveTimesSec.push(elapsedSec);
+          this.moveNumbers.push(fullMoveNo);
+          this.moveSanLabels.push(san);
           if (this.moveTimesSec.length > 60) {
             this.moveTimesSec.shift();
+            this.moveNumbers.shift();
+            this.moveSanLabels.shift();
           }
-          this.onUpdate(summarizeLiveMoveTimes(this.targetOpponent, this.moveTimesSec));
+          this.onUpdate(
+            summarizeLiveMoveTimes(
+              this.targetOpponent,
+              this.moveTimesSec,
+              this.moveNumbers,
+              this.moveSanLabels
+            )
+          );
         }
       }
     }
