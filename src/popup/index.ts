@@ -16,11 +16,11 @@ import { escapeHtml, setSafeHtml } from '../utils/safe-dom';
 type ActiveTab = 'scanner' | 'watchlist' | 'settings';
 
 function barColor(score: number): string {
-  if (score < 25) return '#81b64c';
-  if (score < 45) return '#6ba4d9';
-  if (score < 68) return '#e59934';
-  if (score < 82) return '#e06c35';
-  return '#e04644';
+  if (score < 25) return '#34d399';
+  if (score < 45) return '#60a5fa';
+  if (score < 68) return '#fbbf24';
+  if (score < 82) return '#fb923c';
+  return '#f43f5e';
 }
 
 class PopupController {
@@ -147,6 +147,9 @@ class PopupController {
     const pf = r.formats[r.primaryFormat];
     const pctText = lang === 'tr' ? `%${eff.probability}` : `${eff.probability}%`;
 
+    const arcMax = 96.34; // 2*pi*23*(240/360)
+    const arcFill = Math.max(2, (Math.min(100, Math.max(0, eff.probability)) / 100) * arcMax);
+
     const bars = [
       { lbl: t.signals.recentWinrate, val: r.signals.recentWinrate },
       { lbl: t.signals.overallWinrate, val: r.signals.overallWinrate },
@@ -169,8 +172,12 @@ class PopupController {
       .join('');
 
     return `
-      <div class="scan-result-card">
-        ${isFromLiveTab ? `<div class="active-tag">${escapeHtml(t.popup.activeMatchLabel)}</div>` : ''}
+      <div class="scan-result-card" style="--tier-rgb:${theme.rgb};--tier-color:${theme.color}">
+        ${
+          isFromLiveTab
+            ? `<div class="active-tag"><span class="active-tag-dot"></span><span>${escapeHtml(t.popup.activeMatchLabel)}</span></div>`
+            : ''
+        }
         <div class="scan-top">
           <div class="scan-user">
             ${
@@ -191,9 +198,36 @@ class PopupController {
               </div>
             </div>
           </div>
-          <div class="prob-readout" style="border-left-color:${theme.color}">
-            <div class="prob-num" style="color:${theme.color}">${pctText}</div>
-            <div class="prob-lbl">${escapeHtml(t.tiers[eff.tier].label)}</div>
+
+          <div class="popup-dial">
+            <svg viewBox="0 0 62 54">
+              <circle
+                cx="31"
+                cy="30"
+                r="23"
+                fill="none"
+                stroke="rgba(255,255,255,0.08)"
+                stroke-width="4.5"
+                stroke-linecap="round"
+                stroke-dasharray="${arcMax.toFixed(2)} 180"
+                transform="rotate(150 31 30)"
+              />
+              <circle
+                cx="31"
+                cy="30"
+                r="23"
+                fill="none"
+                stroke="${theme.color}"
+                stroke-width="4.5"
+                stroke-linecap="round"
+                stroke-dasharray="${arcFill.toFixed(2)} 180"
+                transform="rotate(150 31 30)"
+              />
+            </svg>
+            <div class="popup-dial-center">
+              <div class="popup-dial-num">${pctText}</div>
+              <div class="popup-dial-lbl">${escapeHtml(t.tiers[eff.tier].label)}</div>
+            </div>
           </div>
         </div>
 
@@ -254,14 +288,17 @@ class PopupController {
 
     return `
       <form class="search-bar" id="scan-form">
-        <input
-          class="search-input"
-          id="scan-input"
-          type="text"
-          value="${escapeHtml(this.searchQuery)}"
-          placeholder="${escapeHtml(t.popup.searchPlaceholder)}"
-          autocomplete="off"
-        />
+        <div class="search-input-wrap">
+          <span class="search-icon">${ICONS.search}</span>
+          <input
+            class="search-input"
+            id="scan-input"
+            type="text"
+            value="${escapeHtml(this.searchQuery)}"
+            placeholder="${escapeHtml(t.popup.searchPlaceholder)}"
+            autocomplete="off"
+          />
+        </div>
         <button class="primary-btn" type="submit" ${this.scanning ? 'disabled' : ''}>
           ${this.scanning ? '...' : escapeHtml(t.popup.scanBtn)}
         </button>
@@ -313,7 +350,7 @@ class PopupController {
     return `
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div class="sec-title">${escapeHtml(t.popup.watchlistTitle)} (${bannedCount}/${this.watchlist.length})</div>
-        <button class="primary-btn" id="refresh-bans-btn" style="height:26px;padding:0 10px" ${
+        <button class="primary-btn" id="refresh-bans-btn" style="height:27px;padding:0 11px" ${
           this.checkingBans || this.watchlist.length === 0 ? 'disabled' : ''
         }>
           ${escapeHtml(this.checkingBans ? t.popup.checkingBans : t.popup.checkBansBtn)}
@@ -412,16 +449,18 @@ class PopupController {
           </div>
         </div>
 
-        <div class="nav-tabs">
-          <button class="nav-tab ${this.tab === 'scanner' ? 'active' : ''}" data-tab="scanner">
-            ${escapeHtml(t.popup.tabScanner)}
-          </button>
-          <button class="nav-tab ${this.tab === 'watchlist' ? 'active' : ''}" data-tab="watchlist">
-            ${escapeHtml(t.popup.tabWatchlist)} (${this.watchlist.length})
-          </button>
-          <button class="nav-tab ${this.tab === 'settings' ? 'active' : ''}" data-tab="settings">
-            ${escapeHtml(t.popup.tabSettings)}
-          </button>
+        <div class="nav-tabs-wrap">
+          <div class="nav-tabs">
+            <button class="nav-tab ${this.tab === 'scanner' ? 'active' : ''}" data-tab="scanner">
+              ${escapeHtml(t.popup.tabScanner)}
+            </button>
+            <button class="nav-tab ${this.tab === 'watchlist' ? 'active' : ''}" data-tab="watchlist">
+              ${escapeHtml(t.popup.tabWatchlist)} (${this.watchlist.length})
+            </button>
+            <button class="nav-tab ${this.tab === 'settings' ? 'active' : ''}" data-tab="settings">
+              ${escapeHtml(t.popup.tabSettings)}
+            </button>
+          </div>
         </div>
 
         <div class="tab-body">${bodyHtml}</div>

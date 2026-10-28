@@ -293,45 +293,51 @@ var SENSITIVITY_MULTIPLIERS = {
 var TIER_THEMES = {
   low: {
     id: "low",
-    color: "#81b64c",
-    accentBg: "rgba(129, 182, 76, 0.14)",
-    glow: "transparent",
-    border: "rgba(129, 182, 76, 0.34)"
+    color: "#34d399",
+    rgb: "52, 211, 153",
+    accentBg: "rgba(52, 211, 153, 0.11)",
+    glow: "rgba(52, 211, 153, 0.16)",
+    border: "rgba(52, 211, 153, 0.28)"
   },
   guarded: {
     id: "guarded",
-    color: "#6ba4d9",
-    accentBg: "rgba(107, 164, 217, 0.14)",
-    glow: "transparent",
-    border: "rgba(107, 164, 217, 0.34)"
+    color: "#60a5fa",
+    rgb: "96, 165, 250",
+    accentBg: "rgba(96, 165, 250, 0.11)",
+    glow: "rgba(96, 165, 250, 0.16)",
+    border: "rgba(96, 165, 250, 0.28)"
   },
   elevated: {
     id: "elevated",
-    color: "#e59934",
-    accentBg: "rgba(229, 153, 52, 0.15)",
-    glow: "transparent",
-    border: "rgba(229, 153, 52, 0.38)"
+    color: "#fbbf24",
+    rgb: "251, 191, 36",
+    accentBg: "rgba(251, 191, 36, 0.12)",
+    glow: "rgba(251, 191, 36, 0.18)",
+    border: "rgba(251, 191, 36, 0.32)"
   },
   high: {
     id: "high",
-    color: "#e06c35",
-    accentBg: "rgba(224, 108, 53, 0.16)",
-    glow: "transparent",
-    border: "rgba(224, 108, 53, 0.44)"
+    color: "#fb923c",
+    rgb: "251, 146, 60",
+    accentBg: "rgba(251, 146, 60, 0.13)",
+    glow: "rgba(251, 146, 60, 0.20)",
+    border: "rgba(251, 146, 60, 0.36)"
   },
   critical: {
     id: "critical",
-    color: "#e04644",
-    accentBg: "rgba(224, 70, 68, 0.18)",
-    glow: "transparent",
-    border: "rgba(224, 70, 68, 0.52)"
+    color: "#f43f5e",
+    rgb: "244, 63, 94",
+    accentBg: "rgba(244, 63, 94, 0.14)",
+    glow: "rgba(244, 63, 94, 0.22)",
+    border: "rgba(244, 63, 94, 0.42)"
   },
   banned: {
     id: "banned",
-    color: "#e04644",
-    accentBg: "rgba(224, 70, 68, 0.22)",
-    glow: "transparent",
-    border: "rgba(224, 70, 68, 0.62)"
+    color: "#f43f5e",
+    rgb: "244, 63, 94",
+    accentBg: "rgba(244, 63, 94, 0.18)",
+    glow: "rgba(244, 63, 94, 0.26)",
+    border: "rgba(244, 63, 94, 0.52)"
   }
 };
 function probabilityToTier(probability, isBanned = false) {

@@ -65,12 +65,9 @@ function encodePng(width, height, rgba) {
 
 // Signed distance / supersampled vector rasterizer for Sentinel Shield Icon
 function pointInShield(nx, ny) {
-  // Normalized coords in [-1, 1]
-  // Shield top at y = -0.78, shoulders at y = -0.50, bottom tip at y = 0.82
   if (ny < -0.78 || ny > 0.82) return false;
   let halfW;
   if (ny < -0.48) {
-    // Sloped top crest
     const t = (ny - -0.78) / 0.3;
     halfW = 0.12 + t * 0.58;
   } else if (ny < 0.05) {
@@ -111,32 +108,47 @@ function renderShieldIcon(size) {
           const ux = ((x + (sx + 0.5) / samples) / size) * 2 - 1;
           const uy = ((y + (sy + 0.5) / samples) / size) * 2 - 1;
 
-          // Rounded squircle dark card background
+          // Rounded squircle obsidian card
           const cornerR = 0.42;
           const qx = Math.max(0, Math.abs(ux) - (0.94 - cornerR));
           const qy = Math.max(0, Math.abs(uy) - (0.94 - cornerR));
-          const inCard = Math.hypot(qx, qy) <= cornerR;
+          const distEdge = Math.hypot(qx, qy) - cornerR;
+          if (distEdge > 0) continue;
 
-          if (!inCard) continue;
+          // Subtle top-to-bottom obsidian gradient (#1c1d24 -> #101116)
+          const tGrad = (uy + 1) * 0.5;
+          let r = 28 * (1 - tGrad) + 16 * tGrad;
+          let g = 29 * (1 - tGrad) + 17 * tGrad;
+          let b = 36 * (1 - tGrad) + 22 * tGrad;
 
-          // Native Chess.com warm dark matte card (#21201d)
-          let r = 33;
-          let g = 32;
-          let b = 29;
+          // Subtle ambient emerald top-right glow
+          const glowD = Math.hypot(ux - 0.35, uy + 0.45);
+          const glow = Math.max(0, 1 - glowD / 1.15) * 0.16;
+          r += 52 * glow;
+          g += 211 * glow;
+          b += 153 * glow;
+
+          // Smoothly fading specular hairline rim (top-lit, zero hard step)
+          if (distEdge > -0.05) {
+            const rimFade = Math.max(0, Math.min(1, (0.35 - uy) / 1.15));
+            r += 28 * rimFade;
+            g += 30 * rimFade;
+            b += 36 * rimFade;
+          }
 
           const inOuter = pointInShield(ux, uy);
-          const inInner = pointInShield(ux * 1.15, uy * 1.15);
+          const inInner = pointInShield(ux * 1.16, uy * 1.16);
 
           if (inOuter && !inInner) {
-            // Crisp Chess.com olive green rim (#81b64c)
-            r = 129;
-            g = 182;
-            b = 76;
+            // Precision emerald rim (#34d399)
+            r = 52;
+            g = 211;
+            b = 153;
           } else if (inInner) {
-            // Subtle dark olive-charcoal core
-            r = 25;
-            g = 28;
-            b = 22;
+            // Deep emerald-tinted obsidian core
+            r = 16;
+            g = 27;
+            b = 25;
           }
 
           // Clean check mark inside shield
@@ -144,9 +156,9 @@ function renderShieldIcon(size) {
           const d2 = distToSegment(ux, uy, -0.05, 0.24, 0.30, -0.18);
           const strokeD = Math.min(d1, d2);
           if (strokeD <= 0.105) {
-            r = 149;
-            g = 201;
-            b = 95;
+            r = 110;
+            g = 231;
+            b = 183;
           }
 
           rSum += Math.min(255, r);
@@ -177,126 +189,115 @@ for (const size of [16, 32, 48, 128]) {
   fs.writeFileSync(path.join(ICONS_DIR, `icon${size}.png`), buf);
 }
 
-// Generate flagship GitHub Hero Banner SVG (`assets/banner.svg`)
+// Generate flagship GitHub Hero Banner SVG (`assets/banner.svg`) - Zero Emoji, High-Craft Obsidian
 const bannerSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" width="1200" height="420">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#060911"/>
-      <stop offset="50%" stop-color="#0b1221"/>
-      <stop offset="100%" stop-color="#081b26"/>
+      <stop offset="0%" stop-color="#14151a"/>
+      <stop offset="55%" stop-color="#101116"/>
+      <stop offset="100%" stop-color="#0b0c10"/>
     </linearGradient>
-    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#10b981"/>
-      <stop offset="100%" stop-color="#38bdf8"/>
-    </linearGradient>
-    <linearGradient id="danger" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f97316"/>
-      <stop offset="100%" stop-color="#ef4444"/>
-    </linearGradient>
-    <radialGradient id="glow1" cx="78%" cy="48%" r="42%">
-      <stop offset="0%" stop-color="#ef4444" stop-opacity="0.22"/>
-      <stop offset="100%" stop-color="#ef4444" stop-opacity="0"/>
+    <radialGradient id="glowRose" cx="82%" cy="32%" r="38%">
+      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="glow2" cx="20%" cy="30%" r="45%">
-      <stop offset="0%" stop-color="#10b981" stop-opacity="0.16"/>
-      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    <radialGradient id="glowEmerald" cx="16%" cy="24%" r="42%">
+      <stop offset="0%" stop-color="#34d399" stop-opacity="0.11"/>
+      <stop offset="100%" stop-color="#34d399" stop-opacity="0"/>
     </radialGradient>
+    <linearGradient id="areaChrono" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f43f5e" stop-opacity="0.34"/>
+      <stop offset="100%" stop-color="#f43f5e" stop-opacity="0.0"/>
+    </linearGradient>
   </defs>
 
-  <rect width="1200" height="420" rx="24" fill="url(#bg)"/>
-  <rect width="1200" height="420" rx="24" fill="url(#glow1)"/>
-  <rect width="1200" height="420" rx="24" fill="url(#glow2)"/>
-  <rect x="1" y="1" width="1198" height="418" rx="23" fill="none" stroke="rgba(255,255,255,0.09)" stroke-width="2"/>
+  <rect width="1200" height="420" rx="22" fill="url(#bg)"/>
+  <rect width="1200" height="420" rx="22" fill="url(#glowRose)"/>
+  <rect width="1200" height="420" rx="22" fill="url(#glowEmerald)"/>
+  <rect x="1" y="1" width="1198" height="418" rx="21" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1.5"/>
 
-  <!-- Subtle Tactical Grid -->
-  <g stroke="rgba(255,255,255,0.03)" stroke-width="1">
-    <line x1="0" y1="84" x2="1200" y2="84"/>
-    <line x1="0" y1="168" x2="1200" y2="168"/>
-    <line x1="0" y1="252" x2="1200" y2="252"/>
-    <line x1="0" y1="336" x2="1200" y2="336"/>
-    <line x1="240" y1="0" x2="240" y2="420"/>
-    <line x1="480" y1="0" x2="480" y2="420"/>
-    <line x1="720" y1="0" x2="720" y2="420"/>
-    <line x1="960" y1="0" x2="960" y2="420"/>
-  </g>
-
-  <!-- Left Hero Copy -->
+  <!-- Left Copy -->
   <g transform="translate(64, 72)">
-    <rect x="0" y="0" width="248" height="30" rx="15" fill="rgba(16,185,129,0.14)" stroke="rgba(16,185,129,0.4)"/>
-    <circle cx="18" cy="15" r="4.5" fill="#10b981"/>
-    <text x="31" y="19.5" fill="#6ee7b7" font-family="Inter, system-ui, sans-serif" font-size="11.5" font-weight="800" letter-spacing="1.2">MANIFEST V3 • CHESS.COM 2026</text>
+    <rect x="0" y="0" width="256" height="28" rx="8" fill="rgba(52,211,153,0.1)" stroke="rgba(52,211,153,0.28)"/>
+    <circle cx="15" cy="14" r="3.5" fill="#34d399"/>
+    <text x="27" y="18" fill="#6ee7b7" font-family="Inter, system-ui, sans-serif" font-size="11" font-weight="600" letter-spacing="0.4">Chess Sentinel v4.1 · Zero-FP Calibrated</text>
 
-    <text x="0" y="88" fill="#f8fafc" font-family="Inter, system-ui, sans-serif" font-size="52" font-weight="900" letter-spacing="-1.2">Chess Sentinel</text>
-    <text x="0" y="132" fill="#94a3b8" font-family="Inter, system-ui, sans-serif" font-size="20" font-weight="500">Real-Time Opponent Cheat Probability (%) &amp; Forensic HUD</text>
-    <text x="0" y="162" fill="#64748b" font-family="Inter, system-ui, sans-serif" font-size="16" font-weight="500">PGN [%clk] Metronome Detection • CAPS2 Elo Calibration • Suspect Ban Watchlist</text>
+    <text x="0" y="86" fill="#fafafa" font-family="Inter, system-ui, sans-serif" font-size="52" font-weight="750" letter-spacing="-1.6">Chess Sentinel</text>
+    <text x="0" y="128" fill="#a1a1aa" font-family="Inter, system-ui, sans-serif" font-size="19" font-weight="500">Live Fair-Play Telemetry &amp; Move-Range Pinpointer for Chess.com</text>
+    <text x="0" y="158" fill="#71717a" font-family="Inter, system-ui, sans-serif" font-size="14.5" font-weight="500">0.1s Server Clock Hydration · CAPS2 Elo Excess · Suspect Ban Watchlist</text>
 
-    <!-- Feature Pills -->
-    <g transform="translate(0, 202)" font-family="Inter, system-ui, sans-serif" font-size="12.5" font-weight="700">
-      <rect x="0" y="0" width="166" height="36" rx="10" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
-      <text x="16" y="22.5" fill="#e2e8f0">⏱️ PGN Clock Pacing</text>
+    <g transform="translate(0, 198)" font-family="Inter, system-ui, sans-serif" font-size="12" font-weight="600">
+      <rect x="0" y="0" width="174" height="34" rx="8" fill="rgba(255,255,255,0.035)" stroke="rgba(255,255,255,0.09)"/>
+      <text x="16" y="21.5" fill="#e4e4e7">0 / 10,000 Honest FPs</text>
 
-      <rect x="178" y="0" width="166" height="36" rx="10" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
-      <text x="194" y="22.5" fill="#e2e8f0">🎯 CAPS2 Telemetry</text>
+      <rect x="186" y="0" width="184" height="34" rx="8" fill="rgba(255,255,255,0.035)" stroke="rgba(255,255,255,0.09)"/>
+      <text x="202" y="21.5" fill="#e4e4e7">0.1s Live Clock Pacing</text>
 
-      <rect x="356" y="0" width="168" height="36" rx="10" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
-      <text x="372" y="22.5" fill="#e2e8f0">🇹🇷 / 🇬🇧 Bilingual UI</text>
+      <rect x="382" y="0" width="152" height="34" rx="8" fill="rgba(255,255,255,0.035)" stroke="rgba(255,255,255,0.09)"/>
+      <text x="398" y="21.5" fill="#e4e4e7">TR / EN Instant UI</text>
     </g>
   </g>
 
-  <!-- Right Floating HUD Mockup Card -->
-  <g transform="translate(748, 36)">
-    <rect x="0" y="0" width="388" height="348" rx="20" fill="#0c111d" stroke="rgba(239,68,68,0.52)" stroke-width="1.5"/>
-    <rect x="0" y="0" width="388" height="4" rx="2" fill="url(#danger)"/>
+  <!-- Right Floating v4.1 Obsidian HUD Card -->
+  <g transform="translate(756, 36)">
+    <rect x="0" y="0" width="380" height="348" rx="14" fill="#131419" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    <line x1="14" y1="1" x2="366" y2="1" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
 
-    <!-- Card Header -->
-    <text x="20" y="28" fill="#f1f5f9" font-family="Inter, system-ui, sans-serif" font-size="12" font-weight="800" letter-spacing="1.4">🛡️ CHESS SENTINEL</text>
-    <rect x="306" y="13" width="32" height="20" rx="5" fill="rgba(255,255,255,0.07)"/>
-    <text x="314" y="26.5" fill="#cbd5e1" font-family="Inter, system-ui, sans-serif" font-size="10" font-weight="700">TR</text>
-    <rect x="344" y="13" width="24" height="20" rx="5" fill="rgba(255,255,255,0.07)"/>
-    <text x="351" y="26.5" fill="#cbd5e1" font-family="Inter, system-ui, sans-serif" font-size="10" font-weight="700">⇅</text>
-    <line x1="0" y1="42" x2="388" y2="42" stroke="rgba(255,255,255,0.07)"/>
+    <!-- Header -->
+    <rect x="14" y="12" width="22" height="22" rx="6" fill="rgba(244,63,94,0.14)" stroke="rgba(244,63,94,0.32)"/>
+    <path d="M25 16.5L30.5 19v4.2c0 3.3-2.3 6.2-5.5 7.2-3.2-1-5.5-3.9-5.5-7.2V19L25 16.5z" fill="none" stroke="#f43f5e" stroke-width="1.4"/>
+    <text x="44" y="27" fill="#f4f4f5" font-family="Inter, system-ui, sans-serif" font-size="12" font-weight="650">Chess Sentinel</text>
+    <rect x="306" y="12" width="28" height="22" rx="6" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.09)"/>
+    <text x="313" y="26.5" fill="#d4d4d8" font-family="ui-monospace, SFMono-Regular, monospace" font-size="10" font-weight="600">TR</text>
+    <rect x="339" y="12" width="26" height="22" rx="6" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.09)"/>
+    <text x="348" y="26.5" fill="#d4d4d8" font-family="Inter, system-ui, sans-serif" font-size="12" font-weight="600">-</text>
+    <line x1="0" y1="45" x2="380" y2="45" stroke="rgba(255,255,255,0.06)"/>
 
-    <!-- Abort Warning -->
-    <rect x="18" y="54" width="352" height="28" rx="7" fill="rgba(239,68,68,0.16)" stroke="rgba(239,68,68,0.4)"/>
-    <text x="30" y="72" fill="#fca5a5" font-family="Inter, system-ui, sans-serif" font-size="11" font-weight="700">⚠️ Safe Abort Window Open — High Engine Probability</text>
+    <!-- Identity + 240 deg Instrument Arc -->
+    <g transform="translate(16, 62)">
+      <rect x="0" y="4" width="42" height="42" rx="10" fill="#1e2028" stroke="rgba(255,255,255,0.12)"/>
+      <text x="21" y="30" text-anchor="middle" fill="#e4e4e7" font-family="Inter, system-ui, sans-serif" font-size="16" font-weight="700">G</text>
 
-    <!-- Gauge -->
-    <g transform="translate(64, 138)">
-      <circle cx="0" cy="0" r="38" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="8"/>
-      <circle cx="0" cy="0" r="38" fill="none" stroke="#ef4444" stroke-width="8" stroke-linecap="round" stroke-dasharray="238.76" stroke-dashoffset="26.2" transform="rotate(-90)"/>
-      <text x="0" y="5" text-anchor="middle" fill="#f8fafc" font-family="Inter, system-ui, sans-serif" font-size="24" font-weight="900">89%</text>
-      <text x="0" y="19" text-anchor="middle" fill="#94a3b8" font-family="Inter, system-ui, sans-serif" font-size="7.5" font-weight="800" letter-spacing="0.8">CHEAT PROB</text>
+      <text x="54" y="19" fill="#fafafa" font-family="Inter, system-ui, sans-serif" font-size="15" font-weight="650">@gamer-rahUL</text>
+      <rect x="54" y="26" width="96" height="19" rx="9.5" fill="rgba(244,63,94,0.14)" stroke="rgba(244,63,94,0.34)"/>
+      <circle cx="64" cy="35.5" r="2.8" fill="#f43f5e"/>
+      <text x="72" y="39" fill="#fda4af" font-family="Inter, system-ui, sans-serif" font-size="10" font-weight="600">Critical Risk</text>
+      <text x="54" y="60" fill="#a1a1aa" font-family="Inter, system-ui, sans-serif" font-size="11">BLITZ 1642 (+184 7d) · 14d</text>
+
+      <!-- 240 deg Open Arc -->
+      <g transform="translate(274, -2)">
+        <circle cx="38" cy="38" r="29" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="5.5" stroke-linecap="round" stroke-dasharray="121.47 200" transform="rotate(150 38 38)"/>
+        <circle cx="38" cy="38" r="29" fill="none" stroke="#f43f5e" stroke-width="5.5" stroke-linecap="round" stroke-dasharray="106.9 200" transform="rotate(150 38 38)"/>
+        <text x="38" y="42" text-anchor="middle" fill="#fafafa" font-family="Inter, system-ui, sans-serif" font-size="20" font-weight="750">88%</text>
+        <text x="38" y="56" text-anchor="middle" fill="#a1a1aa" font-family="Inter, system-ui, sans-serif" font-size="8.5" font-weight="500">Confidence 92%</text>
+      </g>
     </g>
 
-    <!-- Identity -->
-    <g transform="translate(122, 108)">
-      <text x="0" y="16" fill="#f8fafc" font-family="Inter, system-ui, sans-serif" font-size="17" font-weight="800">@SuspectGM_09</text>
-      <rect x="0" y="26" width="136" height="21" rx="10.5" fill="rgba(239,68,68,0.18)" stroke="rgba(239,68,68,0.45)"/>
-      <text x="11" y="40" fill="#f87171" font-family="Inter, system-ui, sans-serif" font-size="10" font-weight="800" letter-spacing="0.7">CRITICAL CHEAT RISK</text>
-      <text x="0" y="64" fill="#cbd5e1" font-family="Inter, system-ui, sans-serif" font-size="11.5">Rapid 2190 (+194 7d) • 11d old</text>
+    <!-- Smooth SVG Chronogram Card -->
+    <g transform="translate(16, 140)">
+      <rect x="0" y="0" width="348" height="92" rx="10" fill="rgba(255,255,255,0.026)" stroke="rgba(255,255,255,0.07)"/>
+      <text x="12" y="20" fill="#d4d4d8" font-family="Inter, system-ui, sans-serif" font-size="10.5" font-weight="600">Live Game Clock (18 moves)</text>
+      <text x="336" y="20" text-anchor="end" fill="#fda4af" font-family="ui-monospace, SFMono-Regular, monospace" font-size="10" font-weight="600">CV 0.21 · Mean 4.8s</text>
+
+      <rect x="128" y="30" width="196" height="44" rx="4" fill="rgba(244,63,94,0.09)"/>
+      <path d="M 14 42 C 36 38, 62 66, 94 58 C 118 52, 134 55, 160 55 C 194 55, 240 54, 286 55 C 308 55, 322 54, 334 55 L 334 74 L 14 74 Z" fill="url(#areaChrono)"/>
+      <path d="M 14 42 C 36 38, 62 66, 94 58 C 118 52, 134 55, 160 55 C 194 55, 240 54, 286 55 C 308 55, 322 54, 334 55" fill="none" stroke="#f43f5e" stroke-width="1.8"/>
+      <text x="14" y="85" fill="#71717a" font-family="ui-monospace, SFMono-Regular, monospace" font-size="9">M1</text>
+      <text x="334" y="85" text-anchor="end" fill="#fda4af" font-family="ui-monospace, SFMono-Regular, monospace" font-size="9">Window M8-M18</text>
     </g>
 
-    <!-- Forensic Bars -->
-    <g transform="translate(20, 198)" font-family="Inter, system-ui, sans-serif" font-size="10.5" font-weight="600">
-      <text x="0" y="12" fill="#cbd5e1">Recent Win-Rate Anomaly (78% / 46g)</text>
-      <text x="348" y="12" text-anchor="end" fill="#f8fafc" font-weight="800">88/100</text>
-      <rect x="0" y="18" width="348" height="6" rx="3" fill="rgba(255,255,255,0.08)"/>
-      <rect x="0" y="18" width="306" height="6" rx="3" fill="#ef4444"/>
+    <!-- Pinpoint Card -->
+    <g transform="translate(16, 244)">
+      <rect x="0" y="0" width="348" height="86" rx="10" fill="rgba(255,255,255,0.026)" stroke="rgba(255,255,255,0.07)"/>
+      <text x="12" y="20" fill="#d4d4d8" font-family="Inter, system-ui, sans-serif" font-size="10.5" font-weight="600">Suspect Move Ranges</text>
+      <rect x="292" y="8" width="44" height="17" rx="8.5" fill="rgba(244,63,94,0.16)"/>
+      <text x="314" y="19.5" text-anchor="middle" fill="#fda4af" font-family="ui-monospace, SFMono-Regular, monospace" font-size="9.5" font-weight="700">3 / 6</text>
 
-      <text x="0" y="44" fill="#cbd5e1">Engine Move Pacing (%clk CV: 0.24)</text>
-      <text x="348" y="44" text-anchor="end" fill="#f8fafc" font-weight="800">95/100</text>
-      <rect x="0" y="50" width="348" height="6" rx="3" fill="rgba(255,255,255,0.08)"/>
-      <rect x="0" y="50" width="330" height="6" rx="3" fill="#ef4444"/>
+      <text x="12" y="44" fill="#fafafa" font-family="Inter, system-ui, sans-serif" font-size="11" font-weight="600">vs @Prob1st · Blitz · 96.4% acc</text>
+      <rect x="228" y="32" width="108" height="18" rx="5" fill="rgba(244,63,94,0.14)" stroke="rgba(244,63,94,0.32)"/>
+      <text x="282" y="44" text-anchor="middle" fill="#fda4af" font-family="ui-monospace, SFMono-Regular, monospace" font-size="9.5" font-weight="600">Moves 9-24</text>
 
-      <text x="0" y="76" fill="#cbd5e1">CAPS2 Accuracy Excess (93.8% vs 84.5%)</text>
-      <text x="348" y="76" text-anchor="end" fill="#f8fafc" font-weight="800">91/100</text>
-      <rect x="0" y="82" width="348" height="6" rx="3" fill="rgba(255,255,255,0.08)"/>
-      <rect x="0" y="82" width="316" height="6" rx="3" fill="#ef4444"/>
-
-      <text x="0" y="108" fill="#cbd5e1">Account Age &amp; Smurf Factor (11 days)</text>
-      <text x="348" y="108" text-anchor="end" fill="#f8fafc" font-weight="800">84/100</text>
-      <rect x="0" y="114" width="348" height="6" rx="3" fill="rgba(255,255,255,0.08)"/>
-      <rect x="0" y="114" width="292" height="6" rx="3" fill="#f97316"/>
+      <text x="12" y="67" fill="#a1a1aa" font-family="Inter, system-ui, sans-serif" font-size="10.5">Metronomic move pacing (4.7s avg, CV 0.19)</text>
     </g>
   </g>
 </svg>`;
@@ -304,50 +305,46 @@ const bannerSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420
 fs.writeFileSync(path.join(ASSETS_DIR, 'banner.svg'), bannerSvg, 'utf8');
 
 // Generate Architecture Telemetry Pipeline Diagram (`assets/architecture.svg`)
-const archSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 260" width="1080" height="260">
-  <rect width="1080" height="260" rx="18" fill="#090d16" stroke="rgba(255,255,255,0.09)"/>
+const archSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 250" width="1080" height="250">
+  <rect width="1080" height="250" rx="16" fill="#121318" stroke="rgba(255,255,255,0.08)"/>
   <g font-family="Inter, system-ui, sans-serif">
-    <!-- Node 1 -->
-    <rect x="28" y="44" width="225" height="172" rx="14" fill="#0f172a" stroke="rgba(56,189,248,0.35)"/>
-    <text x="46" y="76" fill="#38bdf8" font-size="11" font-weight="800" letter-spacing="1">1. DOM &amp; SPA DETECTOR</text>
-    <text x="46" y="102" fill="#e2e8f0" font-size="13" font-weight="700">Chess.com 2026 Watcher</text>
-    <text x="46" y="128" fill="#94a3b8" font-size="11.5">• Web Component ShadowRoot</text>
-    <text x="46" y="148" fill="#94a3b8" font-size="11.5">• /game/* &amp; /play/online SPA</text>
-    <text x="46" y="168" fill="#94a3b8" font-size="11.5">• Active Clock Speed &amp; Abort</text>
-    <text x="46" y="188" fill="#94a3b8" font-size="11.5">• Zero Board Interference</text>
+    <rect x="28" y="38" width="225" height="174" rx="12" fill="rgba(255,255,255,0.025)" stroke="rgba(96,165,250,0.3)"/>
+    <text x="46" y="68" fill="#60a5fa" font-size="11" font-weight="700">1. DOM &amp; CALLBACK MONITOR</text>
+    <text x="46" y="94" fill="#f4f4f5" font-size="13" font-weight="650">Chess.com Watcher</text>
+    <text x="46" y="120" fill="#a1a1aa" font-size="11.5">· /game/*, /play/*, /member/*</text>
+    <text x="46" y="142" fill="#a1a1aa" font-size="11.5">· 0.1s Server moveTimestamps</text>
+    <text x="46" y="164" fill="#a1a1aa" font-size="11.5">· Safe Abort Window Detector</text>
+    <text x="46" y="186" fill="#a1a1aa" font-size="11.5">· Zero Board Interference</text>
 
-    <path d="M258 130 L292 130" stroke="#38bdf8" stroke-width="2" stroke-dasharray="4 3"/>
+    <path d="M258 125 L292 125" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="4 3"/>
 
-    <!-- Node 2 -->
-    <rect x="298" y="44" width="235" height="172" rx="14" fill="#0f172a" stroke="rgba(16,185,129,0.35)"/>
-    <text x="316" y="76" fill="#10b981" font-size="11" font-weight="800" letter-spacing="1">2. SERIAL PUBAPI CLIENT</text>
-    <text x="316" y="102" fill="#e2e8f0" font-size="13" font-weight="700">Resilient Data Harvester</text>
-    <text x="316" y="128" fill="#94a3b8" font-size="11.5">• /pub/player &amp; /stats</text>
-    <text x="316" y="148" fill="#94a3b8" font-size="11.5">• Monthly PGN [%clk] Archives</text>
-    <text x="316" y="168" fill="#94a3b8" font-size="11.5">• Auto-Fallback on HTTP 500</text>
-    <text x="316" y="188" fill="#94a3b8" font-size="11.5">• 5-Min Smart LRU Cache</text>
+    <rect x="298" y="38" width="235" height="174" rx="12" fill="rgba(255,255,255,0.025)" stroke="rgba(52,211,153,0.3)"/>
+    <text x="316" y="68" fill="#34d399" font-size="11" font-weight="700">2. SERIAL PUBAPI CLIENT</text>
+    <text x="316" y="94" fill="#f4f4f5" font-size="13" font-weight="650">Resilient Data Harvester</text>
+    <text x="316" y="120" fill="#a1a1aa" font-size="11.5">· /pub/player &amp; /stats</text>
+    <text x="316" y="142" fill="#a1a1aa" font-size="11.5">· Monthly PGN [%clk] Archives</text>
+    <text x="316" y="164" fill="#a1a1aa" font-size="11.5">· Persistent storage.local Cache</text>
+    <text x="316" y="186" fill="#a1a1aa" font-size="11.5">· Retry &amp; Rate-Limit Guard</text>
 
-    <path d="M538 130 L572 130" stroke="#10b981" stroke-width="2" stroke-dasharray="4 3"/>
+    <path d="M538 125 L572 125" stroke="#34d399" stroke-width="1.5" stroke-dasharray="4 3"/>
 
-    <!-- Node 3 -->
-    <rect x="578" y="44" width="245" height="172" rx="14" fill="#0f172a" stroke="rgba(245,158,11,0.4)"/>
-    <text x="596" y="76" fill="#f59e0b" font-size="11" font-weight="800" letter-spacing="1">3. BAYESIAN ENGINE</text>
-    <text x="596" y="102" fill="#e2e8f0" font-size="13" font-weight="700">6-Signal Forensic Model</text>
-    <text x="596" y="128" fill="#94a3b8" font-size="11.5">• Recent &amp; Lifetime Glicko WR</text>
-    <text x="596" y="148" fill="#94a3b8" font-size="11.5">• CAPS2 vs Elo Band Excess</text>
-    <text x="596" y="168" fill="#94a3b8" font-size="11.5">• PGN [%clk] Metronome &amp; Toggle</text>
-    <text x="596" y="188" fill="#94a3b8" font-size="11.5">• FIDE Title &amp; FairPlay Check</text>
+    <rect x="578" y="38" width="245" height="174" rx="12" fill="rgba(255,255,255,0.025)" stroke="rgba(251,191,36,0.32)"/>
+    <text x="596" y="68" fill="#fbbf24" font-size="11" font-weight="700">3. ZERO-FP ENGINE</text>
+    <text x="596" y="94" fill="#f4f4f5" font-size="13" font-weight="650">6-Signal Forensic Model</text>
+    <text x="596" y="120" fill="#a1a1aa" font-size="11.5">· Multi-Signal Corroboration</text>
+    <text x="596" y="142" fill="#a1a1aa" font-size="11.5">· CAPS2 vs Elo Band Excess</text>
+    <text x="596" y="164" fill="#a1a1aa" font-size="11.5">· Exact Move-Range Pinpointer</text>
+    <text x="596" y="186" fill="#a1a1aa" font-size="11.5">· Live Clock Fusion (+12% cap)</text>
 
-    <path d="M828 130 L862 130" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4 3"/>
+    <path d="M828 125 L862 125" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="4 3"/>
 
-    <!-- Node 4 -->
-    <rect x="868" y="44" width="184" height="172" rx="14" fill="#0f172a" stroke="rgba(239,68,68,0.4)"/>
-    <text x="886" y="76" fill="#f87171" font-size="11" font-weight="800" letter-spacing="1">4. SHADOW HUD</text>
-    <text x="886" y="102" fill="#e2e8f0" font-size="13" font-weight="700">Live Overlay + Badge</text>
-    <text x="886" y="128" fill="#94a3b8" font-size="11.5">• Floating Glass HUD</text>
-    <text x="886" y="148" fill="#94a3b8" font-size="11.5">• Inline % Name Pill</text>
-    <text x="886" y="168" fill="#94a3b8" font-size="11.5">• Ban Watchlist Alarm</text>
-    <text x="886" y="188" fill="#94a3b8" font-size="11.5">• Instant TR / EN UI</text>
+    <rect x="868" y="38" width="184" height="174" rx="12" fill="rgba(255,255,255,0.025)" stroke="rgba(244,63,94,0.32)"/>
+    <text x="886" y="68" fill="#f43f5e" font-size="11" font-weight="700">4. OBSIDIAN HUD</text>
+    <text x="886" y="94" fill="#f4f4f5" font-size="13" font-weight="650">Isolated Shadow UI</text>
+    <text x="886" y="120" fill="#a1a1aa" font-size="11.5">· 240 deg Instrument Dial</text>
+    <text x="886" y="142" fill="#a1a1aa" font-size="11.5">· Smooth SVG Chronograms</text>
+    <text x="886" y="164" fill="#a1a1aa" font-size="11.5">· Inline Username % Pill</text>
+    <text x="886" y="186" fill="#a1a1aa" font-size="11.5">· Instant TR / EN Switch</text>
   </g>
 </svg>`;
 

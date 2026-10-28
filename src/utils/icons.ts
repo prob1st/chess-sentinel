@@ -1,11 +1,26 @@
 /**
  * Crisp geometric monochrome SVG icons (zero emojis).
- * Designed at 14-15px optical grid with 1.75px stroke weight.
+ * Designed on an optical 14-16px grid with 1.75px stroke weight.
  */
 export const ICONS = {
-  mark: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path d="M8 1.5L2.5 3.8v4.1c0 3.55 2.34 6.58 5.5 7.6 3.16-1.02 5.5-4.05 5.5-7.6V3.8L8 1.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-    <path d="M5.8 8.1l1.5 1.5 3-3.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  mark: `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M8 1.4L2.4 3.7v4.15c0 3.62 2.38 6.72 5.6 7.75 3.22-1.03 5.6-4.13 5.6-7.75V3.7L8 1.4z" fill="currentColor" fill-opacity="0.14" stroke="currentColor" stroke-width="1.45" stroke-linejoin="round"/>
+    <path d="M5.65 8.15l1.55 1.55 3.15-3.25" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`,
+
+  shieldCheck: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    <path d="m9 12 2 2 4-4"/>
+  </svg>`,
+
+  alertTriangle: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+    <path d="M12 9v4"/>
+    <path d="M12 17h.01"/>
+  </svg>`,
+
+  activity: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
   </svg>`,
 
   swap: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

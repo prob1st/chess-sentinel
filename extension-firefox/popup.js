@@ -39,45 +39,51 @@ var CAPS2_ACCURACY_BANDS = {
 var TIER_THEMES = {
   low: {
     id: "low",
-    color: "#81b64c",
-    accentBg: "rgba(129, 182, 76, 0.14)",
-    glow: "transparent",
-    border: "rgba(129, 182, 76, 0.34)"
+    color: "#34d399",
+    rgb: "52, 211, 153",
+    accentBg: "rgba(52, 211, 153, 0.11)",
+    glow: "rgba(52, 211, 153, 0.16)",
+    border: "rgba(52, 211, 153, 0.28)"
   },
   guarded: {
     id: "guarded",
-    color: "#6ba4d9",
-    accentBg: "rgba(107, 164, 217, 0.14)",
-    glow: "transparent",
-    border: "rgba(107, 164, 217, 0.34)"
+    color: "#60a5fa",
+    rgb: "96, 165, 250",
+    accentBg: "rgba(96, 165, 250, 0.11)",
+    glow: "rgba(96, 165, 250, 0.16)",
+    border: "rgba(96, 165, 250, 0.28)"
   },
   elevated: {
     id: "elevated",
-    color: "#e59934",
-    accentBg: "rgba(229, 153, 52, 0.15)",
-    glow: "transparent",
-    border: "rgba(229, 153, 52, 0.38)"
+    color: "#fbbf24",
+    rgb: "251, 191, 36",
+    accentBg: "rgba(251, 191, 36, 0.12)",
+    glow: "rgba(251, 191, 36, 0.18)",
+    border: "rgba(251, 191, 36, 0.32)"
   },
   high: {
     id: "high",
-    color: "#e06c35",
-    accentBg: "rgba(224, 108, 53, 0.16)",
-    glow: "transparent",
-    border: "rgba(224, 108, 53, 0.44)"
+    color: "#fb923c",
+    rgb: "251, 146, 60",
+    accentBg: "rgba(251, 146, 60, 0.13)",
+    glow: "rgba(251, 146, 60, 0.20)",
+    border: "rgba(251, 146, 60, 0.36)"
   },
   critical: {
     id: "critical",
-    color: "#e04644",
-    accentBg: "rgba(224, 70, 68, 0.18)",
-    glow: "transparent",
-    border: "rgba(224, 70, 68, 0.52)"
+    color: "#f43f5e",
+    rgb: "244, 63, 94",
+    accentBg: "rgba(244, 63, 94, 0.14)",
+    glow: "rgba(244, 63, 94, 0.22)",
+    border: "rgba(244, 63, 94, 0.42)"
   },
   banned: {
     id: "banned",
-    color: "#e04644",
-    accentBg: "rgba(224, 70, 68, 0.22)",
-    glow: "transparent",
-    border: "rgba(224, 70, 68, 0.62)"
+    color: "#f43f5e",
+    rgb: "244, 63, 94",
+    accentBg: "rgba(244, 63, 94, 0.18)",
+    glow: "rgba(244, 63, 94, 0.26)",
+    border: "rgba(244, 63, 94, 0.52)"
   }
 };
 function probabilityToTier(probability, isBanned = false) {
@@ -129,7 +135,7 @@ function buildFairPlayEvidenceReport(res, lang, liveClock) {
   const eff = computeEffectiveLiveRisk(res, liveClock, res.primaryFormat);
   const lines = [];
   if (lang === "tr") {
-    lines.push(`[Chess Sentinel v4.0 - Adil Oyun Kanit Ozeti]`);
+    lines.push(`[Chess Sentinel v4.1 - Adil Oyun Kanit Ozeti]`);
     lines.push(
       `Oyuncu: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Hesap Yasi: ${res.accountAgeDays !== null ? `${res.accountAgeDays} gun` : "Bilinmiyor"}`
     );
@@ -182,7 +188,7 @@ function buildFairPlayEvidenceReport(res, lang, liveClock) {
       }
     }
   } else {
-    lines.push(`[Chess Sentinel v4.0 - Fair-Play Evidence Summary]`);
+    lines.push(`[Chess Sentinel v4.1 - Fair-Play Evidence Summary]`);
     lines.push(
       `Player: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Account Age: ${res.accountAgeDays !== null ? `${res.accountAgeDays} days` : "Unknown"}`
     );
@@ -572,9 +578,21 @@ function formatAgeShort(days, lang) {
 
 // src/utils/icons.ts
 var ICONS = {
-  mark: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path d="M8 1.5L2.5 3.8v4.1c0 3.55 2.34 6.58 5.5 7.6 3.16-1.02 5.5-4.05 5.5-7.6V3.8L8 1.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-    <path d="M5.8 8.1l1.5 1.5 3-3.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  mark: `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M8 1.4L2.4 3.7v4.15c0 3.62 2.38 6.72 5.6 7.75 3.22-1.03 5.6-4.13 5.6-7.75V3.7L8 1.4z" fill="currentColor" fill-opacity="0.14" stroke="currentColor" stroke-width="1.45" stroke-linejoin="round"/>
+    <path d="M5.65 8.15l1.55 1.55 3.15-3.25" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`,
+  shieldCheck: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    <path d="m9 12 2 2 4-4"/>
+  </svg>`,
+  alertTriangle: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+    <path d="M12 9v4"/>
+    <path d="M12 17h.01"/>
+  </svg>`,
+  activity: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
   </svg>`,
   swap: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     <path d="M7 16V4m0 0L3 8m4-4l4 4"/>
@@ -652,11 +670,11 @@ function setSafeHtml(target, html) {
 
 // src/popup/index.ts
 function barColor(score) {
-  if (score < 25) return "#81b64c";
-  if (score < 45) return "#6ba4d9";
-  if (score < 68) return "#e59934";
-  if (score < 82) return "#e06c35";
-  return "#e04644";
+  if (score < 25) return "#34d399";
+  if (score < 45) return "#60a5fa";
+  if (score < 68) return "#fbbf24";
+  if (score < 82) return "#fb923c";
+  return "#f43f5e";
 }
 var PopupController = class {
   root;
@@ -753,6 +771,8 @@ var PopupController = class {
     const theme = TIER_THEMES[eff.tier];
     const pf = r.formats[r.primaryFormat];
     const pctText = lang === "tr" ? `%${eff.probability}` : `${eff.probability}%`;
+    const arcMax = 96.34;
+    const arcFill = Math.max(2, Math.min(100, Math.max(0, eff.probability)) / 100 * arcMax);
     const bars = [
       { lbl: t.signals.recentWinrate, val: r.signals.recentWinrate },
       { lbl: t.signals.overallWinrate, val: r.signals.overallWinrate },
@@ -770,8 +790,8 @@ var PopupController = class {
         `
     ).join("");
     return `
-      <div class="scan-result-card">
-        ${isFromLiveTab ? `<div class="active-tag">${escapeHtml(t.popup.activeMatchLabel)}</div>` : ""}
+      <div class="scan-result-card" style="--tier-rgb:${theme.rgb};--tier-color:${theme.color}">
+        ${isFromLiveTab ? `<div class="active-tag"><span class="active-tag-dot"></span><span>${escapeHtml(t.popup.activeMatchLabel)}</span></div>` : ""}
         <div class="scan-top">
           <div class="scan-user">
             ${r.avatarUrl ? `<img class="scan-avatar" src="${escapeHtml(r.avatarUrl)}" alt="" />` : `<div class="scan-avatar">${escapeHtml(r.displayName[0]?.toUpperCase() || "?")}</div>`}
@@ -788,9 +808,36 @@ var PopupController = class {
               </div>
             </div>
           </div>
-          <div class="prob-readout" style="border-left-color:${theme.color}">
-            <div class="prob-num" style="color:${theme.color}">${pctText}</div>
-            <div class="prob-lbl">${escapeHtml(t.tiers[eff.tier].label)}</div>
+
+          <div class="popup-dial">
+            <svg viewBox="0 0 62 54">
+              <circle
+                cx="31"
+                cy="30"
+                r="23"
+                fill="none"
+                stroke="rgba(255,255,255,0.08)"
+                stroke-width="4.5"
+                stroke-linecap="round"
+                stroke-dasharray="${arcMax.toFixed(2)} 180"
+                transform="rotate(150 31 30)"
+              />
+              <circle
+                cx="31"
+                cy="30"
+                r="23"
+                fill="none"
+                stroke="${theme.color}"
+                stroke-width="4.5"
+                stroke-linecap="round"
+                stroke-dasharray="${arcFill.toFixed(2)} 180"
+                transform="rotate(150 31 30)"
+              />
+            </svg>
+            <div class="popup-dial-center">
+              <div class="popup-dial-num">${pctText}</div>
+              <div class="popup-dial-lbl">${escapeHtml(t.tiers[eff.tier].label)}</div>
+            </div>
           </div>
         </div>
 
@@ -841,14 +888,17 @@ var PopupController = class {
           </div>`;
     return `
       <form class="search-bar" id="scan-form">
-        <input
-          class="search-input"
-          id="scan-input"
-          type="text"
-          value="${escapeHtml(this.searchQuery)}"
-          placeholder="${escapeHtml(t.popup.searchPlaceholder)}"
-          autocomplete="off"
-        />
+        <div class="search-input-wrap">
+          <span class="search-icon">${ICONS.search}</span>
+          <input
+            class="search-input"
+            id="scan-input"
+            type="text"
+            value="${escapeHtml(this.searchQuery)}"
+            placeholder="${escapeHtml(t.popup.searchPlaceholder)}"
+            autocomplete="off"
+          />
+        </div>
         <button class="primary-btn" type="submit" ${this.scanning ? "disabled" : ""}>
           ${this.scanning ? "..." : escapeHtml(t.popup.scanBtn)}
         </button>
@@ -888,7 +938,7 @@ var PopupController = class {
     return `
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div class="sec-title">${escapeHtml(t.popup.watchlistTitle)} (${bannedCount}/${this.watchlist.length})</div>
-        <button class="primary-btn" id="refresh-bans-btn" style="height:26px;padding:0 10px" ${this.checkingBans || this.watchlist.length === 0 ? "disabled" : ""}>
+        <button class="primary-btn" id="refresh-bans-btn" style="height:27px;padding:0 11px" ${this.checkingBans || this.watchlist.length === 0 ? "disabled" : ""}>
           ${escapeHtml(this.checkingBans ? t.popup.checkingBans : t.popup.checkBansBtn)}
         </button>
       </div>
@@ -969,16 +1019,18 @@ var PopupController = class {
           </div>
         </div>
 
-        <div class="nav-tabs">
-          <button class="nav-tab ${this.tab === "scanner" ? "active" : ""}" data-tab="scanner">
-            ${escapeHtml(t.popup.tabScanner)}
-          </button>
-          <button class="nav-tab ${this.tab === "watchlist" ? "active" : ""}" data-tab="watchlist">
-            ${escapeHtml(t.popup.tabWatchlist)} (${this.watchlist.length})
-          </button>
-          <button class="nav-tab ${this.tab === "settings" ? "active" : ""}" data-tab="settings">
-            ${escapeHtml(t.popup.tabSettings)}
-          </button>
+        <div class="nav-tabs-wrap">
+          <div class="nav-tabs">
+            <button class="nav-tab ${this.tab === "scanner" ? "active" : ""}" data-tab="scanner">
+              ${escapeHtml(t.popup.tabScanner)}
+            </button>
+            <button class="nav-tab ${this.tab === "watchlist" ? "active" : ""}" data-tab="watchlist">
+              ${escapeHtml(t.popup.tabWatchlist)} (${this.watchlist.length})
+            </button>
+            <button class="nav-tab ${this.tab === "settings" ? "active" : ""}" data-tab="settings">
+              ${escapeHtml(t.popup.tabSettings)}
+            </button>
+          </div>
         </div>
 
         <div class="tab-body">${bodyHtml}</div>

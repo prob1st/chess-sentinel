@@ -1055,7 +1055,7 @@ export function buildFairPlayEvidenceReport(
   const lines: string[] = [];
 
   if (lang === 'tr') {
-    lines.push(`[Chess Sentinel v4.0 - Adil Oyun Kanit Ozeti]`);
+    lines.push(`[Chess Sentinel v4.1 - Adil Oyun Kanit Ozeti]`);
     lines.push(
       `Oyuncu: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Hesap Yasi: ${
         res.accountAgeDays !== null ? `${res.accountAgeDays} gun` : 'Bilinmiyor'
@@ -1117,7 +1117,7 @@ export function buildFairPlayEvidenceReport(
       }
     }
   } else {
-    lines.push(`[Chess Sentinel v4.0 - Fair-Play Evidence Summary]`);
+    lines.push(`[Chess Sentinel v4.1 - Fair-Play Evidence Summary]`);
     lines.push(
       `Player: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Account Age: ${
         res.accountAgeDays !== null ? `${res.accountAgeDays} days` : 'Unknown'

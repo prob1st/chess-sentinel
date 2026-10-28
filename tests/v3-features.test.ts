@@ -84,7 +84,7 @@ describe('v3.2 Auto-Verdict, Exact Move-Range Pinpointer & Forensic Evidence Exp
     );
     const trReport = buildFairPlayEvidenceReport(res, 'tr', liveSnap);
     const enReport = buildFairPlayEvidenceReport(res, 'en', liveSnap);
-    expect(trReport).toContain('Chess Sentinel v4.0');
+    expect(trReport).toContain('Chess Sentinel v4.1');
     expect(trReport).toContain('9. hamlede 36sn duraksama -> 10.-17. hamleler robotik');
     expect(enReport).toContain('Move #9 (36s pause) -> Moves #10-#17 mechanical');
     expect(enReport).toContain('https://www.chess.com/game/live/999000');

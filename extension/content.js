@@ -41,45 +41,51 @@
   var TIER_THEMES = {
     low: {
       id: "low",
-      color: "#81b64c",
-      accentBg: "rgba(129, 182, 76, 0.14)",
-      glow: "transparent",
-      border: "rgba(129, 182, 76, 0.34)"
+      color: "#34d399",
+      rgb: "52, 211, 153",
+      accentBg: "rgba(52, 211, 153, 0.11)",
+      glow: "rgba(52, 211, 153, 0.16)",
+      border: "rgba(52, 211, 153, 0.28)"
     },
     guarded: {
       id: "guarded",
-      color: "#6ba4d9",
-      accentBg: "rgba(107, 164, 217, 0.14)",
-      glow: "transparent",
-      border: "rgba(107, 164, 217, 0.34)"
+      color: "#60a5fa",
+      rgb: "96, 165, 250",
+      accentBg: "rgba(96, 165, 250, 0.11)",
+      glow: "rgba(96, 165, 250, 0.16)",
+      border: "rgba(96, 165, 250, 0.28)"
     },
     elevated: {
       id: "elevated",
-      color: "#e59934",
-      accentBg: "rgba(229, 153, 52, 0.15)",
-      glow: "transparent",
-      border: "rgba(229, 153, 52, 0.38)"
+      color: "#fbbf24",
+      rgb: "251, 191, 36",
+      accentBg: "rgba(251, 191, 36, 0.12)",
+      glow: "rgba(251, 191, 36, 0.18)",
+      border: "rgba(251, 191, 36, 0.32)"
     },
     high: {
       id: "high",
-      color: "#e06c35",
-      accentBg: "rgba(224, 108, 53, 0.16)",
-      glow: "transparent",
-      border: "rgba(224, 108, 53, 0.44)"
+      color: "#fb923c",
+      rgb: "251, 146, 60",
+      accentBg: "rgba(251, 146, 60, 0.13)",
+      glow: "rgba(251, 146, 60, 0.20)",
+      border: "rgba(251, 146, 60, 0.36)"
     },
     critical: {
       id: "critical",
-      color: "#e04644",
-      accentBg: "rgba(224, 70, 68, 0.18)",
-      glow: "transparent",
-      border: "rgba(224, 70, 68, 0.52)"
+      color: "#f43f5e",
+      rgb: "244, 63, 94",
+      accentBg: "rgba(244, 63, 94, 0.14)",
+      glow: "rgba(244, 63, 94, 0.22)",
+      border: "rgba(244, 63, 94, 0.42)"
     },
     banned: {
       id: "banned",
-      color: "#e04644",
-      accentBg: "rgba(224, 70, 68, 0.22)",
-      glow: "transparent",
-      border: "rgba(224, 70, 68, 0.62)"
+      color: "#f43f5e",
+      rgb: "244, 63, 94",
+      accentBg: "rgba(244, 63, 94, 0.18)",
+      glow: "rgba(244, 63, 94, 0.26)",
+      border: "rgba(244, 63, 94, 0.52)"
     }
   };
   function probabilityToTier(probability, isBanned = false) {
@@ -591,7 +597,7 @@
     const eff = computeEffectiveLiveRisk(res, liveClock, res.primaryFormat);
     const lines = [];
     if (lang === "tr") {
-      lines.push(`[Chess Sentinel v4.0 - Adil Oyun Kanit Ozeti]`);
+      lines.push(`[Chess Sentinel v4.1 - Adil Oyun Kanit Ozeti]`);
       lines.push(
         `Oyuncu: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Hesap Yasi: ${res.accountAgeDays !== null ? `${res.accountAgeDays} gun` : "Bilinmiyor"}`
       );
@@ -644,7 +650,7 @@
         }
       }
     } else {
-      lines.push(`[Chess Sentinel v4.0 - Fair-Play Evidence Summary]`);
+      lines.push(`[Chess Sentinel v4.1 - Fair-Play Evidence Summary]`);
       lines.push(
         `Player: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Account Age: ${res.accountAgeDays !== null ? `${res.accountAgeDays} days` : "Unknown"}`
       );
@@ -1034,9 +1040,21 @@
 
   // src/utils/icons.ts
   var ICONS = {
-    mark: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path d="M8 1.5L2.5 3.8v4.1c0 3.55 2.34 6.58 5.5 7.6 3.16-1.02 5.5-4.05 5.5-7.6V3.8L8 1.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-    <path d="M5.8 8.1l1.5 1.5 3-3.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    mark: `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M8 1.4L2.4 3.7v4.15c0 3.62 2.38 6.72 5.6 7.75 3.22-1.03 5.6-4.13 5.6-7.75V3.7L8 1.4z" fill="currentColor" fill-opacity="0.14" stroke="currentColor" stroke-width="1.45" stroke-linejoin="round"/>
+    <path d="M5.65 8.15l1.55 1.55 3.15-3.25" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`,
+    shieldCheck: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    <path d="m9 12 2 2 4-4"/>
+  </svg>`,
+    alertTriangle: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+    <path d="M12 9v4"/>
+    <path d="M12 17h.01"/>
+  </svg>`,
+    activity: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
   </svg>`,
     swap: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     <path d="M7 16V4m0 0L3 8m4-4l4 4"/>
@@ -1105,13 +1123,14 @@
   var HUD_SHADOW_CSS = `
   :host {
     all: initial;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    color: #e7e5e4;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    color: #f4f4f5;
     z-index: 2147483640;
     position: fixed;
     pointer-events: none;
     inset: 0;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   * {
@@ -1119,45 +1138,66 @@
   }
 
   .sentinel-card {
+    --tier-color: #34d399;
+    --tier-rgb: 52, 211, 153;
     pointer-events: auto;
     position: fixed;
     top: 64px;
-    right: 16px;
-    width: 336px;
+    right: 18px;
+    width: 350px;
     max-height: calc(100vh - 80px);
     display: flex;
     flex-direction: column;
-    background: #21201d;
-    border: 1px solid #383530;
-    border-radius: 8px;
-    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.56), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+    background: linear-gradient(180deg, rgba(24, 25, 30, 0.96) 0%, rgba(15, 16, 20, 0.98) 100%);
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 14px;
+    box-shadow:
+      0 26px 60px -12px rgba(0, 0, 0, 0.72),
+      0 8px 22px -6px rgba(0, 0, 0, 0.48),
+      inset 0 1px 0 rgba(255, 255, 255, 0.09);
     overflow: hidden;
-    transition: opacity 0.16s ease, transform 0.16s ease;
+    transition:
+      opacity 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+    animation: cardEnter 0.26s cubic-bezier(0.22, 1, 0.36, 1);
     user-select: none;
+  }
+
+  @keyframes cardEnter {
+    from {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
   }
 
   .sentinel-card.hidden {
     opacity: 0;
     pointer-events: none;
-    transform: translateY(-4px);
+    transform: translateY(-6px) scale(0.985);
   }
 
   .hud-scroll-body {
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: thin;
-    scrollbar-color: #3f3c37 transparent;
+    scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
   }
 
   /* Titlebar */
   .hud-header {
-    height: 34px;
+    height: 38px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 8px 0 11px;
-    background: #1a1917;
-    border-bottom: 1px solid #302e2a;
+    padding: 0 9px 0 13px;
+    background: rgba(255, 255, 255, 0.018);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     cursor: grab;
     flex-shrink: 0;
   }
@@ -1169,39 +1209,49 @@
   .brand {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
     min-width: 0;
   }
 
-  .brand-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--tier-color, #81b64c);
-    flex-shrink: 0;
+  .brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--tier-color);
   }
 
   .brand-title {
-    font-size: 12px;
+    font-size: 12.5px;
     font-weight: 600;
-    color: #d6d3ce;
-    letter-spacing: -0.01em;
+    color: #f4f4f5;
+    letter-spacing: -0.015em;
   }
 
   .surface-tag {
-    font-size: 9.5px;
+    font-size: 10px;
     font-weight: 600;
-    padding: 1px 5px;
-    border-radius: 3px;
-    background: #292724;
-    color: #a8a29e;
-    border: 1px solid #36332e;
+    padding: 1.5px 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #a1a1aa;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
 
   .surface-tag.live {
-    color: #95c95f;
-    border-color: rgba(129, 182, 76, 0.32);
-    background: rgba(129, 182, 76, 0.1);
+    color: #6ee7b7;
+    border-color: rgba(52, 211, 153, 0.24);
+    background: rgba(52, 211, 153, 0.09);
+  }
+
+  .live-pulse {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #34d399;
+    box-shadow: 0 0 6px rgba(52, 211, 153, 0.7);
   }
 
   .header-actions {
@@ -1214,10 +1264,10 @@
     appearance: none;
     border: 1px solid transparent;
     background: transparent;
-    color: #9c968f;
-    border-radius: 4px;
-    height: 24px;
-    min-width: 24px;
+    color: #a1a1aa;
+    border-radius: 6px;
+    height: 25px;
+    min-width: 25px;
     padding: 0 5px;
     font-size: 10.5px;
     font-weight: 600;
@@ -1226,50 +1276,58 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: background-color 0.12s ease, color 0.12s ease;
+    transition: all 0.14s ease;
   }
 
   .icon-btn:hover {
-    background: #2c2a26;
-    color: #f5f5f4;
+    background: rgba(255, 255, 255, 0.07);
+    color: #fafafa;
   }
 
   .icon-btn.active {
-    color: #e59934;
-    background: rgba(229, 153, 52, 0.12);
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.12);
+    border-color: rgba(251, 191, 36, 0.25);
   }
 
   .lang-btn {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
     font-size: 10px;
-    color: #b8b2aa;
+    letter-spacing: 0.02em;
+    color: #d4d4d8;
   }
 
-  /* Critical / Abort Callout Bar (only shown on danger/banned) */
+  /* Critical / Abort Banner */
   .alert-banner {
-    padding: 6px 12px;
+    margin: 10px 12px 0;
+    padding: 7px 10px;
+    border-radius: 9px;
     font-size: 11px;
     font-weight: 600;
     line-height: 1.35;
-    border-bottom: 1px solid #302e2a;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(244, 63, 94, 0.12);
+    border: 1px solid rgba(244, 63, 94, 0.32);
+    color: #fda4af;
   }
 
-  .alert-banner.banned,
-  .alert-banner.abort-warn {
-    background: rgba(224, 70, 68, 0.15);
-    color: #fca5a5;
-    border-bottom-color: rgba(224, 70, 68, 0.35);
-  }
-
-  /* Identity + Tabular Score Readout */
+  /* Hero Section with Subtle Ambient Radial Wash + 240-deg Instrument Dial */
   .hero {
-    padding: 11px 12px 10px;
-    border-bottom: 1px solid #2e2c28;
+    position: relative;
+    padding: 13px 13px 12px;
+    background: radial-gradient(
+      170px 115px at 88% 24%,
+      rgba(var(--tier-rgb), 0.15) 0%,
+      rgba(var(--tier-rgb), 0) 78%
+    );
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .hero-top {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 10px;
   }
@@ -1277,25 +1335,43 @@
   .identity {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 10px;
     min-width: 0;
     flex: 1;
   }
 
-  .avatar {
-    width: 34px;
-    height: 34px;
-    border-radius: 5px;
-    object-fit: cover;
-    border: 1px solid #3a3732;
-    background: #2b2926;
+  .avatar-wrap {
+    position: relative;
+    width: 40px;
+    height: 40px;
     flex-shrink: 0;
+  }
+
+  .avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: linear-gradient(145deg, #27272a, #18181b);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 700;
-    color: #d6d3ce;
+    color: #e4e4e7;
+  }
+
+  .avatar-dot {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--tier-color);
+    border: 2px solid #16171b;
   }
 
   .id-meta {
@@ -1311,9 +1387,9 @@
   }
 
   .title-pill {
-    padding: 1px 4px;
-    border-radius: 3px;
-    background: #a62b28;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #dc2626, #b91c1c);
     color: #fff;
     font-size: 9.5px;
     font-weight: 700;
@@ -1322,9 +1398,10 @@
   }
 
   .username-link {
-    font-size: 13.5px;
-    font-weight: 600;
-    color: #f5f5f4;
+    font-size: 14.5px;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    color: #fafafa;
     text-decoration: none;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1332,114 +1409,170 @@
   }
 
   .username-link:hover {
+    color: #fff;
     text-decoration: underline;
   }
 
   .iso-tag {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
     font-size: 9.5px;
     font-weight: 600;
-    color: #8c867e;
-    background: #2a2825;
-    padding: 0 4px;
-    border-radius: 3px;
-    border: 1px solid #36332e;
+    color: #a1a1aa;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 1px 4.5px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     flex-shrink: 0;
   }
 
   .sub-meta-row {
-    margin-top: 2px;
+    margin-top: 3px;
     font-size: 11px;
-    color: #9c968f;
+    color: #a1a1aa;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
+    flex-wrap: wrap;
     font-variant-numeric: tabular-nums;
   }
 
-  .score-readout {
-    text-align: right;
-    flex-shrink: 0;
-    padding-left: 8px;
-    border-left: 2px solid var(--tier-color, #81b64c);
-  }
-
-  .score-num {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 22px;
-    font-weight: 700;
-    line-height: 1;
-    letter-spacing: -0.03em;
-    color: var(--tier-color, #81b64c);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .score-tier {
-    margin-top: 3px;
+  .tier-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6.5px;
+    border-radius: 999px;
     font-size: 10px;
     font-weight: 600;
-    color: #d6d3ce;
+    color: var(--tier-color);
+    background: rgba(var(--tier-rgb), 0.12);
+    border: 1px solid rgba(var(--tier-rgb), 0.28);
   }
 
-  /* Segmented Risk Meter */
-  .meter-wrap {
-    margin-top: 9px;
-  }
-
-  .meter-track {
+  /* 240-Degree Precision Instrument Arc Dial */
+  .dial-wrap {
     position: relative;
-    height: 4px;
-    background: #171614;
-    border-radius: 2px;
-    overflow: hidden;
+    width: 70px;
+    height: 62px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  .meter-fill {
-    height: 100%;
-    background: var(--tier-color, #81b64c);
-    border-radius: 2px;
-    transition: width 0.35s ease, background-color 0.25s ease;
+  .dial-svg {
+    width: 70px;
+    height: 62px;
+    overflow: visible;
   }
 
-  .meter-ticks {
-    position: relative;
-    height: 0;
+  .dial-track {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.08);
+    stroke-width: 5;
+    stroke-linecap: round;
   }
 
-  .verdict-line {
-    margin-top: 7px;
+  .dial-fill {
+    fill: none;
+    stroke: var(--tier-color);
+    stroke-width: 5;
+    stroke-linecap: round;
+    filter: drop-shadow(0 0 8px rgba(var(--tier-rgb), 0.35));
+    transition: stroke-dasharray 0.55s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.25s ease;
+  }
+
+  .dial-center {
+    position: absolute;
+    inset: 4px 0 0 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .dial-num {
+    font-size: 19px;
+    font-weight: 750;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    color: #fafafa;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dial-num small {
     font-size: 11px;
+    font-weight: 600;
+    color: var(--tier-color);
+    margin: 0 0.5px;
+  }
+
+  .dial-lbl {
+    margin-top: 3px;
+    font-size: 8.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #71717a;
+  }
+
+  /* Soft Verdict Pill */
+  .verdict-callout {
+    margin-top: 10px;
+    padding: 7px 10px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 11.2px;
     line-height: 1.38;
-    color: #a8a29e;
+    color: #d4d4d8;
   }
 
-  .verdict-line.warn {
-    color: #f3c37a;
+  .verdict-icon {
+    margin-top: 1px;
+    color: var(--tier-color);
+    flex-shrink: 0;
+    display: inline-flex;
   }
 
-  .verdict-line.danger {
-    color: #fca5a5;
-    font-weight: 500;
+  .verdict-callout.warn {
+    background: rgba(251, 191, 36, 0.07);
+    border-color: rgba(251, 191, 36, 0.22);
+    color: #fde68a;
   }
 
-  /* 3-View Segmented Navigation */
+  .verdict-callout.danger {
+    background: rgba(244, 63, 94, 0.09);
+    border-color: rgba(244, 63, 94, 0.28);
+    color: #fecdd3;
+  }
+
+  /* Raycast-Style Segmented Control */
+  .view-tabs-shell {
+    padding: 8px 12px 2px;
+    flex-shrink: 0;
+  }
+
   .view-tabs {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 2px;
-    padding: 5px 10px;
-    background: #1b1a17;
-    border-bottom: 1px solid #2e2c28;
-    flex-shrink: 0;
+    gap: 3px;
+    padding: 3px;
+    background: rgba(0, 0, 0, 0.34);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 9px;
   }
 
   .view-tab {
     appearance: none;
-    border: 1px solid transparent;
+    border: none;
     background: transparent;
-    color: #9c968f;
-    border-radius: 4px;
-    padding: 4px 6px;
+    color: #a1a1aa;
+    border-radius: 6.5px;
+    padding: 5px 6px;
     font-size: 11px;
     font-weight: 600;
     font-family: inherit;
@@ -1448,56 +1581,55 @@
     align-items: center;
     justify-content: center;
     gap: 5px;
-    transition: background-color 0.12s ease, color 0.12s ease;
+    transition: all 0.15s ease;
   }
 
   .view-tab:hover {
-    color: #e7e5e4;
-    background: #252320;
+    color: #e4e4e7;
   }
 
   .view-tab.active {
-    background: #2c2a26;
-    color: #f5f5f4;
-    border-color: #3d3a34;
+    background: rgba(255, 255, 255, 0.09);
+    color: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.09);
   }
 
   .tab-count {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
     font-size: 9.5px;
-    padding: 0 4px;
-    border-radius: 3px;
-    background: #191816;
-    color: #a8a29e;
+    padding: 0.5px 4.5px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.07);
+    color: #d4d4d8;
   }
 
   .tab-count.alert {
-    background: rgba(224, 70, 68, 0.22);
-    color: #fca5a5;
+    background: rgba(244, 63, 94, 0.24);
+    color: #fda4af;
   }
 
   /* Tab Content Container */
   .tab-pane {
-    padding: 10px 12px;
+    padding: 9px 12px 12px;
     display: flex;
     flex-direction: column;
     gap: 10px;
   }
 
-  /* Speed Switcher */
+  /* Speed Pills */
   .format-tabs {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 4px;
+    gap: 6px;
   }
 
   .fmt-tab {
     appearance: none;
-    border: 1px solid #302e2a;
-    background: #1b1a17;
-    color: #9c968f;
-    border-radius: 4px;
-    padding: 4px 7px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.025);
+    color: #a1a1aa;
+    border-radius: 8px;
+    padding: 5px 8px;
     font-size: 10.5px;
     font-weight: 600;
     font-family: inherit;
@@ -1506,129 +1638,108 @@
     align-items: center;
     justify-content: space-between;
     text-transform: capitalize;
-    transition: border-color 0.12s ease, color 0.12s ease, background-color 0.12s ease;
+    transition: all 0.14s ease;
   }
 
   .fmt-tab:hover {
-    border-color: #423f39;
-    color: #e7e5e4;
+    background: rgba(255, 255, 255, 0.05);
+    color: #f4f4f5;
   }
 
   .fmt-tab.active {
-    background: #2a2824;
-    border-color: #524e47;
-    color: #f5f5f4;
+    background: rgba(var(--tier-rgb), 0.1);
+    border-color: rgba(var(--tier-rgb), 0.3);
+    color: #ffffff;
   }
 
   .fmt-elo {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
     font-size: 10.5px;
-    color: #d6d3ce;
+    font-weight: 650;
+    color: #e4e4e7;
   }
 
-  /* Hairline 3x2 Telemetry Grid */
-  .metric-table {
+  /* Sculpted 2x3 Metric Cards */
+  .metric-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 1px;
-    background: #302e2a;
-    border: 1px solid #302e2a;
-    border-radius: 5px;
-    overflow: hidden;
+    gap: 6px;
   }
 
-  .metric-cell {
-    background: #21201d;
-    padding: 6px 8px;
+  .metric-card {
+    background: rgba(255, 255, 255, 0.028);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    border-radius: 9px;
+    padding: 7px 9px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
     min-width: 0;
   }
 
   .metric-lbl {
     font-size: 10px;
-    color: #8c867e;
+    font-weight: 500;
+    color: #71717a;
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
 
+  .metric-val-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px;
+    min-width: 0;
+  }
+
   .metric-val {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 11.5px;
-    font-weight: 600;
-    color: #e7e5e4;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #f4f4f5;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
-  .metric-val.pos { color: #95c95f; }
-  .metric-val.warn { color: #e59934; }
-  .metric-val.neg { color: #ef6b68; }
+  .metric-val.pos { color: #34d399; }
+  .metric-val.warn { color: #fbbf24; }
+  .metric-val.neg { color: #fb7185; }
 
   .metric-sub {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
     font-size: 10px;
-    font-weight: 400;
-    color: #8c867e;
+    color: #a1a1aa;
+    white-space: nowrap;
   }
 
-  /* Form Squares */
+  /* Form Micro-Pills */
   .form-dots {
     display: inline-flex;
     align-items: center;
-    gap: 2px;
+    gap: 2.5px;
   }
 
   .form-dot {
     width: 6px;
     height: 6px;
-    border-radius: 1.5px;
+    border-radius: 2px;
   }
-  .form-dot.W { background: #81b64c; }
-  .form-dot.L { background: #ca3431; }
-  .form-dot.D { background: #78716c; }
+  .form-dot.W { background: #34d399; }
+  .form-dot.L { background: #f43f5e; }
+  .form-dot.D { background: #71717a; }
 
-  /* Findings List (Clean Dot-Prefixed Lines, Zero Rainbow Boxes) */
-  .flags-list {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
-
-  .flag-line {
-    display: flex;
-    align-items: flex-start;
-    gap: 7px;
-    font-size: 11px;
-    line-height: 1.35;
-    color: #d6d3ce;
-  }
-
-  .flag-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    margin-top: 5px;
-    flex-shrink: 0;
-  }
-  .flag-dot.danger { background: #e04644; }
-  .flag-dot.warning { background: #e59934; }
-  .flag-dot.info { background: #6ba4d9; }
-  .flag-dot.positive { background: #81b64c; }
-
-  /* Pinpointed Suspect Games */
+  /* Pinpointed Suspect Games Timeline Card */
   .pinpoint-panel {
-    border: 1px solid rgba(224, 70, 68, 0.36);
-    background: rgba(224, 70, 68, 0.07);
-    border-radius: 5px;
-    padding: 7px 8px;
+    border: 1px solid rgba(244, 63, 94, 0.28);
+    background: linear-gradient(180deg, rgba(244, 63, 94, 0.08) 0%, rgba(244, 63, 94, 0.03) 100%);
+    border-radius: 10px;
+    padding: 8px 10px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 7px;
   }
 
   .sec-head {
@@ -1637,34 +1748,36 @@
     justify-content: space-between;
     font-size: 10.5px;
     font-weight: 600;
-    color: #a8a29e;
+    color: #a1a1aa;
   }
 
   .pinpoint-panel .sec-head {
-    color: #f89896;
+    color: #fda4af;
   }
 
   .pinpoint-item {
-    padding-top: 5px;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 6px 8px;
+    border-radius: 7px;
+    background: rgba(0, 0, 0, 0.26);
+    border-left: 2px solid #f43f5e;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 2.5px;
   }
 
   .pinpoint-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 600;
-    color: #f5f5f4;
+    color: #f4f4f5;
   }
 
   .pinpoint-open {
     font-size: 10px;
     font-weight: 600;
-    color: #9c968f;
+    color: #93c5fd;
     text-decoration: none;
     display: inline-flex;
     align-items: center;
@@ -1672,29 +1785,58 @@
   }
 
   .pinpoint-open:hover {
-    color: #f5f5f4;
+    text-decoration: underline;
   }
 
   .pinpoint-body {
     font-size: 10.5px;
-    line-height: 1.32;
-    color: #e7e5e4;
+    line-height: 1.35;
+    color: #e4e4e7;
   }
 
   .pinpoint-san {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
     font-size: 9.5px;
-    color: #9c968f;
+    color: #a1a1aa;
   }
+
+  /* Clean Insight Bullet Rows */
+  .flags-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 2px 2px 0;
+  }
+
+  .flag-line {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 11px;
+    line-height: 1.38;
+    color: #d4d4d8;
+  }
+
+  .flag-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-top: 4.5px;
+    flex-shrink: 0;
+  }
+  .flag-dot.danger { background: #f43f5e; box-shadow: 0 0 6px rgba(244, 63, 94, 0.5); }
+  .flag-dot.warning { background: #fbbf24; }
+  .flag-dot.info { background: #60a5fa; }
+  .flag-dot.positive { background: #34d399; }
 
   /* Collapsible Signal Breakdown */
   .details-toggle {
     width: 100%;
-    padding: 5px 8px;
-    border-radius: 4px;
-    border: 1px solid #302e2a;
-    background: #1b1a17;
-    color: #a8a29e;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.025);
+    color: #a1a1aa;
     font-size: 10.5px;
     font-weight: 600;
     font-family: inherit;
@@ -1702,18 +1844,19 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    transition: all 0.14s ease;
   }
 
   .details-toggle:hover {
-    color: #e7e5e4;
-    border-color: #3f3c36;
+    background: rgba(255, 255, 255, 0.05);
+    color: #f4f4f5;
   }
 
   .signals-panel {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding-top: 2px;
+    gap: 7px;
+    padding: 4px 2px 0;
   }
 
   .signals-panel.collapsed {
@@ -1723,167 +1866,156 @@
   .sig-row {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 3.5px;
   }
 
   .sig-head {
     display: flex;
     justify-content: space-between;
     font-size: 10.5px;
-    color: #a8a29e;
+    color: #a1a1aa;
   }
 
   .sig-score {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
     font-weight: 600;
-    color: #d6d3ce;
+    color: #e4e4e7;
   }
 
   .sig-bar-bg {
-    height: 3px;
-    border-radius: 1.5px;
-    background: #161513;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.07);
     overflow: hidden;
   }
 
   .sig-bar-fill {
     height: 100%;
-    border-radius: 1.5px;
-    transition: width 0.35s ease;
+    border-radius: 999px;
+    transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  /* Clock & Histogram Panels */
+  /* Smooth Vector SVG Chronogram & Distribution Cards */
   .chart-box {
-    border: 1px solid #302e2a;
-    background: #1b1a17;
-    border-radius: 5px;
-    padding: 8px 9px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.025);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+    padding: 9px 10px;
     display: flex;
     flex-direction: column;
-    gap: 7px;
+    gap: 8px;
   }
 
   .chart-box.suspect {
-    border-color: rgba(224, 70, 68, 0.44);
+    border-color: rgba(244, 63, 94, 0.34);
+    background: linear-gradient(180deg, rgba(244, 63, 94, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%);
   }
 
   .empty-note {
     font-size: 11px;
-    color: #8c867e;
-    padding: 8px 2px;
-    line-height: 1.4;
+    color: #71717a;
+    padding: 10px 2px;
+    line-height: 1.45;
   }
 
-  .live-spark-bars {
-    display: flex;
-    align-items: flex-end;
-    gap: 2px;
-    height: 44px;
-    padding-top: 4px;
-  }
-
-  .live-spark-item {
-    flex: 1;
-    min-width: 6px;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 3px;
-  }
-
-  .live-spark-col {
+  .chrono-svg-wrap {
     width: 100%;
-    border-radius: 1.5px 1.5px 0 0;
-    min-height: 3px;
+    height: 82px;
+    position: relative;
   }
 
-  .live-spark-num {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 8px;
-    color: #78716c;
-    line-height: 1;
-  }
-
-  .live-spark-num.suspect {
-    color: #fca5a5;
-    font-weight: 700;
-  }
-
-  .live-spark-num.pause {
-    color: #e59934;
-    font-weight: 700;
+  .chrono-svg {
+    width: 100%;
+    height: 82px;
+    display: block;
+    overflow: visible;
   }
 
   .move-chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 3px;
+    gap: 4px;
   }
 
   .move-chip {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
     font-size: 9.5px;
-    padding: 1px 5px;
-    border-radius: 3px;
-    background: #252320;
-    color: #b8b2aa;
-    border: 1px solid #33302b;
+    padding: 2px 5.5px;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.04);
+    color: #d4d4d8;
+    border: 1px solid rgba(255, 255, 255, 0.07);
   }
 
   .move-chip.suspect {
-    border-color: rgba(224, 70, 68, 0.45);
-    color: #fca5a5;
+    background: rgba(244, 63, 94, 0.14);
+    border-color: rgba(244, 63, 94, 0.35);
+    color: #fda4af;
   }
 
   .live-suspect-msg {
     font-size: 10.5px;
-    color: #fca5a5;
-    line-height: 1.35;
+    font-weight: 500;
+    color: #fda4af;
+    line-height: 1.38;
+    padding-top: 2px;
+    border-top: 1px solid rgba(244, 63, 94, 0.18);
   }
 
+  /* Sculpted 7-Bin Capsule Histogram */
   .hist-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
-    align-items: end;
-    height: 46px;
+    gap: 6px;
+    height: 64px;
+    padding-top: 2px;
   }
 
   .hist-col-wrap {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-end;
     height: 100%;
-    gap: 3px;
+    gap: 4px;
+  }
+
+  .hist-track {
+    flex: 1;
+    width: 100%;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.035);
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+    padding: 1px;
   }
 
   .hist-bar {
     width: 100%;
-    border-radius: 1.5px 1.5px 0 0;
-    min-height: 2px;
+    border-radius: 4px;
+    min-height: 3px;
+    transition: height 0.35s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .hist-lbl {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 8px;
-    color: #78716c;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 8.5px;
+    color: #71717a;
   }
 
-  /* Recent Games List + Expandable Per-Game Sparkline */
+  /* Recent Games List + Smooth Inline SVG Sparkline Drawer */
   .matches-list {
     display: flex;
     flex-direction: column;
-    border: 1px solid #302e2a;
-    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 10px;
     overflow: hidden;
-    background: #1b1a17;
+    background: rgba(255, 255, 255, 0.02);
   }
 
   .match-block {
-    border-bottom: 1px solid #2a2824;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   }
 
   .match-block:last-child {
@@ -1894,29 +2026,29 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 6px 8px;
+    padding: 7px 9px;
     gap: 6px;
     font-size: 11px;
-    color: #e7e5e4;
+    color: #f4f4f5;
+    transition: background 0.12s ease;
   }
 
   .match-row:hover {
-    background: #24221f;
+    background: rgba(255, 255, 255, 0.035);
   }
 
   .match-left {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
     min-width: 0;
     flex: 1;
   }
 
   .match-res {
-    width: 15px;
-    height: 15px;
-    border-radius: 3px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    width: 17px;
+    height: 17px;
+    border-radius: 5px;
     font-size: 9.5px;
     font-weight: 700;
     display: inline-flex;
@@ -1925,107 +2057,97 @@
     flex-shrink: 0;
   }
 
-  .match-res.W { background: rgba(129, 182, 76, 0.2); color: #95c95f; }
-  .match-res.L { background: rgba(202, 52, 49, 0.2); color: #ef6b68; }
-  .match-res.D { background: rgba(140, 134, 126, 0.2); color: #b8b2aa; }
+  .match-res.W { background: rgba(52, 211, 153, 0.16); color: #34d399; }
+  .match-res.L { background: rgba(244, 63, 94, 0.16); color: #fb7185; }
+  .match-res.D { background: rgba(161, 161, 170, 0.16); color: #d4d4d8; }
 
   .match-opp {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-weight: 500;
-    color: #d6d3ce;
+    font-weight: 550;
+    color: #e4e4e7;
   }
 
   .match-opp-elo {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
     font-size: 10px;
-    color: #8c867e;
+    color: #71717a;
   }
 
   .match-right {
     display: flex;
     align-items: center;
     gap: 5px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
     font-size: 10px;
-    color: #9c968f;
+    color: #a1a1aa;
     flex-shrink: 0;
   }
 
   .match-acc {
-    padding: 1px 4px;
-    border-radius: 3px;
-    background: #292723;
-    color: #d6d3ce;
+    padding: 1.5px 5px;
+    border-radius: 4px;
+    background: rgba(96, 165, 250, 0.12);
+    color: #93c5fd;
+    font-weight: 600;
   }
 
   .match-acc.high {
-    background: rgba(224, 70, 68, 0.18);
-    color: #fca5a5;
+    background: rgba(244, 63, 94, 0.18);
+    color: #fda4af;
   }
 
   .match-pin-tag {
-    padding: 1px 4px;
-    border-radius: 3px;
+    padding: 1.5px 5px;
+    border-radius: 4px;
     font-size: 9px;
-    background: rgba(224, 70, 68, 0.18);
-    color: #fca5a5;
+    font-weight: 600;
+    background: rgba(244, 63, 94, 0.18);
+    color: #fda4af;
   }
 
   .mini-link-btn {
     appearance: none;
-    border: 1px solid #34312c;
-    background: #252320;
-    color: #a8a29e;
-    border-radius: 3px;
-    height: 19px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: #a1a1aa;
+    border-radius: 5px;
+    height: 20px;
     padding: 0 5px;
     font-size: 9.5px;
     font-family: inherit;
     display: inline-flex;
     align-items: center;
-    gap: 2px;
+    justify-content: center;
     cursor: pointer;
     text-decoration: none;
+    transition: all 0.12s ease;
   }
 
   .mini-link-btn:hover {
-    color: #f5f5f4;
-    border-color: #4a463f;
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.09);
   }
 
   .mini-link-btn.active {
-    background: #302d28;
-    color: #f5f5f4;
+    background: rgba(var(--tier-rgb), 0.15);
+    border-color: rgba(var(--tier-rgb), 0.35);
+    color: var(--tier-color);
   }
 
   .match-drawer {
-    padding: 6px 8px 8px;
-    background: #171614;
-    border-top: 1px solid #262420;
-  }
-
-  .drawer-bars {
-    display: flex;
-    align-items: flex-end;
-    gap: 2px;
-    height: 28px;
-  }
-
-  .drawer-bar {
-    flex: 1;
-    min-width: 3px;
-    border-radius: 1px 1px 0 0;
-    background: #6ba4d9;
+    padding: 7px 10px 9px;
+    background: rgba(0, 0, 0, 0.28);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
   }
 
   /* Footer Bar */
   .hud-footer {
-    height: 34px;
-    padding: 0 10px;
-    background: #1a1917;
-    border-top: 1px solid #302e2a;
+    height: 38px;
+    padding: 0 11px;
+    background: rgba(255, 255, 255, 0.018);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -2036,17 +2158,18 @@
   .footer-left {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
   }
 
   .footer-btn {
     appearance: none;
-    border: 1px solid #36332e;
-    background: #252320;
-    color: #d6d3ce;
-    border-radius: 4px;
-    height: 23px;
-    padding: 0 8px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    background: rgba(255, 255, 255, 0.045);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    color: #e4e4e7;
+    border-radius: 7px;
+    height: 25px;
+    padding: 0 9px;
     font-size: 10.5px;
     font-weight: 600;
     font-family: inherit;
@@ -2055,23 +2178,25 @@
     gap: 5px;
     cursor: pointer;
     text-decoration: none;
-    transition: background-color 0.12s ease, border-color 0.12s ease;
+    transition: all 0.14s ease;
   }
 
   .footer-btn:hover {
-    background: #2e2c28;
-    border-color: #4a463f;
-    color: #fff;
+    background: rgba(255, 255, 255, 0.09);
+    border-color: rgba(255, 255, 255, 0.16);
+    color: #ffffff;
   }
 
   .footer-btn.copied {
-    border-color: rgba(129, 182, 76, 0.5);
-    color: #95c95f;
+    border-color: rgba(52, 211, 153, 0.45);
+    background: rgba(52, 211, 153, 0.12);
+    color: #6ee7b7;
   }
 
   .footer-btn.report-warn {
-    border-color: rgba(224, 108, 53, 0.45);
-    color: #f3a982;
+    border-color: rgba(251, 146, 60, 0.38);
+    background: rgba(251, 146, 60, 0.1);
+    color: #fdba74;
   }
 
   .footer-right {
@@ -2081,26 +2206,30 @@
   }
 
   .kbd-hint {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
     font-size: 9.5px;
-    color: #6e6962;
+    padding: 1.5px 5px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: #71717a;
   }
 
   /* Loading State */
   .loading-box {
-    padding: 18px 14px;
+    padding: 20px 14px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 11px;
   }
 
   .spinner {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
-    border: 2px solid #36332e;
-    border-top-color: #81b64c;
-    animation: spin 0.7s linear infinite;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-top-color: #34d399;
+    animation: spin 0.72s linear infinite;
     flex-shrink: 0;
   }
 
@@ -2109,38 +2238,42 @@
   }
 
   .loading-text {
-    font-size: 12px;
-    color: #e7e5e4;
+    font-size: 12.5px;
+    color: #f4f4f5;
     font-weight: 600;
   }
 
   .loading-sub {
     font-size: 11px;
-    color: #8c867e;
-    margin-top: 1px;
+    color: #a1a1aa;
+    margin-top: 2px;
   }
 
-  /* Minimized Compact Tag */
+  /* Minimized Floating Capsule */
   .minimized-pill {
+    --tier-color: #34d399;
+    --tier-rgb: 52, 211, 153;
     pointer-events: auto;
     position: fixed;
     top: 64px;
-    right: 16px;
+    right: 18px;
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    padding: 5px 10px;
-    border-radius: 6px;
-    background: #21201d;
-    border: 1px solid #3a3732;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.48);
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(24, 25, 30, 0.95) 0%, rgba(15, 16, 20, 0.98) 100%);
+    backdrop-filter: blur(18px);
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
     cursor: pointer;
     user-select: none;
-    transition: background-color 0.12s ease;
+    transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.15s ease;
   }
 
   .minimized-pill:hover {
-    background: #292724;
+    transform: translateY(-1px);
+    border-color: rgba(255, 255, 255, 0.22);
   }
 
   .minimized-pill.hidden {
@@ -2151,21 +2284,21 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: var(--tier-color, #81b64c);
+    background: var(--tier-color);
+    box-shadow: 0 0 8px rgba(var(--tier-rgb), 0.65);
   }
 
   .min-pct {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 12px;
+    font-size: 12.5px;
     font-weight: 700;
-    color: var(--tier-color, #81b64c);
+    color: var(--tier-color);
     font-variant-numeric: tabular-nums;
   }
 
   .min-user {
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 600;
-    color: #d6d3ce;
+    color: #e4e4e7;
     max-width: 130px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2176,11 +2309,125 @@
   // src/content/hud-overlay.ts
   var HIST_LABELS = ["<0.9s", "1.8s", "3.2s", "5.5s", "9.5s", "18s", "18s+"];
   function barColor(score) {
-    if (score < 25) return "#81b64c";
-    if (score < 45) return "#6ba4d9";
-    if (score < 68) return "#e59934";
-    if (score < 82) return "#e06c35";
-    return "#e04644";
+    if (score < 25) return "#34d399";
+    if (score < 45) return "#60a5fa";
+    if (score < 68) return "#fbbf24";
+    if (score < 82) return "#fb923c";
+    return "#f43f5e";
+  }
+  function buildSmoothCurvePath(pts, minY, maxY) {
+    if (pts.length === 0) return "";
+    if (pts.length === 1) return `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+    const tau = 0.18;
+    let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[Math.max(0, i - 1)];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const p3 = pts[Math.min(pts.length - 1, i + 2)];
+      const cp1x = p1.x + (p2.x - p0.x) * tau;
+      const cp1y = Math.max(minY, Math.min(maxY, p1.y + (p2.y - p0.y) * tau));
+      const cp2x = p2.x - (p3.x - p1.x) * tau;
+      const cp2y = Math.max(minY, Math.min(maxY, p2.y - (p3.y - p1.y) * tau));
+      d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+    }
+    return d;
+  }
+  function renderSvgMoveChronogram(lc) {
+    const W = 304;
+    const H = 82;
+    const padL = 8;
+    const padR = 8;
+    const padT = 8;
+    const padB = 18;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+    const baseLineY = padT + plotH;
+    const times = lc.moveTimesSec;
+    const n = times.length;
+    const maxVal = Math.min(45, Math.max(12, ...times));
+    const yOf = (sec) => {
+      const clamped = Math.min(maxVal, Math.max(0, sec));
+      return padT + plotH - clamped / maxVal * plotH;
+    };
+    const pts = times.map((sec, i) => ({
+      x: n === 1 ? padL + plotW / 2 : padL + i / (n - 1) * plotW,
+      y: yOf(sec),
+      sec,
+      moveNo: lc.moveNumbers?.[i] ?? i + 2,
+      san: lc.moveSanLabels?.[i] || ""
+    }));
+    const linePath = buildSmoothCurvePath(pts, padT, baseLineY);
+    const areaPath = `${linePath} L ${pts[pts.length - 1].x.toFixed(1)} ${baseLineY} L ${pts[0].x.toFixed(1)} ${baseLineY} Z`;
+    const strokeColor = lc.isLiveSuspectPacing ? "#f43f5e" : "#60a5fa";
+    const gradId = lc.isLiveSuspectPacing ? "csGradDanger" : "csGradNormal";
+    const bandTopY = yOf(Math.min(maxVal, 8.2));
+    const bandBotY = yOf(2.6);
+    const bandH = Math.max(2, bandBotY - bandTopY);
+    const bandHtml = lc.isLiveSuspectPacing ? `<rect x="${padL}" y="${bandTopY.toFixed(1)}" width="${plotW}" height="${bandH.toFixed(1)}" rx="3" fill="rgba(244,63,94,0.09)" stroke="rgba(244,63,94,0.22)" stroke-dasharray="3 3" stroke-width="0.8"/>` : `<line x1="${padL}" y1="${(padT + plotH * 0.5).toFixed(1)}" x2="${padL + plotW}" y2="${(padT + plotH * 0.5).toFixed(1)}" stroke="rgba(255,255,255,0.05)" stroke-dasharray="2 3" stroke-width="1"/>`;
+    const dotsHtml = pts.map((p, idx) => {
+      const isPause = lc.pauseMoveNumber !== null && p.moveNo === lc.pauseMoveNumber;
+      const isSus = lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null && p.moveNo >= lc.roboticStartMove && p.moveNo <= lc.roboticEndMove;
+      const dotCol = isPause ? "#fbbf24" : isSus ? "#f43f5e" : p.sec <= 1.8 ? "#34d399" : "#93c5fd";
+      const r = isPause || isSus ? 3.1 : 2.3;
+      const showTick = n <= 10 || idx === 0 || idx === n - 1 || idx % Math.ceil(n / 6) === 0 || isPause;
+      const lblColor = isPause ? "#fbbf24" : isSus ? "#fda4af" : "#71717a";
+      const tip = `#${p.moveNo}${p.san ? ` ${p.san}` : ""}: ${p.sec}s`;
+      return `
+        <g>
+          <title>${escapeHtml(tip)}</title>
+          ${isSus || isPause ? `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="6" fill="${dotCol}" fill-opacity="0.18"/>` : ""}
+          <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" fill="${dotCol}" stroke="#141519" stroke-width="1"/>
+          ${showTick ? `<text x="${p.x.toFixed(1)}" y="${H - 3}" text-anchor="middle" fill="${lblColor}" font-size="8.5" font-family="ui-monospace, Menlo, monospace">#${p.moveNo}</text>` : ""}
+        </g>
+      `;
+    }).join("");
+    return `
+    <div class="chrono-svg-wrap">
+      <svg class="chrono-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="${strokeColor}" stop-opacity="0.28"/>
+            <stop offset="100%" stop-color="${strokeColor}" stop-opacity="0.0"/>
+          </linearGradient>
+        </defs>
+        ${bandHtml}
+        <line x1="${padL}" y1="${baseLineY}" x2="${padL + plotW}" y2="${baseLineY}" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+        <path d="${areaPath}" fill="url(#${gradId})"/>
+        <path d="${linePath}" fill="none" stroke="${strokeColor}" stroke-width="1.85" stroke-linecap="round"/>
+        ${dotsHtml}
+      </svg>
+    </div>
+  `;
+  }
+  function renderMiniMatchSvgSparkline(times, isSuspect, idx) {
+    const W = 296;
+    const H = 34;
+    const padX = 4;
+    const padY = 4;
+    const plotW = W - padX * 2;
+    const plotH = H - padY * 2;
+    const maxVal = Math.min(35, Math.max(10, ...times));
+    const pts = times.map((sec, i) => ({
+      x: times.length === 1 ? W / 2 : padX + i / (times.length - 1) * plotW,
+      y: padY + plotH - Math.min(maxVal, sec) / maxVal * plotH
+    }));
+    const line = buildSmoothCurvePath(pts, padY, padY + plotH);
+    const area = `${line} L ${pts[pts.length - 1].x.toFixed(1)} ${padY + plotH} L ${pts[0].x.toFixed(1)} ${padY + plotH} Z`;
+    const col = isSuspect ? "#f43f5e" : "#34d399";
+    const gid = `csMiniGrad_${idx}`;
+    return `
+    <svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="display:block">
+      <defs>
+        <linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${col}" stop-opacity="0.26"/>
+          <stop offset="100%" stop-color="${col}" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <path d="${area}" fill="url(#${gid})"/>
+      <path d="${line}" fill="none" stroke="${col}" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+  `;
   }
   var SentinelHudOverlay = class {
     host = null;
@@ -2206,7 +2453,7 @@
     dragging = false;
     dragStartX = 0;
     dragStartY = 0;
-    startRight = 16;
+    startRight = 18;
     startTop = 64;
     constructor(settings, callbacks) {
       this.settings = settings;
@@ -2408,13 +2655,16 @@
       const t = TRANSLATIONS[lang];
       const nextLang = lang === "tr" ? "EN" : "TR";
       const surfLabel = t.surfaceBadge[this.surface];
-      const surfCls = this.surface === "live" ? "live" : "";
+      const isLive = this.surface === "live";
       return `
       <div class="hud-header" data-drag-handle="1">
         <div class="brand">
-          <span class="brand-dot"></span>
+          <span class="brand-mark">${ICONS.mark}</span>
           <span class="brand-title">Chess Sentinel</span>
-          <span class="surface-tag ${surfCls}">${escapeHtml(surfLabel)}</span>
+          <span class="surface-tag ${isLive ? "live" : ""}">
+            ${isLive ? '<span class="live-pulse"></span>' : ""}
+            <span>${escapeHtml(surfLabel)}</span>
+          </span>
         </div>
         <div class="header-actions">
           <button class="icon-btn lang-btn" data-action="lang" title="TR / EN">${nextLang}</button>
@@ -2474,33 +2724,36 @@
       const t = TRANSLATIONS[lang].v3;
       const lc = this.getTargetLiveClock(res);
       if (res.isBannedFairPlay) {
-        return { cls: "danger", message: t.verdictBanned };
+        return { cls: "danger", icon: ICONS.alertTriangle, message: t.verdictBanned };
       }
       if (lc && lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null) {
         if (lc.pauseMoveNumber !== null && lc.detectedPauseSec !== null) {
           return {
             cls: "danger",
+            icon: ICONS.activity,
             message: t.verdictLiveToggle.replace("{pauseMove}", String(lc.pauseMoveNumber)).replace("{pauseSec}", String(lc.detectedPauseSec)).replace("{start}", String(lc.roboticStartMove)).replace("{end}", String(lc.roboticEndMove)).replace("{min}", String(lc.roboticMinSec ?? "-")).replace("{max}", String(lc.roboticMaxSec ?? "-"))
           };
         }
         return {
           cls: "danger",
+          icon: ICONS.activity,
           message: t.verdictLiveFlatline.replace("{start}", String(lc.roboticStartMove)).replace("{end}", String(lc.roboticEndMove)).replace("{count}", String(lc.consecutiveRoboticMoves)).replace("{min}", String(lc.roboticMinSec ?? "-")).replace("{max}", String(lc.roboticMaxSec ?? "-"))
         };
       }
       if (displayProb >= 75) {
         return {
           cls: "danger",
+          icon: ICONS.alertTriangle,
           message: this.isAbortWindowOpen ? t.verdictAbortNow.replace("{pins}", String(Math.max(1, res.suspectPinpoints.length))) : t.verdictHighWatch
         };
       }
       if (displayProb >= 55) {
-        return { cls: "warn", message: t.verdictElevatedWatch };
+        return { cls: "warn", icon: ICONS.alertTriangle, message: t.verdictElevatedWatch };
       }
       if (res.flags.some((f) => f.id === "smurf_human_pacing")) {
-        return { cls: "", message: t.verdictSmurfHuman };
+        return { cls: "", icon: ICONS.activity, message: t.verdictSmurfHuman };
       }
-      return { cls: "", message: t.verdictCleanSafe };
+      return { cls: "", icon: ICONS.shieldCheck, message: t.verdictCleanSafe };
     }
     renderSuspectPinpointsHtml(res, lang) {
       if (!res.suspectPinpoints || res.suspectPinpoints.length === 0) return "";
@@ -2570,7 +2823,7 @@
       const d7 = fmtData.eloDelta7d;
       const d7Str = d7 === null ? "0" : d7 > 0 ? `+${d7}` : `${d7}`;
       const d7Class = d7 !== null && d7 >= 100 ? "warn" : d7 !== null && d7 > 0 ? "pos" : "";
-      const streakSub = res.winStreak >= 2 ? lang === "tr" ? `${res.winStreak}G seri` : `${res.winStreak}W streak` : "";
+      const streakSub = res.winStreak >= 2 ? lang === "tr" ? `${res.winStreak}G seri` : `${res.winStreak}W` : "";
       const ageStr = formatAgeShort(res.accountAgeDays, lang);
       const totalGames = res.formats.rapid.overallTotal + res.formats.blitz.overallTotal + res.formats.bullet.overallTotal + res.formats.daily.overallTotal;
       const gamesSub = t.stats.lifetimeGames.replace("{count}", String(totalGames));
@@ -2607,38 +2860,56 @@
       <div class="tab-pane">
         <div class="format-tabs">${formatTabsHtml}</div>
 
-        <div class="metric-table">
-          <div class="metric-cell">
+        <div class="metric-grid">
+          <div class="metric-card">
             <div class="metric-lbl">
               <span>${escapeHtml(t.stats.recentRecord)}</span>
               <span class="form-dots">${formDotsHtml}</span>
             </div>
-            <div class="metric-val">${escapeHtml(wldVal)} <span class="metric-sub">${escapeHtml(wldSub)}</span></div>
+            <div class="metric-val-row">
+              <span class="metric-val">${escapeHtml(wldVal)}</span>
+              <span class="metric-sub">${escapeHtml(wldSub)}</span>
+            </div>
           </div>
 
-          <div class="metric-cell">
+          <div class="metric-card">
             <div class="metric-lbl"><span>${escapeHtml(t.stats.performance)}</span></div>
-            <div class="metric-val ${zClass}">${escapeHtml(perfStr)} <span class="metric-sub">${zSign}${fmtData.eloZScore}\u03C3</span></div>
+            <div class="metric-val-row">
+              <span class="metric-val ${zClass}">${escapeHtml(perfStr)}</span>
+              <span class="metric-sub">${zSign}${fmtData.eloZScore}\u03C3</span>
+            </div>
           </div>
 
-          <div class="metric-cell">
+          <div class="metric-card">
             <div class="metric-lbl"><span>${escapeHtml(t.stats.avgAccuracy)}</span></div>
-            <div class="metric-val ${accClass}">${escapeHtml(accStr)} <span class="metric-sub">${escapeHtml(t.stats.expectedShort)} ${fmtData.expectedAccuracy}%</span></div>
+            <div class="metric-val-row">
+              <span class="metric-val ${accClass}">${escapeHtml(accStr)}</span>
+              <span class="metric-sub">${escapeHtml(t.stats.expectedShort)} ${fmtData.expectedAccuracy}%</span>
+            </div>
           </div>
 
-          <div class="metric-cell">
+          <div class="metric-card">
             <div class="metric-lbl"><span>${escapeHtml(t.stats.moveCV)}</span></div>
-            <div class="metric-val ${cvClass}">${escapeHtml(paceStr)} <span class="metric-sub">${escapeHtml(paceSub)}</span></div>
+            <div class="metric-val-row">
+              <span class="metric-val ${cvClass}">${escapeHtml(paceStr)}</span>
+              <span class="metric-sub">${escapeHtml(paceSub)}</span>
+            </div>
           </div>
 
-          <div class="metric-cell">
+          <div class="metric-card">
             <div class="metric-lbl"><span>${escapeHtml(t.stats.elo7d)}</span></div>
-            <div class="metric-val ${d7Class}">${escapeHtml(d7Str)} <span class="metric-sub">${escapeHtml(streakSub)}</span></div>
+            <div class="metric-val-row">
+              <span class="metric-val ${d7Class}">${escapeHtml(d7Str)}</span>
+              <span class="metric-sub">${escapeHtml(streakSub)}</span>
+            </div>
           </div>
 
-          <div class="metric-cell">
+          <div class="metric-card">
             <div class="metric-lbl"><span>${escapeHtml(t.stats.accountAge)}</span></div>
-            <div class="metric-val">${escapeHtml(ageStr)} <span class="metric-sub">${escapeHtml(gamesSub)}</span></div>
+            <div class="metric-val-row">
+              <span class="metric-val">${escapeHtml(ageStr)}</span>
+              <span class="metric-sub">${escapeHtml(gamesSub)}</span>
+            </div>
           </div>
         </div>
 
@@ -2668,24 +2939,8 @@
         </div>
       `;
       } else {
-        const maxSec = Math.max(12, ...lc.moveTimesSec);
-        const barsHtml = lc.moveTimesSec.map((sec, idx) => {
-          const moveNo = lc.moveNumbers?.[idx] ?? idx + 2;
-          const san = lc.moveSanLabels?.[idx] || "";
-          const isPauseMove = lc.pauseMoveNumber !== null && moveNo === lc.pauseMoveNumber;
-          const isInRoboticRange = lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null && moveNo >= lc.roboticStartMove && moveNo <= lc.roboticEndMove;
-          const hPx = Math.max(3, Math.min(32, Math.round(sec / maxSec * 32)));
-          const color = isPauseMove ? "#e59934" : isInRoboticRange ? "#e04644" : sec <= 1.8 ? "#81b64c" : sec >= 18 ? "#d9922b" : "#6ba4d9";
-          const numCls = isPauseMove ? "pause" : isInRoboticRange ? "suspect" : "";
-          const tip = `#${moveNo}${san ? ` (${san})` : ""}: ${sec}s`;
-          return `
-            <div class="live-spark-item" title="${escapeHtml(tip)}">
-              <div class="live-spark-col" style="height:${hPx}px;background:${color}"></div>
-              <span class="live-spark-num ${numCls}">${moveNo}</span>
-            </div>
-          `;
-        }).join("");
-        const recentChipsHtml = lc.moveTimesSec.slice(-8).map((sec, idx, arr) => {
+        const chronoSvg = renderSvgMoveChronogram(lc);
+        const recentChipsHtml = lc.moveTimesSec.slice(-6).map((sec, idx, arr) => {
           const globalIdx = lc.moveTimesSec.length - arr.length + idx;
           const moveNo = lc.moveNumbers?.[globalIdx] ?? globalIdx + 2;
           const san = lc.moveSanLabels?.[globalIdx] || "";
@@ -2710,7 +2965,7 @@
             <span>${escapeHtml(headTitle)}</span>
             <span>${escapeHtml(statsText)}</span>
           </div>
-          <div class="live-spark-bars">${barsHtml}</div>
+          ${chronoSvg}
           <div class="move-chips">${recentChipsHtml}</div>
           ${pinpointMsg ? `<div class="live-suspect-msg">${escapeHtml(pinpointMsg)}</div>` : ""}
         </div>
@@ -2721,13 +2976,15 @@
         const dist = res.pacing.bucketDistribution;
         const maxRatio = Math.max(0.25, ...dist);
         const colsHtml = dist.map((ratio, idx) => {
-          const hPx = Math.max(2, Math.round(ratio / maxRatio * 32));
+          const hPct = Math.max(6, Math.round(ratio / maxRatio * 100));
           const isRoboticZone = (idx === 3 || idx === 4) && res.signals.movePacing >= 55;
-          const color = isRoboticZone ? "#e04644" : idx <= 1 ? "#81b64c" : "#6ba4d9";
+          const color = isRoboticZone ? "linear-gradient(180deg, #fb7185, #e11d48)" : idx <= 1 ? "linear-gradient(180deg, #6ee7b7, #10b981)" : "linear-gradient(180deg, #93c5fd, #3b82f6)";
           const pct = Math.round(ratio * 100);
           return `
             <div class="hist-col-wrap" title="${HIST_LABELS[idx]}: ${pct}%">
-              <div class="hist-bar" style="height:${hPx}px;background:${color}"></div>
+              <div class="hist-track">
+                <div class="hist-bar" style="height:${hPct}%;background:${color}"></div>
+              </div>
               <span class="hist-lbl">${HIST_LABELS[idx]}</span>
             </div>
           `;
@@ -2759,27 +3016,18 @@
         const href = m.url || `https://www.chess.com/member/${encodeURIComponent(res.displayName)}`;
         const hasSpark = Array.isArray(m.moveTimesSec) && m.moveTimesSec.length >= 4;
         const isExpanded = this.expandedMatchIdx === idx && hasSpark;
-        let drawerHtml = "";
-        if (isExpanded && m.moveTimesSec) {
-          const maxD = Math.max(10, ...m.moveTimesSec);
-          const bars = m.moveTimesSec.map((sec, sIdx) => {
-            const h = Math.max(2, Math.min(26, Math.round(sec / maxD * 26)));
-            const col = m.pinpointKind && sec >= 2.6 && sec <= 8.5 ? "#e04644" : sec <= 1.8 ? "#81b64c" : "#6ba4d9";
-            return `<div class="drawer-bar" style="height:${h}px;background:${col}" title="#${sIdx + 2}: ${sec}s"></div>`;
-          }).join("");
-          drawerHtml = `
-            <div class="match-drawer">
-              <div class="drawer-bars">${bars}</div>
-            </div>
-          `;
-        }
+        const drawerHtml = isExpanded && m.moveTimesSec ? `<div class="match-drawer">${renderMiniMatchSvgSparkline(
+          m.moveTimesSec,
+          Boolean(m.pinpointKind),
+          idx
+        )}</div>` : "";
         return `
           <div class="match-block">
             <div class="match-row">
               <div class="match-left">
                 <span class="match-res ${m.result}">${resLbl}</span>
                 <span class="match-opp">@${escapeHtml(m.opponentUsername)}</span>
-                <span class="match-opp-elo">(${m.opponentRating})</span>
+                <span class="match-opp-elo">${m.opponentRating}</span>
               </div>
               <div class="match-right">
                 ${pinHtml}
@@ -2808,7 +3056,8 @@
       const lang = this.settings.language;
       const t = TRANSLATIONS[lang];
       if (this.loadingUsername && !this.currentResult) {
-        this.cardEl.style.setProperty("--tier-color", "#81b64c");
+        this.cardEl.style.setProperty("--tier-color", "#34d399");
+        this.cardEl.style.setProperty("--tier-rgb", "52, 211, 153");
         setSafeHtml(
           this.cardEl,
           `
@@ -2835,22 +3084,27 @@
       const eff = computeEffectiveLiveRisk(res, lc, this.selectedFormat);
       const theme = TIER_THEMES[eff.tier];
       this.cardEl.style.setProperty("--tier-color", theme.color);
+      this.cardEl.style.setProperty("--tier-rgb", theme.rgb);
       this.minPillEl.style.setProperty("--tier-color", theme.color);
+      this.minPillEl.style.setProperty("--tier-rgb", theme.rgb);
       const fmtData = res.formats[this.selectedFormat] || res.formats[res.primaryFormat];
       const displayProb = eff.probability;
+      const arcMax = 108.91;
+      const arcFill = Math.max(2.5, Math.min(100, Math.max(0, displayProb)) / 100 * arcMax);
       let alertHtml = "";
       if (res.isBannedFairPlay) {
-        alertHtml = `<div class="alert-banner banned">${escapeHtml(t.bannedFairPlayBanner)}</div>`;
+        alertHtml = `<div class="alert-banner">${ICONS.alertTriangle}<span>${escapeHtml(t.bannedFairPlayBanner)}</span></div>`;
       } else if (this.isAbortWindowOpen && displayProb >= 75) {
-        alertHtml = `<div class="alert-banner abort-warn">${escapeHtml(t.abortWindowActive)}: ${escapeHtml(
+        alertHtml = `<div class="alert-banner">${ICONS.alertTriangle}<span>${escapeHtml(t.abortWindowActive)}: ${escapeHtml(
           t.considerAborting
-        )}</div>`;
+        )}</span></div>`;
       }
       const avatarHtml = res.avatarUrl ? `<img class="avatar" src="${escapeHtml(res.avatarUrl)}" alt="" />` : `<div class="avatar">${escapeHtml(res.displayName.slice(0, 1).toUpperCase())}</div>`;
       const titleBadgeHtml = res.title ? `<span class="title-pill">${escapeHtml(res.title.toUpperCase())}</span>` : "";
       const isoHtml = res.countryCode && res.countryCode.length === 2 ? `<span class="iso-tag">${escapeHtml(res.countryCode.toUpperCase())}</span>` : "";
       const fmtRatingLabel = `${this.selectedFormat.charAt(0).toUpperCase() + this.selectedFormat.slice(1)} ${fmtData.currentRating ?? "-"}`;
-      const pctText = lang === "tr" ? `%${displayProb}` : `${displayProb}%`;
+      const dialNumHtml = lang === "tr" ? `<small>%</small>${displayProb}` : `${displayProb}<small>%</small>`;
+      const minPctText = lang === "tr" ? `%${displayProb}` : `${displayProb}%`;
       const statusLine = this.resolveStatusLine(res, displayProb, lang);
       const clockCountBadge = lc && lc.movesObserved >= 2 ? `<span class="tab-count ${lc.isLiveSuspectPacing ? "alert" : ""}">${lc.movesObserved}</span>` : "";
       const gamesCountBadge = res.suspectPinpoints.length > 0 ? `<span class="tab-count alert">${res.suspectPinpoints.length}</span>` : `<span class="tab-count">${res.recentMatches.length}</span>`;
@@ -2861,12 +3115,15 @@
         this.cardEl,
         `
       ${this.renderHeaderHtml(lang)}
-      ${alertHtml}
       <div class="hud-scroll-body">
+        ${alertHtml}
         <div class="hero">
           <div class="hero-top">
             <div class="identity">
-              ${avatarHtml}
+              <div class="avatar-wrap">
+                ${avatarHtml}
+                <span class="avatar-dot"></span>
+              </div>
               <div class="id-meta">
                 <div class="player-row">
                   ${titleBadgeHtml}
@@ -2878,38 +3135,58 @@
                   ${isoHtml}
                 </div>
                 <div class="sub-meta-row">
+                  <span class="tier-chip">${escapeHtml(t.tiers[eff.tier].label)}</span>
                   <span>${escapeHtml(fmtRatingLabel)}</span>
-                  <span>\xB7</span>
-                  <span>${escapeHtml(t.confidenceLabel[res.confidence])}</span>
                 </div>
               </div>
             </div>
-            <div class="score-readout">
-              <div class="score-num">${pctText}</div>
-              <div class="score-tier">${escapeHtml(t.tiers[eff.tier].label)}</div>
+
+            <div class="dial-wrap">
+              <svg class="dial-svg" viewBox="0 0 70 62">
+                <circle
+                  class="dial-track"
+                  cx="35"
+                  cy="34"
+                  r="26"
+                  stroke-dasharray="${arcMax.toFixed(2)} 200"
+                  transform="rotate(150 35 34)"
+                />
+                <circle
+                  class="dial-fill"
+                  cx="35"
+                  cy="34"
+                  r="26"
+                  stroke-dasharray="${arcFill.toFixed(2)} 200"
+                  transform="rotate(150 35 34)"
+                />
+              </svg>
+              <div class="dial-center">
+                <div class="dial-num">${dialNumHtml}</div>
+                <div class="dial-lbl">${escapeHtml(t.cheatProbability)}</div>
+              </div>
             </div>
           </div>
 
-          <div class="meter-wrap">
-            <div class="meter-track">
-              <div class="meter-fill" style="width:${Math.max(2, displayProb)}%"></div>
-            </div>
+          <div class="verdict-callout ${statusLine.cls}">
+            <span class="verdict-icon">${statusLine.icon}</span>
+            <span>${escapeHtml(statusLine.message)}</span>
           </div>
-          <div class="verdict-line ${statusLine.cls}">${escapeHtml(statusLine.message)}</div>
         </div>
 
-        <div class="view-tabs">
-          <button class="view-tab ${this.activeTab === "overview" ? "active" : ""}" data-view-tab="overview">
-            <span>${escapeHtml(t.hudTabs.overview)}</span>
-          </button>
-          <button class="view-tab ${this.activeTab === "clock" ? "active" : ""}" data-view-tab="clock">
-            <span>${escapeHtml(t.hudTabs.clock)}</span>
-            ${clockCountBadge}
-          </button>
-          <button class="view-tab ${this.activeTab === "games" ? "active" : ""}" data-view-tab="games">
-            <span>${escapeHtml(t.hudTabs.games)}</span>
-            ${gamesCountBadge}
-          </button>
+        <div class="view-tabs-shell">
+          <div class="view-tabs">
+            <button class="view-tab ${this.activeTab === "overview" ? "active" : ""}" data-view-tab="overview">
+              <span>${escapeHtml(t.hudTabs.overview)}</span>
+            </button>
+            <button class="view-tab ${this.activeTab === "clock" ? "active" : ""}" data-view-tab="clock">
+              <span>${escapeHtml(t.hudTabs.clock)}</span>
+              ${clockCountBadge}
+            </button>
+            <button class="view-tab ${this.activeTab === "games" ? "active" : ""}" data-view-tab="games">
+              <span>${escapeHtml(t.hudTabs.games)}</span>
+              ${gamesCountBadge}
+            </button>
+          </div>
         </div>
 
         ${tabContentHtml}
@@ -2937,7 +3214,7 @@
         this.minPillEl,
         `
       <span class="min-dot"></span>
-      <span class="min-pct">${pctText}</span>
+      <span class="min-pct">${minPctText}</span>
       <span class="min-user">@${escapeHtml(res.displayName)}</span>
     `
       );
@@ -3015,28 +3292,29 @@
     .${BADGE_CLASS} {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      margin-left: 6px;
-      padding: 1px 6px;
-      border-radius: 4px;
-      background: #21201d;
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      gap: 6px;
+      margin-left: 7px;
+      padding: 2px 8px 2px 7px;
+      border-radius: 7px;
+      background: linear-gradient(180deg, rgba(28, 30, 36, 0.94) 0%, rgba(19, 20, 25, 0.96) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       font-size: 11px;
       font-weight: 600;
       font-variant-numeric: tabular-nums;
-      line-height: 1.4;
-      color: #e7e5e4;
+      line-height: 1.35;
+      color: #f4f4f5;
       cursor: pointer;
       user-select: none;
       vertical-align: middle;
       white-space: nowrap;
-      transition: background-color 0.12s ease, border-color 0.12s ease;
+      transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.15s ease, background 0.15s ease;
       z-index: 20;
     }
     .${BADGE_CLASS}:hover {
-      background: #2b2926;
-      border-color: rgba(255, 255, 255, 0.26);
+      transform: translateY(-0.5px);
+      border-color: rgba(255, 255, 255, 0.24);
     }
     .${BADGE_CLASS} .cs-pill-dot {
       width: 6px;
@@ -3045,15 +3323,15 @@
       flex-shrink: 0;
     }
     .${BADGE_CLASS} .cs-pill-prob {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-weight: 700;
+      letter-spacing: -0.02em;
     }
     .${BADGE_CLASS} .cs-pill-wld {
-      color: #a8a29e;
+      color: #a1a1aa;
       font-weight: 500;
       font-size: 10.5px;
-      padding-left: 5px;
-      border-left: 1px solid rgba(255, 255, 255, 0.12);
+      padding-left: 6px;
+      border-left: 1px solid rgba(255, 255, 255, 0.1);
     }
   `;
     document.head.appendChild(style);
@@ -3120,14 +3398,15 @@
     const theme = TIER_THEMES[eff.tier];
     const pf = result.formats[result.primaryFormat];
     const probText = lang === "tr" ? `%${eff.probability}` : `${eff.probability}%`;
-    const wldText = pf.recentTotal > 0 ? lang === "tr" ? `${pf.recentWins}G-${pf.recentLosses}M` : `${pf.recentWins}W-${pf.recentLosses}L` : lang === "tr" ? `${pf.overallWins}G-${pf.overallLosses}M` : `${pf.overallWins}W-${pf.overallLosses}L`;
+    const wldText = pf.recentTotal > 0 ? lang === "tr" ? `${pf.recentWins}G ${pf.recentLosses}M` : `${pf.recentWins}W ${pf.recentLosses}L` : lang === "tr" ? `${pf.overallWins}G ${pf.overallLosses}M` : `${pf.overallWins}W ${pf.overallLosses}L`;
     const pill = document.createElement("span");
     pill.className = BADGE_CLASS;
     pill.style.borderColor = theme.border;
-    pill.title = lang === "tr" ? `Chess Sentinel: %${eff.probability} (Paneli acmak icin tikla)` : `Chess Sentinel: ${eff.probability}% (Click to open panel)`;
+    pill.title = lang === "tr" ? `Chess Sentinel: %${eff.probability} (Paneli a\xE7)` : `Chess Sentinel: ${eff.probability}% (Open panel)`;
     const dot = document.createElement("span");
     dot.className = "cs-pill-dot";
     dot.style.background = theme.color;
+    dot.style.boxShadow = `0 0 6px rgba(${theme.rgb}, 0.55)`;
     const probSpan = document.createElement("span");
     probSpan.className = "cs-pill-prob";
     probSpan.style.color = theme.color;

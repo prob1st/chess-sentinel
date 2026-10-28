@@ -88,7 +88,7 @@ export function parseCallbackMoveTimestamps(
 }
 
 /**
- * Resilient Chess.com Published-Data & Live Callback Client (v4.0).
+ * Resilient Chess.com Published-Data & Live Callback Client (v4.1).
  * - Enforces serial PubAPI request execution to respect Chess.com rate limits.
  * - Persists short-TTL (5-min) bundle cache in `chrome.storage.local` so MV3 worker restarts stay instant.
  * - Hydrates live/finished game decisecond clocks via `chess.com/callback/live/game/{id}`.

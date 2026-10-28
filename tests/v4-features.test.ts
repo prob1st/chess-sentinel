@@ -4,10 +4,13 @@ import {
   extractGameIdFromUrl,
   extractMemberProfileFromUrl,
 } from '../src/content/detector';
+import { HUD_SHADOW_CSS } from '../src/content/hud-styles';
 import { summarizeLiveMoveTimes } from '../src/content/live-clock-monitor';
+import { TIER_THEMES } from '../src/core/calibration';
 import { analyzePlayerBundle, computeEffectiveLiveRisk } from '../src/core/engine';
 import { TRANSLATIONS } from '../src/i18n/translations';
 import { PlayerRawBundle } from '../src/types';
+import { ICONS } from '../src/utils/icons';
 
 function collectStrings(obj: unknown): string[] {
   if (typeof obj === 'string') return [obj];
@@ -17,14 +20,21 @@ function collectStrings(obj: unknown): string[] {
   return [];
 }
 
-describe('v4.0 Zero-Slop UI Copy, Server Callback Clocks, Profile URLs & Live Risk Fusion', () => {
-  it('contains strictly ZERO emojis and ZERO em-dashes across all TR and EN UI strings', () => {
-    const allStrings = collectStrings(TRANSLATIONS);
+describe('v4.1 High-Craft Zero-Slop Obsidian UI, Server Callback Clocks, Profile URLs & Live Risk Fusion', () => {
+  it('contains strictly ZERO emojis and ZERO em-dashes across all TR/EN UI strings and SVG icons, and uses jewel-tone RGB themes', () => {
+    const allStrings = [...collectStrings(TRANSLATIONS), ...collectStrings(ICONS)];
     const emojiRegex = /\p{Extended_Pictographic}/u;
     for (const str of allStrings) {
       expect(emojiRegex.test(str), `Found emoji in string: ${str}`).toBe(false);
       expect(str.includes('—'), `Found em-dash in string: ${str}`).toBe(false);
     }
+
+    for (const theme of Object.values(TIER_THEMES)) {
+      expect(theme.rgb).toMatch(/^\d+,\s*\d+,\s*\d+$/);
+    }
+    expect(HUD_SHADOW_CSS).toContain('rgba(15, 16, 20');
+    expect(HUD_SHADOW_CSS).toContain('inset 0 1px 0 rgba(255, 255, 255, 0.09)');
+    expect(HUD_SHADOW_CSS).not.toContain('#21201d');
   });
 
   it('extracts game IDs and member profile usernames across live, finished, analysis, and localized URLs', () => {

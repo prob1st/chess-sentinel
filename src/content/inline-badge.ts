@@ -18,28 +18,29 @@ function ensureInlineStyles(): void {
     .${BADGE_CLASS} {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      margin-left: 6px;
-      padding: 1px 6px;
-      border-radius: 4px;
-      background: #21201d;
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      gap: 6px;
+      margin-left: 7px;
+      padding: 2px 8px 2px 7px;
+      border-radius: 7px;
+      background: linear-gradient(180deg, rgba(28, 30, 36, 0.94) 0%, rgba(19, 20, 25, 0.96) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       font-size: 11px;
       font-weight: 600;
       font-variant-numeric: tabular-nums;
-      line-height: 1.4;
-      color: #e7e5e4;
+      line-height: 1.35;
+      color: #f4f4f5;
       cursor: pointer;
       user-select: none;
       vertical-align: middle;
       white-space: nowrap;
-      transition: background-color 0.12s ease, border-color 0.12s ease;
+      transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.15s ease, background 0.15s ease;
       z-index: 20;
     }
     .${BADGE_CLASS}:hover {
-      background: #2b2926;
-      border-color: rgba(255, 255, 255, 0.26);
+      transform: translateY(-0.5px);
+      border-color: rgba(255, 255, 255, 0.24);
     }
     .${BADGE_CLASS} .cs-pill-dot {
       width: 6px;
@@ -48,15 +49,15 @@ function ensureInlineStyles(): void {
       flex-shrink: 0;
     }
     .${BADGE_CLASS} .cs-pill-prob {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-weight: 700;
+      letter-spacing: -0.02em;
     }
     .${BADGE_CLASS} .cs-pill-wld {
-      color: #a8a29e;
+      color: #a1a1aa;
       font-weight: 500;
       font-size: 10.5px;
-      padding-left: 5px;
-      border-left: 1px solid rgba(255, 255, 255, 0.12);
+      padding-left: 6px;
+      border-left: 1px solid rgba(255, 255, 255, 0.1);
     }
   `;
   document.head.appendChild(style);
@@ -153,23 +154,24 @@ export function renderInlineUsernameBadge(
   const wldText =
     pf.recentTotal > 0
       ? lang === 'tr'
-        ? `${pf.recentWins}G-${pf.recentLosses}M`
-        : `${pf.recentWins}W-${pf.recentLosses}L`
+        ? `${pf.recentWins}G ${pf.recentLosses}M`
+        : `${pf.recentWins}W ${pf.recentLosses}L`
       : lang === 'tr'
-        ? `${pf.overallWins}G-${pf.overallLosses}M`
-        : `${pf.overallWins}W-${pf.overallLosses}L`;
+        ? `${pf.overallWins}G ${pf.overallLosses}M`
+        : `${pf.overallWins}W ${pf.overallLosses}L`;
 
   const pill = document.createElement('span');
   pill.className = BADGE_CLASS;
   pill.style.borderColor = theme.border;
   pill.title =
     lang === 'tr'
-      ? `Chess Sentinel: %${eff.probability} (Paneli acmak icin tikla)`
-      : `Chess Sentinel: ${eff.probability}% (Click to open panel)`;
+      ? `Chess Sentinel: %${eff.probability} (Paneli aç)`
+      : `Chess Sentinel: ${eff.probability}% (Open panel)`;
 
   const dot = document.createElement('span');
   dot.className = 'cs-pill-dot';
   dot.style.background = theme.color;
+  dot.style.boxShadow = `0 0 6px rgba(${theme.rgb}, 0.55)`;
 
   const probSpan = document.createElement('span');
   probSpan.className = 'cs-pill-prob';

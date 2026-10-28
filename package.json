@@ -1,6 +1,6 @@
 {
   "name": "chess-sentinel",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "Opponent Cheat Probability & Move-Time Monitor for Chess.com (Firefox & Chromium MV3)",
   "type": "module",
   "license": "MIT",

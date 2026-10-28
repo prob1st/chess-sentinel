@@ -18,11 +18,165 @@ const HIST_LABELS = ['<0.9s', '1.8s', '3.2s', '5.5s', '9.5s', '18s', '18s+'];
 type HudViewTab = 'overview' | 'clock' | 'games';
 
 function barColor(score: number): string {
-  if (score < 25) return '#81b64c';
-  if (score < 45) return '#6ba4d9';
-  if (score < 68) return '#e59934';
-  if (score < 82) return '#e06c35';
-  return '#e04644';
+  if (score < 25) return '#34d399';
+  if (score < 45) return '#60a5fa';
+  if (score < 68) return '#fbbf24';
+  if (score < 82) return '#fb923c';
+  return '#f43f5e';
+}
+
+function buildSmoothCurvePath(pts: Array<{ x: number; y: number }>, minY: number, maxY: number): string {
+  if (pts.length === 0) return '';
+  if (pts.length === 1) return `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  const tau = 0.18;
+  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[Math.min(pts.length - 1, i + 2)];
+
+    const cp1x = p1.x + (p2.x - p0.x) * tau;
+    const cp1y = Math.max(minY, Math.min(maxY, p1.y + (p2.y - p0.y) * tau));
+    const cp2x = p2.x - (p3.x - p1.x) * tau;
+    const cp2y = Math.max(minY, Math.min(maxY, p2.y - (p3.y - p1.y) * tau));
+
+    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
+/**
+ * Renders a smooth Fey/Linear-grade SVG Area Chronogram for live or finished match move times.
+ */
+function renderSvgMoveChronogram(lc: LiveMatchClockTelemetry): string {
+  const W = 304;
+  const H = 82;
+  const padL = 8;
+  const padR = 8;
+  const padT = 8;
+  const padB = 18;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const baseLineY = padT + plotH;
+
+  const times = lc.moveTimesSec;
+  const n = times.length;
+  const maxVal = Math.min(45, Math.max(12, ...times));
+
+  const yOf = (sec: number) => {
+    const clamped = Math.min(maxVal, Math.max(0, sec));
+    return padT + plotH - (clamped / maxVal) * plotH;
+  };
+
+  const pts = times.map((sec, i) => ({
+    x: n === 1 ? padL + plotW / 2 : padL + (i / (n - 1)) * plotW,
+    y: yOf(sec),
+    sec,
+    moveNo: lc.moveNumbers?.[i] ?? i + 2,
+    san: lc.moveSanLabels?.[i] || '',
+  }));
+
+  const linePath = buildSmoothCurvePath(pts, padT, baseLineY);
+  const areaPath = `${linePath} L ${pts[pts.length - 1].x.toFixed(1)} ${baseLineY} L ${pts[0].x.toFixed(1)} ${baseLineY} Z`;
+
+  const strokeColor = lc.isLiveSuspectPacing ? '#f43f5e' : '#60a5fa';
+  const gradId = lc.isLiveSuspectPacing ? 'csGradDanger' : 'csGradNormal';
+
+  // Optional mechanical relay band (2.6s - 8.2s)
+  const bandTopY = yOf(Math.min(maxVal, 8.2));
+  const bandBotY = yOf(2.6);
+  const bandH = Math.max(2, bandBotY - bandTopY);
+  const bandHtml = lc.isLiveSuspectPacing
+    ? `<rect x="${padL}" y="${bandTopY.toFixed(1)}" width="${plotW}" height="${bandH.toFixed(1)}" rx="3" fill="rgba(244,63,94,0.09)" stroke="rgba(244,63,94,0.22)" stroke-dasharray="3 3" stroke-width="0.8"/>`
+    : `<line x1="${padL}" y1="${(padT + plotH * 0.5).toFixed(1)}" x2="${padL + plotW}" y2="${(padT + plotH * 0.5).toFixed(1)}" stroke="rgba(255,255,255,0.05)" stroke-dasharray="2 3" stroke-width="1"/>`;
+
+  const dotsHtml = pts
+    .map((p, idx) => {
+      const isPause = lc.pauseMoveNumber !== null && p.moveNo === lc.pauseMoveNumber;
+      const isSus =
+        lc.isLiveSuspectPacing &&
+        lc.roboticStartMove !== null &&
+        lc.roboticEndMove !== null &&
+        p.moveNo >= lc.roboticStartMove &&
+        p.moveNo <= lc.roboticEndMove;
+
+      const dotCol = isPause
+        ? '#fbbf24'
+        : isSus
+          ? '#f43f5e'
+          : p.sec <= 1.8
+            ? '#34d399'
+            : '#93c5fd';
+      const r = isPause || isSus ? 3.1 : 2.3;
+      const showTick =
+        n <= 10 || idx === 0 || idx === n - 1 || idx % Math.ceil(n / 6) === 0 || isPause;
+      const lblColor = isPause ? '#fbbf24' : isSus ? '#fda4af' : '#71717a';
+      const tip = `#${p.moveNo}${p.san ? ` ${p.san}` : ''}: ${p.sec}s`;
+
+      return `
+        <g>
+          <title>${escapeHtml(tip)}</title>
+          ${isSus || isPause ? `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="6" fill="${dotCol}" fill-opacity="0.18"/>` : ''}
+          <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" fill="${dotCol}" stroke="#141519" stroke-width="1"/>
+          ${
+            showTick
+              ? `<text x="${p.x.toFixed(1)}" y="${H - 3}" text-anchor="middle" fill="${lblColor}" font-size="8.5" font-family="ui-monospace, Menlo, monospace">#${p.moveNo}</text>`
+              : ''
+          }
+        </g>
+      `;
+    })
+    .join('');
+
+  return `
+    <div class="chrono-svg-wrap">
+      <svg class="chrono-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="${strokeColor}" stop-opacity="0.28"/>
+            <stop offset="100%" stop-color="${strokeColor}" stop-opacity="0.0"/>
+          </linearGradient>
+        </defs>
+        ${bandHtml}
+        <line x1="${padL}" y1="${baseLineY}" x2="${padL + plotW}" y2="${baseLineY}" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+        <path d="${areaPath}" fill="url(#${gradId})"/>
+        <path d="${linePath}" fill="none" stroke="${strokeColor}" stroke-width="1.85" stroke-linecap="round"/>
+        ${dotsHtml}
+      </svg>
+    </div>
+  `;
+}
+
+function renderMiniMatchSvgSparkline(times: number[], isSuspect: boolean, idx: number): string {
+  const W = 296;
+  const H = 34;
+  const padX = 4;
+  const padY = 4;
+  const plotW = W - padX * 2;
+  const plotH = H - padY * 2;
+  const maxVal = Math.min(35, Math.max(10, ...times));
+  const pts = times.map((sec, i) => ({
+    x: times.length === 1 ? W / 2 : padX + (i / (times.length - 1)) * plotW,
+    y: padY + plotH - (Math.min(maxVal, sec) / maxVal) * plotH,
+  }));
+  const line = buildSmoothCurvePath(pts, padY, padY + plotH);
+  const area = `${line} L ${pts[pts.length - 1].x.toFixed(1)} ${padY + plotH} L ${pts[0].x.toFixed(1)} ${padY + plotH} Z`;
+  const col = isSuspect ? '#f43f5e' : '#34d399';
+  const gid = `csMiniGrad_${idx}`;
+
+  return `
+    <svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="display:block">
+      <defs>
+        <linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${col}" stop-opacity="0.26"/>
+          <stop offset="100%" stop-color="${col}" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <path d="${area}" fill="url(#${gid})"/>
+      <path d="${line}" fill="none" stroke="${col}" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+  `;
 }
 
 export interface HudCallbacks {
@@ -60,7 +214,7 @@ export class SentinelHudOverlay {
   private dragging = false;
   private dragStartX = 0;
   private dragStartY = 0;
-  private startRight = 16;
+  private startRight = 18;
   private startTop = 64;
 
   constructor(settings: SentinelSettings, callbacks: HudCallbacks) {
@@ -284,10 +438,7 @@ export class SentinelHudOverlay {
   private getTargetLiveClock(res: CheatAnalysisResult): LiveMatchClockTelemetry | null {
     if (!this.liveClock) return null;
     const lcUser = this.liveClock.opponent.toLowerCase();
-    if (
-      lcUser === res.username.toLowerCase() ||
-      lcUser === res.displayName.toLowerCase()
-    ) {
+    if (lcUser === res.username.toLowerCase() || lcUser === res.displayName.toLowerCase()) {
       return this.liveClock;
     }
     return null;
@@ -297,14 +448,17 @@ export class SentinelHudOverlay {
     const t = TRANSLATIONS[lang];
     const nextLang = lang === 'tr' ? 'EN' : 'TR';
     const surfLabel = t.surfaceBadge[this.surface];
-    const surfCls = this.surface === 'live' ? 'live' : '';
+    const isLive = this.surface === 'live';
 
     return `
       <div class="hud-header" data-drag-handle="1">
         <div class="brand">
-          <span class="brand-dot"></span>
+          <span class="brand-mark">${ICONS.mark}</span>
           <span class="brand-title">Chess Sentinel</span>
-          <span class="surface-tag ${surfCls}">${escapeHtml(surfLabel)}</span>
+          <span class="surface-tag ${isLive ? 'live' : ''}">
+            ${isLive ? '<span class="live-pulse"></span>' : ''}
+            <span>${escapeHtml(surfLabel)}</span>
+          </span>
         </div>
         <div class="header-actions">
           <button class="icon-btn lang-btn" data-action="lang" title="TR / EN">${nextLang}</button>
@@ -375,17 +529,18 @@ export class SentinelHudOverlay {
     res: CheatAnalysisResult,
     displayProb: number,
     lang: Language
-  ): { cls: string; message: string } {
+  ): { cls: string; icon: string; message: string } {
     const t = TRANSLATIONS[lang].v3;
     const lc = this.getTargetLiveClock(res);
 
     if (res.isBannedFairPlay) {
-      return { cls: 'danger', message: t.verdictBanned };
+      return { cls: 'danger', icon: ICONS.alertTriangle, message: t.verdictBanned };
     }
     if (lc && lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null) {
       if (lc.pauseMoveNumber !== null && lc.detectedPauseSec !== null) {
         return {
           cls: 'danger',
+          icon: ICONS.activity,
           message: t.verdictLiveToggle
             .replace('{pauseMove}', String(lc.pauseMoveNumber))
             .replace('{pauseSec}', String(lc.detectedPauseSec))
@@ -397,6 +552,7 @@ export class SentinelHudOverlay {
       }
       return {
         cls: 'danger',
+        icon: ICONS.activity,
         message: t.verdictLiveFlatline
           .replace('{start}', String(lc.roboticStartMove))
           .replace('{end}', String(lc.roboticEndMove))
@@ -408,18 +564,19 @@ export class SentinelHudOverlay {
     if (displayProb >= 75) {
       return {
         cls: 'danger',
+        icon: ICONS.alertTriangle,
         message: this.isAbortWindowOpen
           ? t.verdictAbortNow.replace('{pins}', String(Math.max(1, res.suspectPinpoints.length)))
           : t.verdictHighWatch,
       };
     }
     if (displayProb >= 55) {
-      return { cls: 'warn', message: t.verdictElevatedWatch };
+      return { cls: 'warn', icon: ICONS.alertTriangle, message: t.verdictElevatedWatch };
     }
     if (res.flags.some((f) => f.id === 'smurf_human_pacing')) {
-      return { cls: '', message: t.verdictSmurfHuman };
+      return { cls: '', icon: ICONS.activity, message: t.verdictSmurfHuman };
     }
-    return { cls: '', message: t.verdictCleanSafe };
+    return { cls: '', icon: ICONS.shieldCheck, message: t.verdictCleanSafe };
   }
 
   private renderSuspectPinpointsHtml(res: CheatAnalysisResult, lang: Language): string {
@@ -518,9 +675,7 @@ export class SentinelHudOverlay {
           ? `%${fmtData.overallWinPct}`
           : `${fmtData.overallWinPct}%`;
     const wldSub =
-      fmtData.recentTotal > 0
-        ? `%${fmtData.recentWinPct}`
-        : `${fmtData.overallTotal}`;
+      fmtData.recentTotal > 0 ? `%${fmtData.recentWinPct}` : `${fmtData.overallTotal}`;
 
     const perfStr = fmtData.performanceRating ? String(fmtData.performanceRating) : '-';
     const zSign = fmtData.eloZScore >= 0 ? '+' : '';
@@ -539,7 +694,7 @@ export class SentinelHudOverlay {
     const paceStr = cvVal !== null ? `CV ${cvVal}` : '-';
     const paceSub = qcdVal !== null ? `QCD ${qcdVal}` : '';
     const cvClass =
-      cvVal !== null && cvVal < 0.45 ? 'neg' : cvVal !== null && cvVal < 0.60 ? 'warn' : 'pos';
+      cvVal !== null && cvVal < 0.45 ? 'neg' : cvVal !== null && cvVal < 0.6 ? 'warn' : 'pos';
 
     const d7 = fmtData.eloDelta7d;
     const d7Str = d7 === null ? '0' : d7 > 0 ? `+${d7}` : `${d7}`;
@@ -548,7 +703,7 @@ export class SentinelHudOverlay {
       res.winStreak >= 2
         ? lang === 'tr'
           ? `${res.winStreak}G seri`
-          : `${res.winStreak}W streak`
+          : `${res.winStreak}W`
         : '';
 
     const ageStr = formatAgeShort(res.accountAgeDays, lang);
@@ -599,38 +754,56 @@ export class SentinelHudOverlay {
       <div class="tab-pane">
         <div class="format-tabs">${formatTabsHtml}</div>
 
-        <div class="metric-table">
-          <div class="metric-cell">
+        <div class="metric-grid">
+          <div class="metric-card">
             <div class="metric-lbl">
               <span>${escapeHtml(t.stats.recentRecord)}</span>
               <span class="form-dots">${formDotsHtml}</span>
             </div>
-            <div class="metric-val">${escapeHtml(wldVal)} <span class="metric-sub">${escapeHtml(wldSub)}</span></div>
+            <div class="metric-val-row">
+              <span class="metric-val">${escapeHtml(wldVal)}</span>
+              <span class="metric-sub">${escapeHtml(wldSub)}</span>
+            </div>
           </div>
 
-          <div class="metric-cell">
+          <div class="metric-card">
             <div class="metric-lbl"><span>${escapeHtml(t.stats.performance)}</span></div>
-            <div class="metric-val ${zClass}">${escapeHtml(perfStr)} <span class="metric-sub">${zSign}${fmtData.eloZScore}σ</span></div>
+            <div class="metric-val-row">
+              <span class="metric-val ${zClass}">${escapeHtml(perfStr)}</span>
+              <span class="metric-sub">${zSign}${fmtData.eloZScore}σ</span>
+            </div>
           </div>
 
-          <div class="metric-cell">
+          <div class="metric-card">
             <div class="metric-lbl"><span>${escapeHtml(t.stats.avgAccuracy)}</span></div>
-            <div class="metric-val ${accClass}">${escapeHtml(accStr)} <span class="metric-sub">${escapeHtml(t.stats.expectedShort)} ${fmtData.expectedAccuracy}%</span></div>
+            <div class="metric-val-row">
+              <span class="metric-val ${accClass}">${escapeHtml(accStr)}</span>
+              <span class="metric-sub">${escapeHtml(t.stats.expectedShort)} ${fmtData.expectedAccuracy}%</span>
+            </div>
           </div>
 
-          <div class="metric-cell">
+          <div class="metric-card">
             <div class="metric-lbl"><span>${escapeHtml(t.stats.moveCV)}</span></div>
-            <div class="metric-val ${cvClass}">${escapeHtml(paceStr)} <span class="metric-sub">${escapeHtml(paceSub)}</span></div>
+            <div class="metric-val-row">
+              <span class="metric-val ${cvClass}">${escapeHtml(paceStr)}</span>
+              <span class="metric-sub">${escapeHtml(paceSub)}</span>
+            </div>
           </div>
 
-          <div class="metric-cell">
+          <div class="metric-card">
             <div class="metric-lbl"><span>${escapeHtml(t.stats.elo7d)}</span></div>
-            <div class="metric-val ${d7Class}">${escapeHtml(d7Str)} <span class="metric-sub">${escapeHtml(streakSub)}</span></div>
+            <div class="metric-val-row">
+              <span class="metric-val ${d7Class}">${escapeHtml(d7Str)}</span>
+              <span class="metric-sub">${escapeHtml(streakSub)}</span>
+            </div>
           </div>
 
-          <div class="metric-cell">
+          <div class="metric-card">
             <div class="metric-lbl"><span>${escapeHtml(t.stats.accountAge)}</span></div>
-            <div class="metric-val">${escapeHtml(ageStr)} <span class="metric-sub">${escapeHtml(gamesSub)}</span></div>
+            <div class="metric-val-row">
+              <span class="metric-val">${escapeHtml(ageStr)}</span>
+              <span class="metric-sub">${escapeHtml(gamesSub)}</span>
+            </div>
           </div>
         </div>
 
@@ -662,43 +835,10 @@ export class SentinelHudOverlay {
         </div>
       `;
     } else {
-      const maxSec = Math.max(12, ...lc.moveTimesSec);
-      const barsHtml = lc.moveTimesSec
-        .map((sec, idx) => {
-          const moveNo = lc.moveNumbers?.[idx] ?? idx + 2;
-          const san = lc.moveSanLabels?.[idx] || '';
-          const isPauseMove = lc.pauseMoveNumber !== null && moveNo === lc.pauseMoveNumber;
-          const isInRoboticRange =
-            lc.isLiveSuspectPacing &&
-            lc.roboticStartMove !== null &&
-            lc.roboticEndMove !== null &&
-            moveNo >= lc.roboticStartMove &&
-            moveNo <= lc.roboticEndMove;
-
-          const hPx = Math.max(3, Math.min(32, Math.round((sec / maxSec) * 32)));
-          const color = isPauseMove
-            ? '#e59934'
-            : isInRoboticRange
-              ? '#e04644'
-              : sec <= 1.8
-                ? '#81b64c'
-                : sec >= 18
-                  ? '#d9922b'
-                  : '#6ba4d9';
-          const numCls = isPauseMove ? 'pause' : isInRoboticRange ? 'suspect' : '';
-          const tip = `#${moveNo}${san ? ` (${san})` : ''}: ${sec}s`;
-
-          return `
-            <div class="live-spark-item" title="${escapeHtml(tip)}">
-              <div class="live-spark-col" style="height:${hPx}px;background:${color}"></div>
-              <span class="live-spark-num ${numCls}">${moveNo}</span>
-            </div>
-          `;
-        })
-        .join('');
+      const chronoSvg = renderSvgMoveChronogram(lc);
 
       const recentChipsHtml = lc.moveTimesSec
-        .slice(-8)
+        .slice(-6)
         .map((sec, idx, arr) => {
           const globalIdx = lc.moveTimesSec.length - arr.length + idx;
           const moveNo = lc.moveNumbers?.[globalIdx] ?? globalIdx + 2;
@@ -748,7 +888,7 @@ export class SentinelHudOverlay {
             <span>${escapeHtml(headTitle)}</span>
             <span>${escapeHtml(statsText)}</span>
           </div>
-          <div class="live-spark-bars">${barsHtml}</div>
+          ${chronoSvg}
           <div class="move-chips">${recentChipsHtml}</div>
           ${pinpointMsg ? `<div class="live-suspect-msg">${escapeHtml(pinpointMsg)}</div>` : ''}
         </div>
@@ -761,17 +901,19 @@ export class SentinelHudOverlay {
       const maxRatio = Math.max(0.25, ...dist);
       const colsHtml = dist
         .map((ratio, idx) => {
-          const hPx = Math.max(2, Math.round((ratio / maxRatio) * 32));
+          const hPct = Math.max(6, Math.round((ratio / maxRatio) * 100));
           const isRoboticZone = (idx === 3 || idx === 4) && res.signals.movePacing >= 55;
           const color = isRoboticZone
-            ? '#e04644'
+            ? 'linear-gradient(180deg, #fb7185, #e11d48)'
             : idx <= 1
-              ? '#81b64c'
-              : '#6ba4d9';
+              ? 'linear-gradient(180deg, #6ee7b7, #10b981)'
+              : 'linear-gradient(180deg, #93c5fd, #3b82f6)';
           const pct = Math.round(ratio * 100);
           return `
             <div class="hist-col-wrap" title="${HIST_LABELS[idx]}: ${pct}%">
-              <div class="hist-bar" style="height:${hPx}px;background:${color}"></div>
+              <div class="hist-track">
+                <div class="hist-bar" style="height:${hPct}%;background:${color}"></div>
+              </div>
               <span class="hist-lbl">${HIST_LABELS[idx]}</span>
             </div>
           `;
@@ -823,27 +965,14 @@ export class SentinelHudOverlay {
         const hasSpark = Array.isArray(m.moveTimesSec) && m.moveTimesSec.length >= 4;
         const isExpanded = this.expandedMatchIdx === idx && hasSpark;
 
-        let drawerHtml = '';
-        if (isExpanded && m.moveTimesSec) {
-          const maxD = Math.max(10, ...m.moveTimesSec);
-          const bars = m.moveTimesSec
-            .map((sec, sIdx) => {
-              const h = Math.max(2, Math.min(26, Math.round((sec / maxD) * 26)));
-              const col =
-                m.pinpointKind && sec >= 2.6 && sec <= 8.5
-                  ? '#e04644'
-                  : sec <= 1.8
-                    ? '#81b64c'
-                    : '#6ba4d9';
-              return `<div class="drawer-bar" style="height:${h}px;background:${col}" title="#${sIdx + 2}: ${sec}s"></div>`;
-            })
-            .join('');
-          drawerHtml = `
-            <div class="match-drawer">
-              <div class="drawer-bars">${bars}</div>
-            </div>
-          `;
-        }
+        const drawerHtml =
+          isExpanded && m.moveTimesSec
+            ? `<div class="match-drawer">${renderMiniMatchSvgSparkline(
+                m.moveTimesSec,
+                Boolean(m.pinpointKind),
+                idx
+              )}</div>`
+            : '';
 
         return `
           <div class="match-block">
@@ -851,7 +980,7 @@ export class SentinelHudOverlay {
               <div class="match-left">
                 <span class="match-res ${m.result}">${resLbl}</span>
                 <span class="match-opp">@${escapeHtml(m.opponentUsername)}</span>
-                <span class="match-opp-elo">(${m.opponentRating})</span>
+                <span class="match-opp-elo">${m.opponentRating}</span>
               </div>
               <div class="match-right">
                 ${pinHtml}
@@ -888,7 +1017,8 @@ export class SentinelHudOverlay {
     const t = TRANSLATIONS[lang];
 
     if (this.loadingUsername && !this.currentResult) {
-      this.cardEl.style.setProperty('--tier-color', '#81b64c');
+      this.cardEl.style.setProperty('--tier-color', '#34d399');
+      this.cardEl.style.setProperty('--tier-rgb', '52, 211, 153');
       setSafeHtml(
         this.cardEl,
         `
@@ -918,18 +1048,24 @@ export class SentinelHudOverlay {
     const theme = TIER_THEMES[eff.tier];
 
     this.cardEl.style.setProperty('--tier-color', theme.color);
+    this.cardEl.style.setProperty('--tier-rgb', theme.rgb);
     this.minPillEl.style.setProperty('--tier-color', theme.color);
+    this.minPillEl.style.setProperty('--tier-rgb', theme.rgb);
 
     const fmtData = res.formats[this.selectedFormat] || res.formats[res.primaryFormat];
     const displayProb = eff.probability;
 
+    // 240-deg open instrument arc (r = 26, center = 35, 34 -> arc length = 2*pi*26*(240/360) = 108.91)
+    const arcMax = 108.91;
+    const arcFill = Math.max(2.5, (Math.min(100, Math.max(0, displayProb)) / 100) * arcMax);
+
     let alertHtml = '';
     if (res.isBannedFairPlay) {
-      alertHtml = `<div class="alert-banner banned">${escapeHtml(t.bannedFairPlayBanner)}</div>`;
+      alertHtml = `<div class="alert-banner">${ICONS.alertTriangle}<span>${escapeHtml(t.bannedFairPlayBanner)}</span></div>`;
     } else if (this.isAbortWindowOpen && displayProb >= 75) {
-      alertHtml = `<div class="alert-banner abort-warn">${escapeHtml(t.abortWindowActive)}: ${escapeHtml(
+      alertHtml = `<div class="alert-banner">${ICONS.alertTriangle}<span>${escapeHtml(t.abortWindowActive)}: ${escapeHtml(
         t.considerAborting
-      )}</div>`;
+      )}</span></div>`;
     }
 
     const avatarHtml = res.avatarUrl
@@ -946,7 +1082,9 @@ export class SentinelHudOverlay {
         : '';
 
     const fmtRatingLabel = `${this.selectedFormat.charAt(0).toUpperCase() + this.selectedFormat.slice(1)} ${fmtData.currentRating ?? '-'}`;
-    const pctText = lang === 'tr' ? `%${displayProb}` : `${displayProb}%`;
+    const dialNumHtml =
+      lang === 'tr' ? `<small>%</small>${displayProb}` : `${displayProb}<small>%</small>`;
+    const minPctText = lang === 'tr' ? `%${displayProb}` : `${displayProb}%`;
     const statusLine = this.resolveStatusLine(res, displayProb, lang);
 
     const clockCountBadge =
@@ -972,12 +1110,15 @@ export class SentinelHudOverlay {
       this.cardEl,
       `
       ${this.renderHeaderHtml(lang)}
-      ${alertHtml}
       <div class="hud-scroll-body">
+        ${alertHtml}
         <div class="hero">
           <div class="hero-top">
             <div class="identity">
-              ${avatarHtml}
+              <div class="avatar-wrap">
+                ${avatarHtml}
+                <span class="avatar-dot"></span>
+              </div>
               <div class="id-meta">
                 <div class="player-row">
                   ${titleBadgeHtml}
@@ -989,38 +1130,58 @@ export class SentinelHudOverlay {
                   ${isoHtml}
                 </div>
                 <div class="sub-meta-row">
+                  <span class="tier-chip">${escapeHtml(t.tiers[eff.tier].label)}</span>
                   <span>${escapeHtml(fmtRatingLabel)}</span>
-                  <span>·</span>
-                  <span>${escapeHtml(t.confidenceLabel[res.confidence])}</span>
                 </div>
               </div>
             </div>
-            <div class="score-readout">
-              <div class="score-num">${pctText}</div>
-              <div class="score-tier">${escapeHtml(t.tiers[eff.tier].label)}</div>
+
+            <div class="dial-wrap">
+              <svg class="dial-svg" viewBox="0 0 70 62">
+                <circle
+                  class="dial-track"
+                  cx="35"
+                  cy="34"
+                  r="26"
+                  stroke-dasharray="${arcMax.toFixed(2)} 200"
+                  transform="rotate(150 35 34)"
+                />
+                <circle
+                  class="dial-fill"
+                  cx="35"
+                  cy="34"
+                  r="26"
+                  stroke-dasharray="${arcFill.toFixed(2)} 200"
+                  transform="rotate(150 35 34)"
+                />
+              </svg>
+              <div class="dial-center">
+                <div class="dial-num">${dialNumHtml}</div>
+                <div class="dial-lbl">${escapeHtml(t.cheatProbability)}</div>
+              </div>
             </div>
           </div>
 
-          <div class="meter-wrap">
-            <div class="meter-track">
-              <div class="meter-fill" style="width:${Math.max(2, displayProb)}%"></div>
-            </div>
+          <div class="verdict-callout ${statusLine.cls}">
+            <span class="verdict-icon">${statusLine.icon}</span>
+            <span>${escapeHtml(statusLine.message)}</span>
           </div>
-          <div class="verdict-line ${statusLine.cls}">${escapeHtml(statusLine.message)}</div>
         </div>
 
-        <div class="view-tabs">
-          <button class="view-tab ${this.activeTab === 'overview' ? 'active' : ''}" data-view-tab="overview">
-            <span>${escapeHtml(t.hudTabs.overview)}</span>
-          </button>
-          <button class="view-tab ${this.activeTab === 'clock' ? 'active' : ''}" data-view-tab="clock">
-            <span>${escapeHtml(t.hudTabs.clock)}</span>
-            ${clockCountBadge}
-          </button>
-          <button class="view-tab ${this.activeTab === 'games' ? 'active' : ''}" data-view-tab="games">
-            <span>${escapeHtml(t.hudTabs.games)}</span>
-            ${gamesCountBadge}
-          </button>
+        <div class="view-tabs-shell">
+          <div class="view-tabs">
+            <button class="view-tab ${this.activeTab === 'overview' ? 'active' : ''}" data-view-tab="overview">
+              <span>${escapeHtml(t.hudTabs.overview)}</span>
+            </button>
+            <button class="view-tab ${this.activeTab === 'clock' ? 'active' : ''}" data-view-tab="clock">
+              <span>${escapeHtml(t.hudTabs.clock)}</span>
+              ${clockCountBadge}
+            </button>
+            <button class="view-tab ${this.activeTab === 'games' ? 'active' : ''}" data-view-tab="games">
+              <span>${escapeHtml(t.hudTabs.games)}</span>
+              ${gamesCountBadge}
+            </button>
+          </div>
         </div>
 
         ${tabContentHtml}
@@ -1049,7 +1210,7 @@ export class SentinelHudOverlay {
       this.minPillEl,
       `
       <span class="min-dot"></span>
-      <span class="min-pct">${pctText}</span>
+      <span class="min-pct">${minPctText}</span>
       <span class="min-user">@${escapeHtml(res.displayName)}</span>
     `
     );
