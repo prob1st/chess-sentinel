@@ -1,5 +1,11 @@
 import { TIER_THEMES } from '../core/calibration';
-import { CheatAnalysisResult, Language } from '../types';
+import { computeEffectiveLiveRisk } from '../core/engine';
+import {
+  CheatAnalysisResult,
+  Language,
+  LiveMatchClockTelemetry,
+  PageSurfaceKind,
+} from '../types';
 
 const BADGE_CLASS = 'chess-sentinel-inline-pill';
 const STYLE_ID = 'chess-sentinel-inline-style';
@@ -13,25 +19,27 @@ function ensureInlineStyles(): void {
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      margin-left: 7px;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 11.5px;
-      font-weight: 700;
-      line-height: 1.35;
-      letter-spacing: 0.01em;
+      margin-left: 6px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: #21201d;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.4;
+      color: #e7e5e4;
       cursor: pointer;
       user-select: none;
       vertical-align: middle;
-      transition: transform 0.16s ease, filter 0.16s ease, box-shadow 0.16s ease;
-      backdrop-filter: blur(8px);
       white-space: nowrap;
+      transition: background-color 0.12s ease, border-color 0.12s ease;
       z-index: 20;
     }
     .${BADGE_CLASS}:hover {
-      transform: translateY(-1px) scale(1.03);
-      filter: brightness(1.12);
+      background: #2b2926;
+      border-color: rgba(255, 255, 255, 0.26);
     }
     .${BADGE_CLASS} .cs-pill-dot {
       width: 6px;
@@ -39,18 +47,43 @@ function ensureInlineStyles(): void {
       border-radius: 50%;
       flex-shrink: 0;
     }
+    .${BADGE_CLASS} .cs-pill-prob {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-weight: 700;
+    }
     .${BADGE_CLASS} .cs-pill-wld {
-      opacity: 0.85;
-      font-weight: 600;
+      color: #a8a29e;
+      font-weight: 500;
       font-size: 10.5px;
-      padding-left: 4px;
-      border-left: 1px solid rgba(255, 255, 255, 0.16);
+      padding-left: 5px;
+      border-left: 1px solid rgba(255, 255, 255, 0.12);
     }
   `;
   document.head.appendChild(style);
 }
 
-function findPlayerAnchorContainer(targetSide: 'top' | 'bottom'): Element | null {
+function findProfileHeaderAnchor(): Element | null {
+  const selectors = [
+    '.profile-card-username',
+    '[data-cy="profile-header-username"]',
+    '.profile-header-details-username',
+    '.v5-section-content-wide .profile-card-info h1',
+  ];
+  for (const sel of selectors) {
+    const el = document.querySelector(sel);
+    if (el) return el.parentElement || el;
+  }
+  return null;
+}
+
+function findPlayerAnchorContainer(
+  targetSide: 'top' | 'bottom',
+  surface: PageSurfaceKind = 'live'
+): Element | null {
+  if (surface === 'profile') {
+    return findProfileHeaderAnchor();
+  }
+
   const selectors =
     targetSide === 'top'
       ? [
@@ -83,7 +116,6 @@ function findPlayerAnchorContainer(targetSide: 'top' | 'bottom'): Element | null
   for (const sel of selectors) {
     const el = document.querySelector(sel);
     if (el) {
-      // Never append inside the username text element itself — always attach to its tagline row!
       if (
         el.tagName.toLowerCase() === 'cc-user-username-component' ||
         el.classList.contains('cc-user-username-component') ||
@@ -101,49 +133,51 @@ export function renderInlineUsernameBadge(
   result: CheatAnalysisResult,
   targetSide: 'top' | 'bottom',
   lang: Language,
-  onClick: () => void
+  onClick: () => void,
+  options?: {
+    liveClock?: LiveMatchClockTelemetry | null;
+    surface?: PageSurfaceKind;
+  }
 ): void {
   ensureInlineStyles();
   removeInlineUsernameBadges();
 
-  const container = findPlayerAnchorContainer(targetSide);
+  const container = findPlayerAnchorContainer(targetSide, options?.surface ?? 'live');
   if (!container) return;
 
-  const theme = TIER_THEMES[result.tier];
+  const eff = computeEffectiveLiveRisk(result, options?.liveClock);
+  const theme = TIER_THEMES[eff.tier];
   const pf = result.formats[result.primaryFormat];
 
-  const probText = lang === 'tr' ? `%${result.probability}` : `${result.probability}%`;
+  const probText = lang === 'tr' ? `%${eff.probability}` : `${eff.probability}%`;
   const wldText =
     pf.recentTotal > 0
       ? lang === 'tr'
-        ? `${pf.recentWins}G/${pf.recentLosses}M`
-        : `${pf.recentWins}W/${pf.recentLosses}L`
+        ? `${pf.recentWins}G-${pf.recentLosses}M`
+        : `${pf.recentWins}W-${pf.recentLosses}L`
       : lang === 'tr'
-        ? `${pf.overallWins}G/${pf.overallLosses}M`
-        : `${pf.overallWins}W/${pf.overallLosses}L`;
+        ? `${pf.overallWins}G-${pf.overallLosses}M`
+        : `${pf.overallWins}W-${pf.overallLosses}L`;
 
   const pill = document.createElement('span');
   pill.className = BADGE_CLASS;
-  pill.style.background = theme.accentBg;
-  pill.style.border = `1px solid ${theme.border}`;
-  pill.style.color = theme.color;
-  pill.style.boxShadow = `0 2px 10px ${theme.glow}`;
+  pill.style.borderColor = theme.border;
   pill.title =
     lang === 'tr'
-      ? `Chess Sentinel — Hile Olasılığı: %${result.probability} (Detaylar için tıkla)`
-      : `Chess Sentinel — Cheat Probability: ${result.probability}% (Click for HUD)`;
+      ? `Chess Sentinel: %${eff.probability} (Paneli acmak icin tikla)`
+      : `Chess Sentinel: ${eff.probability}% (Click to open panel)`;
 
   const dot = document.createElement('span');
   dot.className = 'cs-pill-dot';
   dot.style.background = theme.color;
-  dot.style.boxShadow = `0 0 6px ${theme.color}`;
 
   const probSpan = document.createElement('span');
+  probSpan.className = 'cs-pill-prob';
+  probSpan.style.color = theme.color;
   probSpan.textContent = probText;
 
   const wldSpan = document.createElement('span');
   wldSpan.className = 'cs-pill-wld';
-  wldSpan.style.color = '#e2e8f0';
   wldSpan.textContent = wldText;
 
   pill.append(dot, probSpan, wldSpan);

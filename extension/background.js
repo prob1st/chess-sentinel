@@ -3,6 +3,49 @@ var API_BASE = "https://api.chess.com/pub";
 var CACHE_TTL_MS = 5 * 60 * 1e3;
 var TARGET_MIN_GAMES = 30;
 var MAX_ARCHIVES_TO_WALK = 3;
+var STORAGE_CACHE_KEY = "sentinel_bundle_cache_v4";
+function hasLocalStorageApi() {
+  return typeof chrome !== "undefined" && !!chrome.storage?.local;
+}
+function inferTimeClassFromBaseSec(baseSec, incSec) {
+  const est = baseSec + 40 * incSec;
+  if (est < 180) return "bullet";
+  if (est < 600) return "blitz";
+  return "rapid";
+}
+function parseCallbackMoveTimestamps(rawTimestamps, baseTimeDs = 6e3, incrementDs = 0) {
+  if (!rawTimestamps || typeof rawTimestamps !== "string") {
+    return { whiteTimesSec: [], whiteMoveNumbers: [], blackTimesSec: [], blackMoveNumbers: [] };
+  }
+  const tokens = rawTimestamps.split(",").map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n >= 0);
+  const whiteClocksSec = [];
+  const blackClocksSec = [];
+  for (let idx = 0; idx < tokens.length; idx++) {
+    const sec = tokens[idx] / 10;
+    if (idx % 2 === 0) whiteClocksSec.push(sec);
+    else blackClocksSec.push(sec);
+  }
+  const incSec = Math.max(0, incrementDs / 10);
+  const buildDeltas = (clocks) => {
+    const times = [];
+    const nums = [];
+    for (let i = 1; i < clocks.length; i++) {
+      const elapsed = clocks[i - 1] - clocks[i] + incSec;
+      const clamped = Math.min(240, Math.max(0.1, Number(elapsed.toFixed(1))));
+      times.push(clamped);
+      nums.push(i + 1);
+    }
+    return { times, nums };
+  };
+  const w = buildDeltas(whiteClocksSec);
+  const b = buildDeltas(blackClocksSec);
+  return {
+    whiteTimesSec: w.times,
+    whiteMoveNumbers: w.nums,
+    blackTimesSec: b.times,
+    blackMoveNumbers: b.nums
+  };
+}
 var ChessComApiClient = class {
   memoryCache = /* @__PURE__ */ new Map();
   queue = Promise.resolve();
@@ -13,6 +56,33 @@ var ChessComApiClient = class {
       () => void 0
     );
     return run;
+  }
+  async readDiskCache(cleanUser) {
+    if (!hasLocalStorageApi()) return null;
+    try {
+      const stored = await chrome.storage.local.get(STORAGE_CACHE_KEY);
+      const map = stored[STORAGE_CACHE_KEY] || {};
+      const entry = map[cleanUser];
+      if (entry && entry.expiresAt > Date.now() && entry.bundle) {
+        this.memoryCache.set(cleanUser, entry);
+        return entry.bundle;
+      }
+    } catch {
+    }
+    return null;
+  }
+  async writeDiskCache(cleanUser, item) {
+    if (!hasLocalStorageApi()) return;
+    try {
+      const stored = await chrome.storage.local.get(STORAGE_CACHE_KEY);
+      const rawMap = stored[STORAGE_CACHE_KEY] || {};
+      const now = Date.now();
+      const prunedEntries = Object.entries(rawMap).filter(([, v]) => v && v.expiresAt > now).slice(-24);
+      const nextMap = Object.fromEntries(prunedEntries);
+      nextMap[cleanUser] = item;
+      await chrome.storage.local.set({ [STORAGE_CACHE_KEY]: nextMap });
+    } catch {
+    }
   }
   async fetchJson(url, retries = 2) {
     return this.enqueue(async () => {
@@ -31,7 +101,7 @@ var ChessComApiClient = class {
           });
           clearTimeout(timer);
           if (response.status === 404) {
-            throw new Error(`PLAYER_NOT_FOUND`);
+            throw new Error("PLAYER_NOT_FOUND");
           }
           if (response.status === 429) {
             await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
@@ -42,7 +112,7 @@ var ChessComApiClient = class {
           }
           const data = await response.json();
           if (typeof data.code === "number" && data.code === 0 && data.message) {
-            throw new Error(`CHESSCOM_INTERNAL_ERROR`);
+            throw new Error("CHESSCOM_INTERNAL_ERROR");
           }
           return data;
         } catch (err) {
@@ -63,6 +133,44 @@ var ChessComApiClient = class {
     const clean = username.trim().toLowerCase();
     return this.fetchJson(`${API_BASE}/player/${encodeURIComponent(clean)}`);
   }
+  async fetchGameCallback(gameId) {
+    if (!/^\d{6,16}$/.test(gameId)) return null;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6500);
+      const resp = await fetch(`https://www.chess.com/callback/live/game/${gameId}`, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        credentials: "omit",
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      const g = data.game;
+      if (!g) return null;
+      const baseDs = typeof g.baseTime1 === "number" ? g.baseTime1 : 6e3;
+      const incDs = typeof g.timeIncrement1 === "number" ? g.timeIncrement1 : 0;
+      const parsed = parseCallbackMoveTimestamps(g.moveTimestamps, baseDs, incDs);
+      const topColor = data.players?.top?.color || "black";
+      const topIsWhite = topColor.toLowerCase() === "white";
+      return {
+        gameId,
+        isFinished: Boolean(g.isFinished),
+        isRated: g.isRated !== false,
+        isAbortable: Boolean(g.isAbortable),
+        detectedFormat: inferTimeClassFromBaseSec(baseDs / 10, incDs / 10),
+        topPlayer: data.players?.top?.username || null,
+        bottomPlayer: data.players?.bottom?.username || null,
+        topTimesSec: topIsWhite ? parsed.whiteTimesSec : parsed.blackTimesSec,
+        topMoveNumbers: topIsWhite ? parsed.whiteMoveNumbers : parsed.blackMoveNumbers,
+        bottomTimesSec: topIsWhite ? parsed.blackTimesSec : parsed.whiteTimesSec,
+        bottomMoveNumbers: topIsWhite ? parsed.blackMoveNumbers : parsed.whiteMoveNumbers
+      };
+    } catch {
+      return null;
+    }
+  }
   async fetchPlayerBundle(username, forceRefresh = false) {
     const clean = username.trim().toLowerCase();
     if (!clean) throw new Error("INVALID_USERNAME");
@@ -71,6 +179,8 @@ var ChessComApiClient = class {
       if (cached && cached.expiresAt > Date.now()) {
         return cached.bundle;
       }
+      const diskCached = await this.readDiskCache(clean);
+      if (diskCached) return diskCached;
     }
     const profile = await this.fetchProfileOnly(clean);
     let stats = {};
@@ -115,14 +225,16 @@ var ChessComApiClient = class {
       recentGames: trimmedGames,
       fetchedAt: Date.now()
     };
-    this.memoryCache.set(clean, {
+    const cacheItem = {
       bundle,
       expiresAt: Date.now() + CACHE_TTL_MS
-    });
+    };
+    this.memoryCache.set(clean, cacheItem);
     if (this.memoryCache.size > 60) {
       const oldestKey = this.memoryCache.keys().next().value;
       if (oldestKey) this.memoryCache.delete(oldestKey);
     }
+    void this.writeDiskCache(clean, cacheItem);
     return bundle;
   }
 };
@@ -154,9 +266,11 @@ var CAPS2_ACCURACY_BANDS = {
     { maxRating: 1400, expected: 79.5, ceiling: 88 },
     { maxRating: 1700, expected: 82, ceiling: 90 },
     { maxRating: 2e3, expected: 84.5, ceiling: 91.5 },
+    { maxRating: Infinity, expected: 84.5, ceiling: 91.5 }
+  ].slice(0, 5).concat([
     { maxRating: 2400, expected: 88, ceiling: 93.5 },
     { maxRating: Infinity, expected: 91, ceiling: 96 }
-  ],
+  ]),
   daily: [
     { maxRating: 1200, expected: 78, ceiling: 88 },
     { maxRating: 1800, expected: 84, ceiling: 92 },
@@ -179,45 +293,45 @@ var SENSITIVITY_MULTIPLIERS = {
 var TIER_THEMES = {
   low: {
     id: "low",
-    color: "#10b981",
-    accentBg: "rgba(16, 185, 129, 0.14)",
-    glow: "rgba(16, 185, 129, 0.38)",
-    border: "rgba(16, 185, 129, 0.35)"
+    color: "#81b64c",
+    accentBg: "rgba(129, 182, 76, 0.14)",
+    glow: "transparent",
+    border: "rgba(129, 182, 76, 0.34)"
   },
   guarded: {
     id: "guarded",
-    color: "#38bdf8",
-    accentBg: "rgba(56, 189, 248, 0.14)",
-    glow: "rgba(56, 189, 248, 0.35)",
-    border: "rgba(56, 189, 248, 0.35)"
+    color: "#6ba4d9",
+    accentBg: "rgba(107, 164, 217, 0.14)",
+    glow: "transparent",
+    border: "rgba(107, 164, 217, 0.34)"
   },
   elevated: {
     id: "elevated",
-    color: "#f59e0b",
-    accentBg: "rgba(245, 158, 11, 0.15)",
-    glow: "rgba(245, 158, 11, 0.42)",
-    border: "rgba(245, 158, 11, 0.40)"
+    color: "#e59934",
+    accentBg: "rgba(229, 153, 52, 0.15)",
+    glow: "transparent",
+    border: "rgba(229, 153, 52, 0.38)"
   },
   high: {
     id: "high",
-    color: "#f97316",
-    accentBg: "rgba(249, 115, 22, 0.16)",
-    glow: "rgba(249, 115, 22, 0.46)",
-    border: "rgba(249, 115, 22, 0.45)"
+    color: "#e06c35",
+    accentBg: "rgba(224, 108, 53, 0.16)",
+    glow: "transparent",
+    border: "rgba(224, 108, 53, 0.44)"
   },
   critical: {
     id: "critical",
-    color: "#ef4444",
-    accentBg: "rgba(239, 68, 68, 0.18)",
-    glow: "rgba(239, 68, 68, 0.55)",
-    border: "rgba(239, 68, 68, 0.55)"
+    color: "#e04644",
+    accentBg: "rgba(224, 70, 68, 0.18)",
+    glow: "transparent",
+    border: "rgba(224, 70, 68, 0.52)"
   },
   banned: {
     id: "banned",
-    color: "#f43f5e",
-    accentBg: "rgba(244, 63, 94, 0.22)",
-    glow: "rgba(244, 63, 94, 0.65)",
-    border: "rgba(244, 63, 94, 0.70)"
+    color: "#e04644",
+    accentBg: "rgba(224, 70, 68, 0.22)",
+    glow: "transparent",
+    border: "rgba(224, 70, 68, 0.62)"
   }
 };
 function probabilityToTier(probability, isBanned = false) {
@@ -970,7 +1084,7 @@ function analyzePlayerBundle(bundle, options = {}) {
       return getAccuracyBand(validFmt, rating).ceiling;
     }
   );
-  const recentMatches = validGames.slice(0, 5).map((g) => {
+  const recentMatches = validGames.slice(0, 8).map((g) => {
     const isWhite = g.white?.username?.toLowerCase() === usernameLower;
     const player = isWhite ? g.white : g.black;
     const opp = isWhite ? g.black : g.white;
@@ -979,6 +1093,8 @@ function analyzePlayerBundle(bundle, options = {}) {
     const accuracy = typeof rawAcc === "number" && !Number.isNaN(rawAcc) ? Number(rawAcc.toFixed(1)) : null;
     const pinKey = g.url || String(g.end_time || "");
     const pin = pinKey ? byUrlOrEndTime.get(pinKey) : void 0;
+    const parsedTimes = g.pgn ? extractPlayerMoveTimes(g.pgn, isWhite) : null;
+    const moveTimesSec = parsedTimes ? parsedTimes.moveDurationsSec.slice(0, 32).map((v) => Number(v.toFixed(1))) : void 0;
     return {
       result: resCode,
       format: String(g.time_class || "blitz"),
@@ -990,7 +1106,8 @@ function analyzePlayerBundle(bundle, options = {}) {
       url: g.url || null,
       endTime: g.end_time || 0,
       pinpointKind: pin ? pin.kind : null,
-      pinpointMoveRange: pin ? `#${pin.suspectStartMove}\u2013#${pin.suspectEndMove}` : null
+      pinpointMoveRange: pin ? `#${pin.suspectStartMove}-#${pin.suspectEndMove}` : null,
+      moveTimesSec
     };
   });
   const pacing = computeAggregatePacing(validGames, usernameLower, ratedOnly);
@@ -1138,13 +1255,13 @@ function analyzePlayerBundle(bundle, options = {}) {
   }
   const flags = [];
   if (isBannedFairPlay) {
-    flags.push({ id: "banned_fair_play", severity: "danger", icon: "\u{1F6A8}" });
+    flags.push({ id: "banned_fair_play", severity: "danger", icon: "" });
   }
   if (profile.title) {
     flags.push({
       id: "verified_title",
       severity: "info",
-      icon: "\u{1F451}",
+      icon: "",
       params: { title: profile.title.toUpperCase() }
     });
   }
@@ -1152,14 +1269,14 @@ function analyzePlayerBundle(bundle, options = {}) {
     flags.push({
       id: "fresh_high_elo",
       severity: probability >= 55 ? "danger" : "warning",
-      icon: "\u{1F195}",
+      icon: "",
       params: { days: Math.max(1, accountAgeDays), rating: pf.currentRating || 0 }
     });
   } else if (accountAgeDays !== null && accountAgeDays <= 21 && probability >= 30) {
     flags.push({
       id: "fresh_account",
       severity: "warning",
-      icon: "\u{1F195}",
+      icon: "",
       params: { days: Math.max(1, accountAgeDays) }
     });
   }
@@ -1167,14 +1284,14 @@ function analyzePlayerBundle(bundle, options = {}) {
     flags.push({
       id: "extreme_recent_wr",
       severity: "danger",
-      icon: "\u{1F6A9}",
+      icon: "",
       params: { games: pf.recentTotal, wr: pf.recentWinPct, z: pf.eloZScore }
     });
   } else if (pf.recentTotal >= 8 && pf.eloZScore >= 2) {
     flags.push({
       id: "elevated_recent_wr",
       severity: "warning",
-      icon: "\u{1F4C8}",
+      icon: "",
       params: { games: pf.recentTotal, wr: pf.recentWinPct, z: pf.eloZScore }
     });
   }
@@ -1182,7 +1299,7 @@ function analyzePlayerBundle(bundle, options = {}) {
     flags.push({
       id: "smurf_human_pacing",
       severity: "info",
-      icon: "\u{1F9ED}"
+      icon: ""
     });
   }
   if (signals.accuracyAnomaly >= 42 && pf.avgAccuracy !== null) {
@@ -1190,7 +1307,7 @@ function analyzePlayerBundle(bundle, options = {}) {
     flags.push({
       id: "accuracy_excess",
       severity: signals.accuracyAnomaly >= 70 ? "danger" : "warning",
-      icon: "\u{1F3AF}",
+      icon: "",
       params: { excess: Math.max(1.5, excess), avg: pf.avgAccuracy }
     });
   }
@@ -1198,7 +1315,7 @@ function analyzePlayerBundle(bundle, options = {}) {
     flags.push({
       id: "accuracy_spikes",
       severity: pf.highAccRate >= 0.45 ? "danger" : "warning",
-      icon: "\u26A1",
+      icon: "",
       params: {
         games: pf.reviewedGames,
         rate: Math.round(pf.highAccRate * 100),
@@ -1210,7 +1327,7 @@ function analyzePlayerBundle(bundle, options = {}) {
     flags.push({
       id: "robotic_pacing",
       severity: signals.movePacing >= 72 ? "danger" : "warning",
-      icon: "\u23F1\uFE0F",
+      icon: "",
       params: {
         cv: pacing.medianCV,
         qcd: pacing.medianQCD,
@@ -1222,7 +1339,7 @@ function analyzePlayerBundle(bundle, options = {}) {
     flags.push({
       id: "midgame_toggle",
       severity: pacing.toggleGames >= 3 ? "danger" : "warning",
-      icon: "\u{1F916}",
+      icon: "",
       params: { count: pacing.toggleGames }
     });
   }
@@ -1230,7 +1347,7 @@ function analyzePlayerBundle(bundle, options = {}) {
     flags.push({
       id: "elo_surge",
       severity: pf.eloDelta7d >= 185 ? "danger" : "warning",
-      icon: "\u{1F680}",
+      icon: "",
       params: { delta: pf.eloDelta7d }
     });
   }
@@ -1238,7 +1355,7 @@ function analyzePlayerBundle(bundle, options = {}) {
     flags.push({
       id: "hot_streak",
       severity: winStreak >= 12 ? "danger" : "warning",
-      icon: "\u{1F525}",
+      icon: "",
       params: { streak: winStreak }
     });
   }
@@ -1246,7 +1363,7 @@ function analyzePlayerBundle(bundle, options = {}) {
     flags.push({
       id: "tactics_gap",
       severity: "warning",
-      icon: "\u{1F9E9}",
+      icon: "",
       params: { rating: pf.currentRating || bestLiveRating, tactics: tacticsGapRating }
     });
   }
@@ -1255,7 +1372,7 @@ function analyzePlayerBundle(bundle, options = {}) {
       flags.push({
         id: "natural_human",
         severity: "positive",
-        icon: "\u2705",
+        icon: "",
         params: { cv: pacing.medianCV }
       });
     }
@@ -1263,7 +1380,7 @@ function analyzePlayerBundle(bundle, options = {}) {
       flags.push({
         id: "established_veteran",
         severity: "positive",
-        icon: "\u{1F6E1}\uFE0F",
+        icon: "",
         params: { years: Math.floor(accountAgeDays / 365), total: lifetimeGames }
       });
     }
@@ -1457,6 +1574,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           await recordRecentScan(result);
           setTabBadge(sender.tab?.id, result.probability, TIER_THEMES[result.tier].color);
           sendResponse({ ok: true, result });
+          break;
+        }
+        case "FETCH_GAME_CALLBACK": {
+          const data = await chessComApi.fetchGameCallback(message.gameId);
+          sendResponse({ ok: Boolean(data), data });
           break;
         }
         case "GET_SETTINGS": {

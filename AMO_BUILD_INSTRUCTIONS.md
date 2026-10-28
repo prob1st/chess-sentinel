@@ -1,11 +1,11 @@
-# Mozilla Add-ons (AMO) Reproducible Build Instructions — Chess Sentinel v3.2.0
+# Mozilla Add-ons (AMO) Reproducible Build Instructions - Chess Sentinel v4.0.0
 
-This document provides exact step-by-step instructions for Mozilla Add-ons reviewers to reproduce the submitted Firefox extension package (`chess-sentinel-v3.2.0-firefox.zip`) from TypeScript source code.
+This document provides exact step-by-step instructions for Mozilla Add-ons reviewers to reproduce the submitted Firefox extension package (`chess-sentinel-v4.0.0-firefox.zip`) from TypeScript source code.
 
 ## Build Environment
 - **Operating System:** Linux (Ubuntu 22.04 / 24.04 x86_64) or macOS / Windows
 - **Node.js:** `v20.x` or `v22.x` LTS (with `npm 10.x`)
-- **Bundler:** `esbuild` `^0.24.2` (`minify: false` — human-readable unminified output!)
+- **Bundler:** `esbuild` `^0.24.2` (`minify: false` - human-readable unminified output)
 
 ## Exact Build Steps
 
@@ -32,4 +32,4 @@ The complete unpacked Firefox extension is generated inside:
 
 ## Privacy & Network Behavior
 - **Zero personal data collection:** Declared via `browser_specific_settings.gecko.data_collection_permissions.required: ["none"]`.
-- **No remote code, analytics, or external servers:** Only makes read-only `GET` requests to Chess.com's official public API (`https://api.chess.com/pub/...`).
+- **No remote code, analytics, or external servers:** Only makes read-only `GET` requests to Chess.com's public endpoints (`https://api.chess.com/pub/...` and `https://www.chess.com/callback/live/game/...`).

@@ -8,8 +8,6 @@ export interface AccuracyBand {
 
 /**
  * Empirically calibrated Chess.com CAPS2 accuracy benchmarks per rating band & speed.
- * `expected`: mean CAPS2 accuracy of legitimate games in that rating bucket.
- * `ceiling`: ~95th-percentile threshold above which single-game performance is a spike.
  */
 export const CAPS2_ACCURACY_BANDS: Record<TimeClass, AccuracyBand[]> = {
   bullet: [
@@ -36,9 +34,11 @@ export const CAPS2_ACCURACY_BANDS: Record<TimeClass, AccuracyBand[]> = {
     { maxRating: 1400, expected: 79.5, ceiling: 88 },
     { maxRating: 1700, expected: 82, ceiling: 90 },
     { maxRating: 2000, expected: 84.5, ceiling: 91.5 },
+    { maxRating: Infinity, expected: 84.5, ceiling: 91.5 },
+  ].slice(0, 5).concat([
     { maxRating: 2400, expected: 88, ceiling: 93.5 },
     { maxRating: Infinity, expected: 91, ceiling: 96 },
-  ],
+  ]),
   daily: [
     { maxRating: 1200, expected: 78, ceiling: 88 },
     { maxRating: 1800, expected: 84, ceiling: 92 },
@@ -69,48 +69,51 @@ export interface TierTheme {
   border: string;
 }
 
+/**
+ * Native Chess.com Matte Semantic Palette (Zero Neon Glow).
+ */
 export const TIER_THEMES: Record<RiskTierId, TierTheme> = {
   low: {
     id: 'low',
-    color: '#10b981',
-    accentBg: 'rgba(16, 185, 129, 0.14)',
-    glow: 'rgba(16, 185, 129, 0.38)',
-    border: 'rgba(16, 185, 129, 0.35)',
+    color: '#81b64c',
+    accentBg: 'rgba(129, 182, 76, 0.14)',
+    glow: 'transparent',
+    border: 'rgba(129, 182, 76, 0.34)',
   },
   guarded: {
     id: 'guarded',
-    color: '#38bdf8',
-    accentBg: 'rgba(56, 189, 248, 0.14)',
-    glow: 'rgba(56, 189, 248, 0.35)',
-    border: 'rgba(56, 189, 248, 0.35)',
+    color: '#6ba4d9',
+    accentBg: 'rgba(107, 164, 217, 0.14)',
+    glow: 'transparent',
+    border: 'rgba(107, 164, 217, 0.34)',
   },
   elevated: {
     id: 'elevated',
-    color: '#f59e0b',
-    accentBg: 'rgba(245, 158, 11, 0.15)',
-    glow: 'rgba(245, 158, 11, 0.42)',
-    border: 'rgba(245, 158, 11, 0.40)',
+    color: '#e59934',
+    accentBg: 'rgba(229, 153, 52, 0.15)',
+    glow: 'transparent',
+    border: 'rgba(229, 153, 52, 0.38)',
   },
   high: {
     id: 'high',
-    color: '#f97316',
-    accentBg: 'rgba(249, 115, 22, 0.16)',
-    glow: 'rgba(249, 115, 22, 0.46)',
-    border: 'rgba(249, 115, 22, 0.45)',
+    color: '#e06c35',
+    accentBg: 'rgba(224, 108, 53, 0.16)',
+    glow: 'transparent',
+    border: 'rgba(224, 108, 53, 0.44)',
   },
   critical: {
     id: 'critical',
-    color: '#ef4444',
-    accentBg: 'rgba(239, 68, 68, 0.18)',
-    glow: 'rgba(239, 68, 68, 0.55)',
-    border: 'rgba(239, 68, 68, 0.55)',
+    color: '#e04644',
+    accentBg: 'rgba(224, 70, 68, 0.18)',
+    glow: 'transparent',
+    border: 'rgba(224, 70, 68, 0.52)',
   },
   banned: {
     id: 'banned',
-    color: '#f43f5e',
-    accentBg: 'rgba(244, 63, 94, 0.22)',
-    glow: 'rgba(244, 63, 94, 0.65)',
-    border: 'rgba(244, 63, 94, 0.70)',
+    color: '#e04644',
+    accentBg: 'rgba(224, 70, 68, 0.22)',
+    glow: 'transparent',
+    border: 'rgba(224, 70, 68, 0.62)',
   },
 };
 

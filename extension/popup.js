@@ -1,48 +1,93 @@
 // src/core/calibration.ts
+var CAPS2_ACCURACY_BANDS = {
+  bullet: [
+    { maxRating: 800, expected: 69, ceiling: 80 },
+    { maxRating: 1100, expected: 74, ceiling: 84 },
+    { maxRating: 1400, expected: 77, ceiling: 86 },
+    { maxRating: 1700, expected: 80, ceiling: 88 },
+    { maxRating: 2e3, expected: 82.5, ceiling: 90 },
+    { maxRating: 2400, expected: 85.5, ceiling: 92 },
+    { maxRating: Infinity, expected: 88.5, ceiling: 94.5 }
+  ],
+  blitz: [
+    { maxRating: 800, expected: 70, ceiling: 80 },
+    { maxRating: 1100, expected: 75, ceiling: 84 },
+    { maxRating: 1400, expected: 78.5, ceiling: 87 },
+    { maxRating: 1700, expected: 81, ceiling: 89 },
+    { maxRating: 2e3, expected: 83.5, ceiling: 90.5 },
+    { maxRating: 2400, expected: 86.5, ceiling: 92.5 },
+    { maxRating: Infinity, expected: 89.5, ceiling: 95 }
+  ],
+  rapid: [
+    { maxRating: 800, expected: 71, ceiling: 81 },
+    { maxRating: 1100, expected: 76, ceiling: 85 },
+    { maxRating: 1400, expected: 79.5, ceiling: 88 },
+    { maxRating: 1700, expected: 82, ceiling: 90 },
+    { maxRating: 2e3, expected: 84.5, ceiling: 91.5 },
+    { maxRating: Infinity, expected: 84.5, ceiling: 91.5 }
+  ].slice(0, 5).concat([
+    { maxRating: 2400, expected: 88, ceiling: 93.5 },
+    { maxRating: Infinity, expected: 91, ceiling: 96 }
+  ]),
+  daily: [
+    { maxRating: 1200, expected: 78, ceiling: 88 },
+    { maxRating: 1800, expected: 84, ceiling: 92 },
+    { maxRating: 2400, expected: 89, ceiling: 95 },
+    { maxRating: Infinity, expected: 92, ceiling: 97 }
+  ]
+};
 var TIER_THEMES = {
   low: {
     id: "low",
-    color: "#10b981",
-    accentBg: "rgba(16, 185, 129, 0.14)",
-    glow: "rgba(16, 185, 129, 0.38)",
-    border: "rgba(16, 185, 129, 0.35)"
+    color: "#81b64c",
+    accentBg: "rgba(129, 182, 76, 0.14)",
+    glow: "transparent",
+    border: "rgba(129, 182, 76, 0.34)"
   },
   guarded: {
     id: "guarded",
-    color: "#38bdf8",
-    accentBg: "rgba(56, 189, 248, 0.14)",
-    glow: "rgba(56, 189, 248, 0.35)",
-    border: "rgba(56, 189, 248, 0.35)"
+    color: "#6ba4d9",
+    accentBg: "rgba(107, 164, 217, 0.14)",
+    glow: "transparent",
+    border: "rgba(107, 164, 217, 0.34)"
   },
   elevated: {
     id: "elevated",
-    color: "#f59e0b",
-    accentBg: "rgba(245, 158, 11, 0.15)",
-    glow: "rgba(245, 158, 11, 0.42)",
-    border: "rgba(245, 158, 11, 0.40)"
+    color: "#e59934",
+    accentBg: "rgba(229, 153, 52, 0.15)",
+    glow: "transparent",
+    border: "rgba(229, 153, 52, 0.38)"
   },
   high: {
     id: "high",
-    color: "#f97316",
-    accentBg: "rgba(249, 115, 22, 0.16)",
-    glow: "rgba(249, 115, 22, 0.46)",
-    border: "rgba(249, 115, 22, 0.45)"
+    color: "#e06c35",
+    accentBg: "rgba(224, 108, 53, 0.16)",
+    glow: "transparent",
+    border: "rgba(224, 108, 53, 0.44)"
   },
   critical: {
     id: "critical",
-    color: "#ef4444",
-    accentBg: "rgba(239, 68, 68, 0.18)",
-    glow: "rgba(239, 68, 68, 0.55)",
-    border: "rgba(239, 68, 68, 0.55)"
+    color: "#e04644",
+    accentBg: "rgba(224, 70, 68, 0.18)",
+    glow: "transparent",
+    border: "rgba(224, 70, 68, 0.52)"
   },
   banned: {
     id: "banned",
-    color: "#f43f5e",
-    accentBg: "rgba(244, 63, 94, 0.22)",
-    glow: "rgba(244, 63, 94, 0.65)",
-    border: "rgba(244, 63, 94, 0.70)"
+    color: "#e04644",
+    accentBg: "rgba(224, 70, 68, 0.22)",
+    glow: "transparent",
+    border: "rgba(224, 70, 68, 0.62)"
   }
 };
+function probabilityToTier(probability, isBanned = false) {
+  if (isBanned) return "banned";
+  if (probability < 30) return "low";
+  if (probability < 55) return "guarded";
+  if (probability < 75) return "elevated";
+  if (probability < 90) return "high";
+  return "critical";
+}
 var DEFAULT_SETTINGS = {
   language: "tr",
   autoShowHud: true,
@@ -55,48 +100,73 @@ var DEFAULT_SETTINGS = {
 };
 
 // src/core/engine.ts
+function computeEffectiveLiveRisk(res, liveClock, selectedFormat) {
+  if (res.isBannedFairPlay) {
+    return { probability: 100, tier: "banned", liveEscalated: false };
+  }
+  const fmt = selectedFormat || res.primaryFormat;
+  const fmtData = res.formats[fmt] || res.formats[res.primaryFormat];
+  const baseProb = fmt === res.primaryFormat ? res.probability : fmtData.formatProbability;
+  const belongsToTarget = liveClock && (liveClock.opponent.toLowerCase() === res.username.toLowerCase() || liveClock.opponent.toLowerCase() === res.displayName.toLowerCase());
+  if (!belongsToTarget || !liveClock.isLiveSuspectPacing || res.title) {
+    return {
+      probability: baseProb,
+      tier: probabilityToTier(baseProb, false),
+      liveEscalated: false
+    };
+  }
+  const streakBonus = Math.min(18, Math.max(0, liveClock.consecutiveRoboticMoves - 7) * 3);
+  const liveFloor = liveClock.pauseMoveNumber !== null ? 68 + streakBonus : 60 + streakBonus;
+  const combined = Math.min(94, Math.max(baseProb, Math.round(liveFloor + baseProb * 0.18)));
+  return {
+    probability: combined,
+    tier: probabilityToTier(combined, false),
+    liveEscalated: combined > baseProb
+  };
+}
 function buildFairPlayEvidenceReport(res, lang, liveClock) {
   const pf = res.formats[res.primaryFormat];
+  const eff = computeEffectiveLiveRisk(res, liveClock, res.primaryFormat);
   const lines = [];
   if (lang === "tr") {
-    lines.push(`[Chess Sentinel v3.2 (Zero-FP) \u2014 Adil Oyun & Hamle Bazl\u0131 Kan\u0131t \xD6zeti]`);
+    lines.push(`[Chess Sentinel v4.0 - Adil Oyun Kanit Ozeti]`);
     lines.push(
-      `Oyuncu: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Hesap Ya\u015F\u0131: ${res.accountAgeDays !== null ? `${res.accountAgeDays} g\xFCn` : "Bilinmiyor"}`
+      `Oyuncu: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Hesap Yasi: ${res.accountAgeDays !== null ? `${res.accountAgeDays} gun` : "Bilinmiyor"}`
     );
     lines.push(
-      `Birincil Format: ${res.primaryFormat.toUpperCase()} (${pf.currentRating ?? "\u2014"} Elo) | \u0130statistiksel Anomali Olas\u0131l\u0131\u011F\u0131: %${res.probability}`
+      `Format: ${res.primaryFormat.toUpperCase()} (${pf.currentRating ?? "-"} Elo) | Anomali Skoru: %${eff.probability}`
     );
     lines.push(
-      `Son Performans: ${pf.recentWins}G / ${pf.recentLosses}M / ${pf.recentDraws}B (%${pf.recentWinPct} galibiyet, Rakip Elo beklentisine g\xF6re ${pf.eloZScore >= 0 ? "+" : ""}${pf.eloZScore}\u03C3 Z-Skoru)`
+      `Son Performans: ${pf.recentWins}G / ${pf.recentLosses}M / ${pf.recentDraws}B (%${pf.recentWinPct} galibiyet, ${pf.eloZScore >= 0 ? "+" : ""}${pf.eloZScore}\u03C3 Z-Skoru${pf.performanceRating ? `, Perf: ${pf.performanceRating}` : ""})`
     );
     if (pf.avgAccuracy !== null) {
       lines.push(
-        `Uzun Ma\xE7 CAPS2 Do\u011Fruluk: %${pf.avgAccuracy} (Elo band\u0131 beklentisi: %${pf.expectedAccuracy}, \u0130ncelenen tam ma\xE7: ${pf.reviewedGames})`
+        `Uzun Mac CAPS2 Dogruluk: %${pf.avgAccuracy} (Beklenen: %${pf.expectedAccuracy}, Incelenen tam mac: ${pf.reviewedGames})`
       );
     }
     if (res.pacing.gamesAnalyzed >= 4) {
       lines.push(
-        `Kronometrik Saat Analizi (%clk): Entropi ${res.pacing.meanEntropyBits ?? "\u2014"} bit | Medyan QCD: ${res.pacing.medianQCD ?? "\u2014"} | Medyan CV: ${res.pacing.medianCV ?? "\u2014"} | Mekanik Ma\xE7 Oran\u0131: %${Math.round(res.pacing.flatlineRate * 100)}`
+        `Hamle Suresi Analizi (%clk): Entropi ${res.pacing.meanEntropyBits ?? "-"} bit | Medyan QCD: ${res.pacing.medianQCD ?? "-"} | Medyan CV: ${res.pacing.medianCV ?? "-"} | Mekanik Mac Orani: %${Math.round(res.pacing.flatlineRate * 100)}`
       );
     }
     if (liveClock && liveClock.movesObserved >= 4) {
       const livePin = liveClock.pauseMoveNumber !== null && liveClock.roboticStartMove !== null ? ` | Nokta At\u0131\u015F\u0131: ${liveClock.pauseMoveNumber}. hamlede ${liveClock.detectedPauseSec}sn duraksama -> ${liveClock.roboticStartMove}.-${liveClock.roboticEndMove}. hamleler robotik (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}sn)` : liveClock.roboticStartMove !== null && liveClock.consecutiveRoboticMoves >= 6 ? ` | Nokta At\u0131\u015F\u0131: ${liveClock.roboticStartMove}.-${liveClock.roboticEndMove}. hamleler kesintisiz mekanik (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}sn)` : "";
       lines.push(
-        `Canl\u0131 Ma\xE7 Saat Verisi: ${liveClock.movesObserved} hamle izlendi | Ort: ${liveClock.liveMeanSec ?? "\u2014"} sn | Canl\u0131 QCD: ${liveClock.liveQCD ?? "\u2014"}${livePin}`
+        `Aktif Mac Saat Verisi: ${liveClock.movesObserved} hamle | Ort: ${liveClock.liveMeanSec ?? "-"} sn | QCD: ${liveClock.liveQCD ?? "-"}${livePin}`
       );
     }
     if (res.suspectPinpoints && res.suspectPinpoints.length > 0) {
-      lines.push(`Tespit Edilen \u015E\xFCpheli Ma\xE7 & Hamle Aral\u0131klar\u0131:`);
+      lines.push(`\u015E\xFCpheli Ma\xE7 ve Hamle Aral\u0131klar\u0131:`);
       for (const p of res.suspectPinpoints) {
-        const urlPart = p.gameUrl ? ` \u2014 ${p.gameUrl}` : "";
+        const urlPart = p.gameUrl ? ` | ${p.gameUrl}` : "";
         const samples = p.sampleMoves.length > 0 ? ` [${p.sampleMoves.join(" ")}]` : "";
         if (p.kind === "midgame_toggle") {
           lines.push(
-            `- vs @${p.opponentUsername}: ${p.pauseMoveNumber}. hamlede ${p.pauseSec}sn duraksama -> ${p.suspectStartMove}.-${p.suspectEndMove}. hamleler sabit robotik tempo (${p.minBandSec}-${p.maxBandSec}sn)${samples}${urlPart}`
+            `- vs @${p.opponentUsername}: ${p.pauseMoveNumber}. hamlede ${p.pauseSec}sn duraksama -> ${p.suspectStartMove}.-${p.suspectEndMove}. hamleler robotik tempo (${p.minBandSec}-${p.maxBandSec}sn)${samples}${urlPart}`
           );
         } else if (p.kind === "robotic_flatline") {
           lines.push(
-            `- vs @${p.opponentUsername}: ${p.suspectStartMove}.-${p.suspectEndMove}. hamleler s\u0131f\u0131r refleksli mekanik tempo (${p.minBandSec}-${p.maxBandSec}sn)${p.accuracy !== null ? ` [%${p.accuracy}]` : ""}${samples}${urlPart}`
+            `- vs @${p.opponentUsername}: ${p.suspectStartMove}.-${p.suspectEndMove}. hamleler sabit mekanik tempo (${p.minBandSec}-${p.maxBandSec}sn)${p.accuracy !== null ? ` [%${p.accuracy}]` : ""}${samples}${urlPart}`
           );
         } else {
           lines.push(
@@ -112,36 +182,36 @@ function buildFairPlayEvidenceReport(res, lang, liveClock) {
       }
     }
   } else {
-    lines.push(`[Chess Sentinel v3.2 (Zero-FP) \u2014 Fair-Play & Move-Range Evidence Summary]`);
+    lines.push(`[Chess Sentinel v4.0 - Fair-Play Evidence Summary]`);
     lines.push(
       `Player: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Account Age: ${res.accountAgeDays !== null ? `${res.accountAgeDays} days` : "Unknown"}`
     );
     lines.push(
-      `Primary Format: ${res.primaryFormat.toUpperCase()} (${pf.currentRating ?? "\u2014"} Elo) | Statistical Anomaly Probability: ${res.probability}%`
+      `Format: ${res.primaryFormat.toUpperCase()} (${pf.currentRating ?? "-"} Elo) | Statistical Anomaly Score: ${eff.probability}%`
     );
     lines.push(
-      `Recent Performance: ${pf.recentWins}W / ${pf.recentLosses}L / ${pf.recentDraws}D (${pf.recentWinPct}% WR, ${pf.eloZScore >= 0 ? "+" : ""}${pf.eloZScore}\u03C3 Elo-adjusted Z-Score)`
+      `Recent Performance: ${pf.recentWins}W / ${pf.recentLosses}L / ${pf.recentDraws}D (${pf.recentWinPct}% WR, ${pf.eloZScore >= 0 ? "+" : ""}${pf.eloZScore}\u03C3 Z-Score${pf.performanceRating ? `, Perf: ${pf.performanceRating}` : ""})`
     );
     if (pf.avgAccuracy !== null) {
       lines.push(
-        `Long-Game CAPS2 Accuracy: ${pf.avgAccuracy}% (Band expected: ${pf.expectedAccuracy}%, Full-length reviewed games: ${pf.reviewedGames})`
+        `Long-Game CAPS2 Accuracy: ${pf.avgAccuracy}% (Expected: ${pf.expectedAccuracy}%, Full-length reviewed games: ${pf.reviewedGames})`
       );
     }
     if (res.pacing.gamesAnalyzed >= 4) {
       lines.push(
-        `Chronometric PGN [%clk] Profile: Entropy ${res.pacing.meanEntropyBits ?? "\u2014"} bits | Median QCD: ${res.pacing.medianQCD ?? "\u2014"} | Median CV: ${res.pacing.medianCV ?? "\u2014"} | Flatline Rate: ${Math.round(res.pacing.flatlineRate * 100)}%`
+        `Move-Time [%clk] Profile: Entropy ${res.pacing.meanEntropyBits ?? "-"} bits | Median QCD: ${res.pacing.medianQCD ?? "-"} | Median CV: ${res.pacing.medianCV ?? "-"} | Flatline Rate: ${Math.round(res.pacing.flatlineRate * 100)}%`
       );
     }
     if (liveClock && liveClock.movesObserved >= 4) {
       const livePin = liveClock.pauseMoveNumber !== null && liveClock.roboticStartMove !== null ? ` | Pinpoint: Move #${liveClock.pauseMoveNumber} (${liveClock.detectedPauseSec}s pause) -> Moves #${liveClock.roboticStartMove}-#${liveClock.roboticEndMove} mechanical (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}s)` : liveClock.roboticStartMove !== null && liveClock.consecutiveRoboticMoves >= 6 ? ` | Pinpoint: Moves #${liveClock.roboticStartMove}-#${liveClock.roboticEndMove} continuous mechanical band (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}s)` : "";
       lines.push(
-        `Live Match Clock Radar: ${liveClock.movesObserved} moves | Mean: ${liveClock.liveMeanSec ?? "\u2014"}s | Live QCD: ${liveClock.liveQCD ?? "\u2014"}${livePin}`
+        `Match Clock Data: ${liveClock.movesObserved} moves | Mean: ${liveClock.liveMeanSec ?? "-"}s | QCD: ${liveClock.liveQCD ?? "-"}${livePin}`
       );
     }
     if (res.suspectPinpoints && res.suspectPinpoints.length > 0) {
       lines.push(`Pinpointed Suspect Games & Move Ranges:`);
       for (const p of res.suspectPinpoints) {
-        const urlPart = p.gameUrl ? ` \u2014 ${p.gameUrl}` : "";
+        const urlPart = p.gameUrl ? ` | ${p.gameUrl}` : "";
         const samples = p.sampleMoves.length > 0 ? ` [${p.sampleMoves.join(" ")}]` : "";
         if (p.kind === "midgame_toggle") {
           lines.push(
@@ -172,36 +242,46 @@ function buildFairPlayEvidenceReport(res, lang, liveClock) {
 var TRANSLATIONS = {
   tr: {
     appName: "Chess Sentinel",
-    appSubtitle: "Canl\u0131 Hile Olas\u0131l\u0131\u011F\u0131 & Adil Oyun Radar\u0131",
-    cheatProbability: "H\u0130LE OLASILI\u011EI",
-    scanningOpponent: "Rakip telemetrisi analiz ediliyor\u2026",
-    waitingForMatch: "Rakip bekleniyor\u2026",
-    abortWindowActive: "G\xFCvenli \u0130ptal (Abort) Penceresi A\xE7\u0131k",
-    safeToPlay: "Normal oyuncu profili \u2014 g\xFCvenle oynanabilir",
-    cautionAdvised: "Ola\u011Fand\u0131\u015F\u0131 sinyaller var \u2014 dikkatli oynay\u0131n",
-    considerAborting: "Y\xFCksek hile / smurf riski \u2014 iptal (abort) d\xFC\u015F\xFCn\xFCn",
-    bannedFairPlayBanner: "CHESS.COM TARAFINDAN H\u0130LEDEN KAPATILDI",
+    appSubtitle: "Rakip Analizi ve Adil Oyun Kontrol\xFC",
+    cheatProbability: "Risk Skoru",
+    scanningOpponent: "Rakip ge\xE7mi\u015Fi inceleniyor...",
+    waitingForMatch: "Rakip bekleniyor...",
+    abortWindowActive: "\xDCcretsiz iptal (abort) s\xFCresi a\xE7\u0131k",
+    safeToPlay: "Do\u011Fal insan profili, g\xFCvenle oynanabilir",
+    cautionAdvised: "Ola\u011Fand\u0131\u015F\u0131 metrikler var, dikkatli oynay\u0131n",
+    considerAborting: "Y\xFCksek risk sinyali, ma\xE7\u0131 iptal edebilirsiniz",
+    bannedFairPlayBanner: "Bu hesap Chess.com taraf\u0131ndan adil oyun ihlalinden kapat\u0131ld\u0131",
     confidenceLabel: {
-      low: "D\xFC\u015F\xFCk Veri G\xFCveni",
-      medium: "Orta Veri G\xFCveni",
-      high: "Y\xFCksek Veri G\xFCveni"
+      low: "Az \xF6rneklem",
+      medium: "Orta \xF6rneklem",
+      high: "Y\xFCksek \xF6rneklem"
+    },
+    surfaceBadge: {
+      live: "Canl\u0131",
+      game: "Ma\xE7",
+      profile: "Profil"
+    },
+    hudTabs: {
+      overview: "\xD6zet",
+      clock: "Ma\xE7 Saati",
+      games: "Ge\xE7mi\u015F"
     },
     tiers: {
-      low: { label: "D\xDC\u015E\xDCK R\u0130SK", summary: "Do\u011Fal insan istatistikleri" },
-      guarded: { label: "NORMAL / \u0130ZLE", summary: "Hafif form art\u0131\u015F\u0131, normal s\u0131n\u0131rda" },
-      elevated: { label: "\u015E\xDCPHEL\u0130", summary: "Birden fazla ola\u011Fand\u0131\u015F\u0131 metrik" },
-      high: { label: "Y\xDCKSEK R\u0130SK", summary: "G\xFC\xE7l\xFC motor veya smurf sinyalleri" },
-      critical: { label: "KR\u0130T\u0130K H\u0130LE R\u0130SK\u0130", summary: "A\u015F\u0131r\u0131 istatistiksel anomali!" },
-      banned: { label: "YASAKLANDI (%100)", summary: "Adil Oyun (Fair Play) ihlali" }
+      low: { label: "Temiz", summary: "Do\u011Fal insan istatistikleri" },
+      guarded: { label: "Normal+", summary: "Formda, normal s\u0131n\u0131rlar i\xE7inde" },
+      elevated: { label: "\u015E\xFCpheli", summary: "Birden fazla ola\u011Fand\u0131\u015F\u0131 metrik" },
+      high: { label: "Y\xFCksek Risk", summary: "G\xFC\xE7l\xFC motor veya d\u0131\u015F destek sinyali" },
+      critical: { label: "Kritik Risk", summary: "\xC7oklu do\u011Frulanm\u0131\u015F motor imzas\u0131" },
+      banned: { label: "Yasakl\u0131", summary: "Adil oyun ihlalinden kapat\u0131ld\u0131" }
     },
     signals: {
-      sectionTitle: "6-S\u0130NYALL\u0130 ADL\u0130 TELEMETR\u0130",
-      recentWinrate: "Son Ma\xE7 Kazanma Anomalisi",
-      overallWinrate: "Genel Glicko Sapmas\u0131",
-      accuracyAnomaly: "CAPS2 Do\u011Fruluk Sapmas\u0131",
-      movePacing: "Motor Hamle Ritmi (%clk)",
-      eloVelocity: "Elo S\u0131\xE7rama H\u0131z\u0131",
-      accountTrust: "Hesap Ya\u015F\u0131 & G\xFCven Riski"
+      sectionTitle: "Alt Sinyaller",
+      recentWinrate: "Son Ma\xE7 Kazanma Sapmas\u0131",
+      overallWinrate: "Genel Glicko Dengesi",
+      accuracyAnomaly: "Uzun Ma\xE7 CAPS2 Sapmas\u0131",
+      movePacing: "Hamle S\xFCresi Tutarl\u0131l\u0131\u011F\u0131 (%clk)",
+      eloVelocity: "Puan Art\u0131\u015F H\u0131z\u0131",
+      accountTrust: "Hesap Ya\u015F\u0131 ve Ge\xE7mi\u015F"
     },
     stats: {
       accountAge: "Hesap Ya\u015F\u0131",
@@ -209,138 +289,155 @@ var TRANSLATIONS = {
       monthsShort: "ay",
       yearsShort: "y\u0131l",
       recentRecord: "Son Form",
-      avgAccuracy: "Ort. Do\u011Fruluk",
-      expectedShort: "beklenen",
-      moveCV: "Hamle Ritmi CV",
-      elo7d: "7G Elo Fark\u0131",
+      performance: "Performans",
+      avgAccuracy: "CAPS2 Ort.",
+      expectedShort: "bek.",
+      moveCV: "Hamle Ritmi",
+      elo7d: "7 G\xFCnl\xFCk Elo",
       streak: "Seri",
-      noReviewedGames: "Analizli ma\xE7 yok",
-      gamesAnalyzed: "{count} ma\xE7 incelendi"
+      noReviewedGames: "\u0130ncelenen ma\xE7 yok",
+      gamesAnalyzed: "{count} ma\xE7",
+      lifetimeGames: "{count} ma\xE7"
     },
     actions: {
-      swapTarget: "\xDCst / Alt Oyuncu De\u011Fi\u015Ftir",
-      watchSuspect: "\u015E\xFCpheliyi Takibe Al",
-      watchingSuspect: "Takipte (Ban \u0130zleniyor)",
-      refresh: "Yeniden Analiz Et",
+      swapTarget: "\xDCst / Alt oyuncuyu de\u011Fi\u015Ftir",
+      watchSuspect: "Takip listesine ekle",
+      watchingSuspect: "Takipte (ban kontrol\xFC aktif)",
+      refresh: "Verileri yenile",
       minimize: "K\xFC\xE7\xFClt (Alt+S)",
-      expand: "B\xFCy\xFCt",
-      openProfile: "Chess.com Profilini A\xE7",
-      toggleDetails: "Adli Detaylar\u0131 & Grafikleri G\xF6ster",
-      hideDetails: "Detaylar\u0131 Gizle",
-      copyReport: "\u{1F4CB} Kan\u0131t Raporunu Kopyala",
-      copiedReport: "\u2713 Rapor Panoya Kopyaland\u0131!",
-      soundOn: "Sesli Risk Uyar\u0131s\u0131: A\xE7\u0131k",
-      soundOff: "Sesli Risk Uyar\u0131s\u0131: Kapal\u0131"
+      expand: "Paneli a\xE7",
+      openProfile: "Chess.com profilini a\xE7",
+      toggleDetails: "Alt sinyalleri g\xF6ster",
+      hideDetails: "Alt sinyalleri gizle",
+      copyReport: "Kan\u0131t Kopyala",
+      copiedReport: "Kopyaland\u0131",
+      reportFairPlay: "Bildir",
+      soundOn: "Sesli uyar\u0131 a\xE7\u0131k",
+      soundOff: "Sesli uyar\u0131 kapal\u0131"
     },
     v3: {
-      liveClockTitle: "CANLI MA\xC7 HAMLE RADARI",
-      liveClockMoves: "{count} hamle \u2022 Ort {mean}s \u2022 QCD {qcd}",
-      liveClockSuspect: "\u26A1 Canl\u0131 ma\xE7ta mekanik hamle temposu alg\u0131land\u0131!",
-      livePinpointToggle: "\u{1F3AF} {pauseMove}. hamlede {pauseSec}sn duraksad\u0131 \u2192 {start}.\u2013{end}. hamleler sabit robotik ({min}\u2013{max}sn)",
-      livePinpointFlatline: "\u{1F3AF} {start}.\u2013{end}. hamleler aras\u0131 \xFCst \xFCste {count} hamle sabit robotik ({min}\u2013{max}sn)",
-      pacingHistTitle: "HAMLE S\xDCRES\u0130 DA\u011EILIMI (%clk)",
-      pacingEntropyTag: "Entropi: {ent}b \u2022 QCD: {qcd}",
-      recentMatchesTitle: "SON PUANLI MA\xC7LAR",
-      autoVerdictTitle: "OTOMAT\u0130K S\u0130STEM KARARI",
-      verdictBanned: "\u{1F6A8} Bu hesap Chess.com taraf\u0131ndan Adil Oyun (Hile) ihlali nedeniyle resmen kapat\u0131lm\u0131\u015Ft\u0131r.",
-      verdictLiveToggle: "\u{1F3AF} CANLI TESP\u0130T: Rakip {pauseMove}. hamlede {pauseSec}sn bekleyip {start}.\u2013{end}. hamleleri sabit makine ritminde ({min}\u2013{max}sn) oynad\u0131! Ma\xE7 sonu alttan kan\u0131t raporunu kopyalay\u0131n.",
-      verdictLiveFlatline: "\u{1F3AF} CANLI TESP\u0130T: Rakip {start}.\u2013{end}. hamleler boyunca \xFCst \xFCste {count} hamleyi s\u0131f\u0131r refleksli sabit robotik s\xFCrede ({min}\u2013{max}sn) oynuyor!",
-      verdictAbortNow: "\u26D4 \xC7OKLU MOTOR KANITI ({pins} \u015F\xFCpheli ma\xE7 aral\u0131\u011F\u0131): Hen\xFCz ilk hamlelerdesiniz \u2014 puan kaybetmeden MA\xC7I \u0130PTAL ED\u0130N (Abort).",
-      verdictHighWatch: "\u26A0\uFE0F Ge\xE7mi\u015F ma\xE7larda \xE7oklu motor imzas\u0131 bulundu (a\u015Fa\u011F\u0131da tam hamle numaralar\u0131 listelendi). Canl\u0131 saat radar\u0131 \u015Fu an her hamleyi izliyor.",
-      verdictElevatedWatch: "\u{1F536} \u015E\xFCpheli hamle ritmi/do\u011Fruluk sinyalleri var. Canl\u0131 radar aktif \u2014 robotik seri olu\u015Fursa tam hamle numaras\u0131yla burada otomatik yazacak.",
-      verdictSmurfHuman: "\u{1F9ED} Kazanma serisi y\xFCksek ancak hamle s\xFCreleri tamamen do\u011Fal insan ritminde. Motor kan\u0131t\u0131 YOK (el ile oynayan g\xFC\xE7l\xFC oyuncu / smurf).",
-      verdictCleanSafe: "\u2705 \u0130ncelenen ma\xE7larda \u015F\xFCpheli hamle aral\u0131\u011F\u0131 veya motor ge\xE7i\u015Fi yok. Do\u011Fal insan profili \u2014 g\xFCvenle oynayabilirsiniz.",
-      pinpointSectionTitle: "TESP\u0130T ED\u0130LEN \u015E\xDCPHEL\u0130 MA\xC7 & HAMLE ARALIKLARI",
-      pinpointOpenGame: "Ma\xE7\u0131 A\xE7 \u2197",
-      pinpointToggleRow: "{pauseMove}. hamlede {pauseSec}sn duraksama \u2192 {start}.\u2013{end}. hamleler robotik ({min}\u2013{max}sn)",
-      pinpointFlatlineRow: "{start}.\u2013{end}. hamleler aras\u0131 {count} hamle sabit mekanik tempo ({min}\u2013{max}sn)",
-      pinpointCapsRow: "1.\u2013{end}. hamleler boyunca %{acc} motor seviyesi CAPS2 do\u011Fruluk"
+      liveClockTitle: "Canl\u0131 Ma\xE7 Hamle S\xFCreleri",
+      finishedClockTitle: "Bu Ma\xE7\u0131n Hamle S\xFCreleri (0.1sn)",
+      emptyLiveClock: "Canl\u0131 hamle s\xFCreleri 3. hamleden itibaren burada grafiklenir.",
+      liveClockMoves: "{count} hamle \xB7 Ort {mean}sn \xB7 QCD {qcd}",
+      liveClockSuspect: "Bu ma\xE7ta mekanik hamle temposu tespit edildi.",
+      livePinpointToggle: "{pauseMove}. hamlede {pauseSec}sn duraksama -> {start}.-{end}. hamleler sabit ({min}-{max}sn)",
+      livePinpointFlatline: "{start}.-{end}. hamleler aras\u0131 \xFCst \xFCste {count} hamle sabit aral\u0131kta ({min}-{max}sn)",
+      pacingHistTitle: "Ge\xE7mi\u015F Hamle S\xFCresi Da\u011F\u0131l\u0131m\u0131",
+      pacingEntropyTag: "Entropi {ent}b \xB7 QCD {qcd}",
+      recentMatchesTitle: "Son Puanl\u0131 Ma\xE7lar",
+      inspectMoves: "S\xFCreler",
+      autoVerdictTitle: "Durum",
+      verdictBanned: "Hesap Chess.com taraf\u0131ndan adil oyun ihlali nedeniyle kapat\u0131lm\u0131\u015F.",
+      verdictLiveToggle: "Aktif ma\xE7 tespiti: {pauseMove}. hamlede {pauseSec}sn bekleyip {start}.-{end}. hamleleri sabit ritimde ({min}-{max}sn) oynad\u0131.",
+      verdictLiveFlatline: "Aktif ma\xE7 tespiti: {start}.-{end}. hamleler boyunca \xFCst \xFCste {count} hamleyi sabit s\xFCrede ({min}-{max}sn) oynuyor.",
+      verdictAbortNow: "Ge\xE7mi\u015Fte {pins} \u015F\xFCpheli ma\xE7 aral\u0131\u011F\u0131 bulundu. \u0130lk hamlelerdesiniz, puan kaybetmeden iptal (abort) edebilirsiniz.",
+      verdictHighWatch: "Ge\xE7mi\u015F ma\xE7larda do\u011Frulanm\u0131\u015F motor imzas\u0131 var. Tam hamle aral\u0131klar\u0131 a\u015Fa\u011F\u0131da listelendi.",
+      verdictElevatedWatch: "Hamle temposu veya do\u011Fruluk verilerinde sapma var. Canl\u0131 saat takibi aktif.",
+      verdictSmurfHuman: "Kazanma oran\u0131 y\xFCksek fakat hamle s\xFCreleri do\u011Fal insan da\u011F\u0131l\u0131m\u0131nda (olas\u0131 smurf veya formda oyuncu).",
+      verdictCleanSafe: "\u0130ncelenen ma\xE7larda robotik tempo veya oyun ortas\u0131 motor ge\xE7i\u015Fi g\xF6r\xFClmedi.",
+      pinpointSectionTitle: "\u015E\xFCpheli Ma\xE7 ve Hamle Aral\u0131klar\u0131",
+      pinpointOpenGame: "Ma\xE7\u0131 a\xE7",
+      pinpointToggleRow: "{pauseMove}. hamlede {pauseSec}sn duraksama -> {start}.-{end}. hamleler sabit ({min}-{max}sn)",
+      pinpointFlatlineRow: "{start}.-{end}. hamleler aras\u0131 {count} hamle sabit mekanik tempo ({min}-{max}sn)",
+      pinpointCapsRow: "1.-{end}. hamleler boyunca %{acc} CAPS2 do\u011Fruluk"
     },
     popup: {
-      tabScanner: "Oyuncu Tara",
-      tabWatchlist: "Ban Takibi",
+      tabScanner: "Sorgula",
+      tabWatchlist: "Takip Listesi",
       tabSettings: "Ayarlar",
-      searchPlaceholder: "Chess.com kullan\u0131c\u0131 ad\u0131 yaz\u0131n (\xF6rn. hikaru)\u2026",
-      scanBtn: "Analiz Et",
-      recentScansTitle: "SON \u0130NCELENEN RAK\u0130PLER",
-      emptyScans: "Hen\xFCz incelenen rakip yok. Chess.com'da ma\xE7a girin veya yukar\u0131dan arat\u0131n.",
-      watchlistTitle: "\u015E\xDCPHEL\u0130 & BAN TAK\u0130P L\u0130STES\u0130",
-      checkBansBtn: "Ban Durumlar\u0131n\u0131 Kontrol Et",
-      checkingBans: "Kontrol ediliyor\u2026",
-      emptyWatchlist: "Takip listeniz bo\u015F. \u015E\xFCpheli rakipleri HUD \xFCzerindeki g\xF6z ikonuyla ekleyin.",
-      bannedTag: "BANLANDI (H\u0130LE)",
-      activeTag: "Aktif Hesap",
+      activeMatchLabel: "A\xE7\u0131k sekmedeki rakip",
+      searchPlaceholder: "Kullan\u0131c\u0131 ad\u0131 (\xF6rn. hikaru)",
+      scanBtn: "\u0130ncele",
+      recentScansTitle: "Son \u0130ncelenenler",
+      emptyScans: "Hen\xFCz oyuncu incelenmedi. Chess.com'da ma\xE7a girin veya yukar\u0131dan arat\u0131n.",
+      watchlistTitle: "Takip Edilen Hesaplar",
+      checkBansBtn: "Ban Kontrol\xFC",
+      checkingBans: "Kontrol ediliyor...",
+      emptyWatchlist: "Takip listeniz bo\u015F. HUD \xFCzerindeki yer imi simgesiyle oyuncu ekleyebilirsiniz.",
+      bannedTag: "Kapat\u0131ld\u0131",
+      activeTag: "Aktif",
       addedOn: "\u0130lk skor: %{prob}",
-      removeBtn: "Kald\u0131r",
-      settingsLanguage: "Aray\xFCz Dili / Language",
-      settingsAutoHud: "Ma\xE7 Ba\u015Flad\u0131\u011F\u0131nda HUD Pop-up A\xE7",
-      settingsAutoHudDesc: "Yeni rakip bulundu\u011Funda Chess.com ekran\u0131nda y\xFCzen analiz kart\u0131n\u0131 otomatik a\xE7ar.",
-      settingsInlineBadge: "\u0130sim Yan\u0131 Mini % Rozeti",
-      settingsInlineBadgeDesc: "Rakibin kullan\u0131c\u0131 ad\u0131n\u0131n hemen yan\u0131na renkli hile olas\u0131l\u0131\u011F\u0131 ve G/M/B rozeti ekler.",
-      settingsCompact: "Kompakt Pop-up Modu",
-      settingsCompactDesc: "HUD kart\u0131n\u0131 varsay\u0131lan olarak daralt\u0131lm\u0131\u015F g\xF6r\xFCn\xFCmde ba\u015Flat\u0131r.",
-      settingsRatedOnly: "Sadece Puanl\u0131 (Rated) Ma\xE7lar",
-      settingsRatedOnlyDesc: "Arkada\u015Fl\u0131k / puans\u0131z ma\xE7lar\u0131 olas\u0131l\u0131k hesab\u0131ndan hari\xE7 tutar.",
-      settingsSoundAlerts: "Kritik Risk Sesli Uyar\u0131s\u0131",
-      settingsSoundAlertsDesc: "Y\xFCksek/Kritik riskli (%68+) veya takipteki rakip geldi\u011Finde hafif radar sesi \xE7alar.",
-      settingsSensitivity: "Alg\u0131lama Hassasiyeti",
+      removeBtn: "Sil",
+      settingsLanguage: "Dil / Language",
+      settingsAutoHud: "Ma\xE7ta paneli otomatik a\xE7",
+      settingsAutoHudDesc: "Rakip alg\u0131land\u0131\u011F\u0131nda sa\u011F \xFCstteki analiz panelini otomatik g\xF6sterir.",
+      settingsInlineBadge: "Kullan\u0131c\u0131 ad\u0131 yan\u0131 rozeti",
+      settingsInlineBadgeDesc: "Rakibin ad\u0131n\u0131n yan\u0131na sade y\xFCzdelik skor ve galibiyet etiketi ekler.",
+      settingsCompact: "Daralt\u0131lm\u0131\u015F g\xF6r\xFCn\xFCm",
+      settingsCompactDesc: "Alt sinyal \xE7ubuklar\u0131n\u0131 varsay\u0131lan olarak kapal\u0131 tutar.",
+      settingsRatedOnly: "Yaln\u0131zca puanl\u0131 ma\xE7lar",
+      settingsRatedOnlyDesc: "Puans\u0131z ma\xE7lar\u0131 hesaplamaya dahil etmez.",
+      settingsSoundAlerts: "Y\xFCksek risk ses uyar\u0131s\u0131",
+      settingsSoundAlertsDesc: "Y\xFCksek riskli veya takipteki rakip geldi\u011Finde k\u0131sa uyar\u0131 sesi \xE7alar.",
+      settingsSensitivity: "Hassasiyet",
       sensitivityConservative: "Esnek",
       sensitivityBalanced: "Dengeli (\xD6nerilen)",
       sensitivityStrict: "S\u0131k\u0131",
-      toggleInPageHud: "Aktif Sekmede HUD G\xF6ster/Gizle",
-      privacyNote: "100% Gizli \u2022 S\u0131f\u0131r veri toplama \u2022 Yaln\u0131zca resmi Chess.com PubAPI kullan\u0131l\u0131r."
+      toggleInPageHud: "Sekmede Paneli G\xF6ster / Gizle",
+      privacyNote: "Veri toplanmaz. Yaln\u0131zca herkese a\xE7\u0131k Chess.com verileri kullan\u0131l\u0131r."
     },
     flags: {
-      banned_fair_play: "Hesap Chess.com Adil Oyun (Hile) ihlali nedeniyle kapat\u0131lm\u0131\u015F!",
-      verified_title: "Do\u011Frulanm\u0131\u015F FIDE unvanl\u0131 usta ({title}) \u2014 elit istatistik kalibrasyonu uyguland\u0131",
-      fresh_high_elo: "\xC7ok yeni hesap ({days} g\xFCnl\xFCk) olmas\u0131na ra\u011Fmen {rating} Elo seviyesinde",
-      fresh_account: "Yeni a\xE7\u0131lm\u0131\u015F hesap ({days} g\xFCnl\xFCk) \u2014 smurf veya yeni hile hesab\u0131 riski",
-      extreme_recent_wr: "Son {games} puanl\u0131 ma\xE7ta %{wr} galibiyet (Rakip Elo g\xF6re +{z}\u03C3 sapma)",
-      elevated_recent_wr: "Son {games} ma\xE7ta %{wr} galibiyet (+{z}\u03C3 Elo \xFCst\xFC performans)",
-      smurf_human_pacing: "Y\xFCksek kazanma oran\u0131 ancak hamle ritmi do\u011Fal insan da\u011F\u0131l\u0131m\u0131nda (olas\u0131 smurf / formda oyuncu)",
-      accuracy_excess: "Uzun ma\xE7larda Elo band\u0131 beklentisinin (+%{excess}) \xFCzerinde do\u011Fruluk (%{avg})",
-      accuracy_spikes: "\u0130ncelenen {games} uzun ma\xE7\u0131n %{rate} kadar\u0131nda tavan do\u011Fruluk (\u2265%{ceil})",
-      robotic_pacing: "D\xFC\u015F\xFCk zaman entropisi ({ent} bit) ve mekanik hamle da\u011F\u0131l\u0131m\u0131 (QCD: {qcd}, CV: {cv})",
-      midgame_toggle: "{count} ma\xE7ta oyun ortas\u0131 uzun duraksama sonras\u0131 mekanik seri (motor a\xE7ma imzas\u0131)",
-      elo_surge: "Son 7 g\xFCnde +{delta} Elo dikey puan s\u0131\xE7ramas\u0131",
-      hot_streak: "\xDCst \xFCste {streak} puanl\u0131 galibiyet serisinde",
-      tactics_gap: "Canl\u0131 puan ({rating}) ile bulmaca puan\u0131 ({tactics}) aras\u0131nda u\xE7urum var",
-      natural_human: "Do\u011Fal insan hamle s\xFCresi varyans\u0131 (CV: {cv}) ve dengeli kazanma oran\u0131",
-      established_veteran: "K\xF6kl\xFC hesap ({years}+ y\u0131ll\u0131k ge\xE7mi\u015F, {total} toplam ma\xE7)"
+      banned_fair_play: "Chess.com taraf\u0131ndan adil oyun ihlalinden kapat\u0131ld\u0131",
+      verified_title: "Onayl\u0131 FIDE unvanl\u0131 oyuncu ({title})",
+      fresh_high_elo: "Yeni hesap ({days} g\xFCnl\xFCk), {rating} Elo seviyesinde",
+      fresh_account: "Yeni a\xE7\u0131lm\u0131\u015F hesap ({days} g\xFCnl\xFCk)",
+      extreme_recent_wr: "Son {games} ma\xE7ta %{wr} galibiyet (+{z}\u03C3 Elo \xFCst\xFC performans)",
+      elevated_recent_wr: "Son {games} ma\xE7ta %{wr} galibiyet (+{z}\u03C3 beklenti \xFCst\xFC)",
+      smurf_human_pacing: "Y\xFCksek kazanma oran\u0131, do\u011Fal insan hamle s\xFCreleri (olas\u0131 smurf)",
+      accuracy_excess: "Uzun ma\xE7larda beklentinin +%{excess} \xFCzerinde do\u011Fruluk (%{avg})",
+      accuracy_spikes: "{games} uzun ma\xE7\u0131n %{rate} kadar\u0131nda \u2265%{ceil} tavan do\u011Fruluk",
+      robotic_pacing: "D\xFC\u015F\xFCk s\xFCre \xE7e\u015Fitlili\u011Fi ({ent} bit, QCD {qcd}, CV {cv})",
+      midgame_toggle: "{count} ma\xE7ta uzun duraksama sonras\u0131 sabit s\xFCreli hamle serisi",
+      elo_surge: "Son 7 g\xFCnde +{delta} Elo art\u0131\u015F",
+      hot_streak: "\xDCst \xFCste {streak} puanl\u0131 galibiyet serisi",
+      tactics_gap: "Canl\u0131 puan ({rating}) ile bulmaca puan\u0131 ({tactics}) fark\u0131 y\xFCksek",
+      natural_human: "Do\u011Fal hamle s\xFCresi da\u011F\u0131l\u0131m\u0131 (CV {cv})",
+      established_veteran: "K\xF6kl\xFC hesap ({years}+ y\u0131l, {total} ma\xE7)"
     }
   },
   en: {
     appName: "Chess Sentinel",
-    appSubtitle: "Live Cheat Probability & Fair-Play Radar",
-    cheatProbability: "CHEAT PROBABILITY",
-    scanningOpponent: "Analyzing opponent telemetry\u2026",
-    waitingForMatch: "Waiting for opponent\u2026",
-    abortWindowActive: "Safe Abort Window Open",
-    safeToPlay: "Normal player patterns \u2014 safe to play",
-    cautionAdvised: "Elevated anomaly signals \u2014 play with caution",
-    considerAborting: "High engine / smurf probability \u2014 consider aborting",
-    bannedFairPlayBanner: "CLOSED BY CHESS.COM FOR FAIR PLAY VIOLATIONS",
+    appSubtitle: "Opponent Analysis & Fair-Play Monitor",
+    cheatProbability: "Risk Score",
+    scanningOpponent: "Loading opponent history...",
+    waitingForMatch: "Waiting for opponent...",
+    abortWindowActive: "Safe abort window open",
+    safeToPlay: "Organic human profile, safe to play",
+    cautionAdvised: "Unusual signals present, play with care",
+    considerAborting: "High risk indicators, consider aborting",
+    bannedFairPlayBanner: "Account closed by Chess.com for Fair Play violations",
     confidenceLabel: {
-      low: "Low Sample Confidence",
-      medium: "Medium Confidence",
-      high: "High Telemetry Confidence"
+      low: "Low sample",
+      medium: "Medium sample",
+      high: "High sample"
+    },
+    surfaceBadge: {
+      live: "Live",
+      game: "Game",
+      profile: "Profile"
+    },
+    hudTabs: {
+      overview: "Summary",
+      clock: "Match Clock",
+      games: "Games"
     },
     tiers: {
-      low: { label: "LOW RISK", summary: "Organic human patterns" },
-      guarded: { label: "GUARDED", summary: "Slight hot streak, within normal bounds" },
-      elevated: { label: "SUSPICIOUS", summary: "Multiple elevated statistical anomalies" },
-      high: { label: "HIGH RISK", summary: "Strong engine assistance or smurf signals" },
-      critical: { label: "CRITICAL CHEAT RISK", summary: "Extreme multi-signal anomaly!" },
-      banned: { label: "BANNED (100%)", summary: "Confirmed Fair Play violation" }
+      low: { label: "Clean", summary: "Organic human statistics" },
+      guarded: { label: "Normal+", summary: "In form, within normal bounds" },
+      elevated: { label: "Suspicious", summary: "Multiple elevated metrics" },
+      high: { label: "High Risk", summary: "Strong engine or relay indicators" },
+      critical: { label: "Critical", summary: "Corroborated multi-signal anomaly" },
+      banned: { label: "Banned", summary: "Closed for Fair Play violation" }
     },
     signals: {
-      sectionTitle: "6-SIGNAL FORENSIC TELEMETRY",
-      recentWinrate: "Recent Win-Rate Anomaly",
-      overallWinrate: "Lifetime Glicko Deviation",
-      accuracyAnomaly: "CAPS2 Accuracy Excess",
-      movePacing: "Engine Move Pacing (%clk)",
-      eloVelocity: "Elo Surge Velocity",
-      accountTrust: "Account Age & Trust Risk"
+      sectionTitle: "Signal Breakdown",
+      recentWinrate: "Recent Win-Rate Deviation",
+      overallWinrate: "Lifetime Glicko Balance",
+      accuracyAnomaly: "Long-Game CAPS2 Excess",
+      movePacing: "Move-Time Consistency (%clk)",
+      eloVelocity: "Rating Velocity",
+      accountTrust: "Account Age & Provenance"
     },
     stats: {
       accountAge: "Account Age",
@@ -348,104 +445,111 @@ var TRANSLATIONS = {
       monthsShort: "mo",
       yearsShort: "yr",
       recentRecord: "Recent Form",
-      avgAccuracy: "Avg Accuracy",
+      performance: "Performance",
+      avgAccuracy: "CAPS2 Avg",
       expectedShort: "exp",
-      moveCV: "Move Pace CV",
-      elo7d: "7d Elo Delta",
+      moveCV: "Move Pace",
+      elo7d: "7d Rating",
       streak: "Streak",
       noReviewedGames: "No reviewed games",
-      gamesAnalyzed: "{count} games analyzed"
+      gamesAnalyzed: "{count} games",
+      lifetimeGames: "{count} games"
     },
     actions: {
-      swapTarget: "Swap Top / Bottom Player",
-      watchSuspect: "Add to Suspect Watchlist",
-      watchingSuspect: "Watching (Ban Monitor Active)",
-      refresh: "Re-scan Opponent",
+      swapTarget: "Swap top / bottom player",
+      watchSuspect: "Add to watchlist",
+      watchingSuspect: "Bookmarked (ban check active)",
+      refresh: "Refresh data",
       minimize: "Minimize (Alt+S)",
-      expand: "Expand HUD",
-      openProfile: "Open Chess.com Profile",
-      toggleDetails: "Show Forensic Charts & Breakdown",
-      hideDetails: "Hide Breakdown",
-      copyReport: "\u{1F4CB} Copy Fair-Play Report",
-      copiedReport: "\u2713 Evidence Copied!",
-      soundOn: "Critical Risk Audio Alert: ON",
-      soundOff: "Critical Risk Audio Alert: OFF"
+      expand: "Open panel",
+      openProfile: "Open Chess.com profile",
+      toggleDetails: "Show signal breakdown",
+      hideDetails: "Hide signal breakdown",
+      copyReport: "Copy Evidence",
+      copiedReport: "Copied",
+      reportFairPlay: "Report",
+      soundOn: "Sound alert on",
+      soundOff: "Sound alert off"
     },
     v3: {
-      liveClockTitle: "LIVE MATCH CLOCK RADAR",
-      liveClockMoves: "{count} moves \u2022 Avg {mean}s \u2022 QCD {qcd}",
-      liveClockSuspect: "\u26A1 Mechanical move pacing detected in live game!",
-      livePinpointToggle: "\u{1F3AF} Move #{pauseMove} ({pauseSec}s pause) \u2192 Moves #{start}\u2013#{end} mechanical ({min}\u2013{max}s)",
-      livePinpointFlatline: "\u{1F3AF} Moves #{start}\u2013#{end} ({count} straight moves) locked in mechanical band ({min}\u2013{max}s)",
-      pacingHistTitle: "MOVE-TIME HISTOGRAM (%clk)",
-      pacingEntropyTag: "Entropy: {ent}b \u2022 QCD: {qcd}",
-      recentMatchesTitle: "RECENT RATED MATCHES",
-      autoVerdictTitle: "AUTOMATIC SYSTEM VERDICT",
-      verdictBanned: "\u{1F6A8} This account has been officially closed by Chess.com for Fair Play violations.",
-      verdictLiveToggle: "\u{1F3AF} LIVE PINPOINT: Opponent paused {pauseSec}s on Move #{pauseMove}, then played Moves #{start}\u2013#{end} at fixed robotic pace ({min}\u2013{max}s)! Copy the evidence report after the game.",
-      verdictLiveFlatline: "\u{1F3AF} LIVE PINPOINT: Opponent played {count} consecutive moves (#{start}\u2013#{end}) in a zero-reflex mechanical band ({min}\u2013{max}s)!",
-      verdictAbortNow: "\u26D4 CORROBORATED ENGINE EVIDENCE ({pins} suspect game spans): Safe abort window is open \u2014 ABORT MATCH NOW to protect your Elo.",
-      verdictHighWatch: "\u26A0\uFE0F Corroborated engine signatures found in match history (exact move numbers listed below). Live radar is tracking every move.",
-      verdictElevatedWatch: "\u{1F536} Elevated chronometric/accuracy signals. Live radar is active and will pinpoint exact move numbers automatically if triggered.",
-      verdictSmurfHuman: "\u{1F9ED} High win rate, but move times follow natural human variance. NO engine proof (likely hand-played smurf or hot streak).",
-      verdictCleanSafe: "\u2705 Zero suspect move ranges or engine toggles found across match history. Organic human profile \u2014 safe to play.",
-      pinpointSectionTitle: "PINPOINTED SUSPECT GAMES & MOVE RANGES",
-      pinpointOpenGame: "Open \u2197",
-      pinpointToggleRow: "Move #{pauseMove} ({pauseSec}s pause) \u2192 Moves #{start}\u2013#{end} robotic ({min}\u2013{max}s)",
-      pinpointFlatlineRow: "Moves #{start}\u2013#{end} ({count} moves) zero-reflex mechanical pace ({min}\u2013{max}s)",
-      pinpointCapsRow: "Moves #1\u2013#{end} played at {acc}% ceiling CAPS2 accuracy"
+      liveClockTitle: "Live Match Move Times",
+      finishedClockTitle: "Match Move Times (0.1s)",
+      emptyLiveClock: "Live move durations appear here starting from move 3.",
+      liveClockMoves: "{count} moves \xB7 Avg {mean}s \xB7 QCD {qcd}",
+      liveClockSuspect: "Mechanical move pacing detected in this game.",
+      livePinpointToggle: "Move #{pauseMove} ({pauseSec}s pause) -> Moves #{start}-#{end} fixed ({min}-{max}s)",
+      livePinpointFlatline: "Moves #{start}-#{end} ({count} straight moves) in narrow band ({min}-{max}s)",
+      pacingHistTitle: "Historical Move-Time Distribution",
+      pacingEntropyTag: "Entropy {ent}b \xB7 QCD {qcd}",
+      recentMatchesTitle: "Recent Rated Games",
+      inspectMoves: "Pacing",
+      autoVerdictTitle: "Status",
+      verdictBanned: "Account closed by Chess.com for Fair Play violations.",
+      verdictLiveToggle: "Live match detection: paused {pauseSec}s on Move #{pauseMove}, then played Moves #{start}-#{end} at {min}-{max}s per move.",
+      verdictLiveFlatline: "Live match detection: played {count} straight moves (#{start}-#{end}) within {min}-{max}s per move.",
+      verdictAbortNow: "{pins} suspect game spans found in history. Safe abort window is open.",
+      verdictHighWatch: "Corroborated engine patterns found in recent history. Exact move ranges are listed below.",
+      verdictElevatedWatch: "Elevated pacing or accuracy metrics. Live move-clock tracking is active.",
+      verdictSmurfHuman: "High win rate with natural human move-time variance (likely smurf or hot streak).",
+      verdictCleanSafe: "No mechanical move spans or mid-game toggles found across analyzed games.",
+      pinpointSectionTitle: "Suspect Games & Move Ranges",
+      pinpointOpenGame: "Open",
+      pinpointToggleRow: "Move #{pauseMove} ({pauseSec}s pause) -> Moves #{start}-#{end} fixed ({min}-{max}s)",
+      pinpointFlatlineRow: "Moves #{start}-#{end} ({count} moves) narrow mechanical band ({min}-{max}s)",
+      pinpointCapsRow: "Moves #1-#{end} played at {acc}% CAPS2 accuracy"
     },
     popup: {
-      tabScanner: "Live Scanner",
-      tabWatchlist: "Ban Watchlist",
+      tabScanner: "Lookup",
+      tabWatchlist: "Watchlist",
       tabSettings: "Settings",
-      searchPlaceholder: "Enter Chess.com username (e.g. hikaru)\u2026",
-      scanBtn: "Analyze",
-      recentScansTitle: "RECENTLY SCANNED OPPONENTS",
-      emptyScans: "No opponents scanned yet. Start a game on Chess.com or search above.",
-      watchlistTitle: "SUSPECT & BAN TRACKER",
-      checkBansBtn: "Check Ban Status Now",
-      checkingBans: "Checking API\u2026",
-      emptyWatchlist: "Watchlist is empty. Click the eye icon on the HUD to track suspicious opponents.",
-      bannedTag: "BANNED (FAIR PLAY)",
-      activeTag: "Active Account",
-      addedOn: "Initial risk: {prob}%",
+      activeMatchLabel: "Active tab opponent",
+      searchPlaceholder: "Username (e.g. hikaru)",
+      scanBtn: "Inspect",
+      recentScansTitle: "Recent Lookups",
+      emptyScans: "No players inspected yet. Open a game on Chess.com or search above.",
+      watchlistTitle: "Bookmarked Accounts",
+      checkBansBtn: "Check Bans",
+      checkingBans: "Checking...",
+      emptyWatchlist: "Watchlist is empty. Use the bookmark icon on the panel to track accounts.",
+      bannedTag: "Banned",
+      activeTag: "Active",
+      addedOn: "Initial: {prob}%",
       removeBtn: "Remove",
-      settingsLanguage: "Interface Language / Dil",
-      settingsAutoHud: "Auto-Open Floating HUD on Match Start",
-      settingsAutoHudDesc: "Automatically opens the glassmorphic HUD overlay on Chess.com when an opponent is detected.",
-      settingsInlineBadge: "Inline Username % Risk Badge",
-      settingsInlineBadgeDesc: "Injects a compact risk percentage and W/L/D pill right next to the opponent username.",
-      settingsCompact: "Compact HUD Mode",
-      settingsCompactDesc: "Starts the in-page HUD popup with telemetry bars collapsed by default.",
-      settingsRatedOnly: "Rated Games Only",
-      settingsRatedOnlyDesc: "Excludes casual / unrated games when computing cheat probability.",
-      settingsSoundAlerts: "Critical Risk Audio Chime",
-      settingsSoundAlertsDesc: "Plays a subtle radar tone when matched against a High/Critical (\u226568%) or watched opponent.",
-      settingsSensitivity: "Detection Sensitivity",
+      settingsLanguage: "Language / Dil",
+      settingsAutoHud: "Auto-open panel on match start",
+      settingsAutoHudDesc: "Shows the analysis panel automatically when an opponent is detected.",
+      settingsInlineBadge: "Inline username badge",
+      settingsInlineBadgeDesc: "Places a compact percentage and record tag next to the username.",
+      settingsCompact: "Collapsed breakdown by default",
+      settingsCompactDesc: "Keeps individual signal bars collapsed until expanded.",
+      settingsRatedOnly: "Rated games only",
+      settingsRatedOnlyDesc: "Excludes unrated games from probability calculations.",
+      settingsSoundAlerts: "High-risk audio alert",
+      settingsSoundAlertsDesc: "Plays a short tone when matched with a high-risk or bookmarked account.",
+      settingsSensitivity: "Sensitivity",
       sensitivityConservative: "Conservative",
       sensitivityBalanced: "Balanced (Default)",
       sensitivityStrict: "Strict",
-      toggleInPageHud: "Toggle HUD on Active Chess.com Tab",
-      privacyNote: "100% Private \u2022 Zero data collection \u2022 Powered strictly by official Chess.com PubAPI."
+      toggleInPageHud: "Show / Hide Panel on Tab",
+      privacyNote: "Zero tracking. Uses public Chess.com API data only."
     },
     flags: {
-      banned_fair_play: "Account closed by Chess.com for Fair Play (Cheating) violations!",
-      verified_title: "Verified FIDE titled player ({title}) \u2014 elite outlier calibration applied",
-      fresh_high_elo: "Brand-new account ({days} days old) already competing at {rating} Elo",
-      fresh_account: "Recently created account ({days} days old) \u2014 elevated smurf / burner risk",
-      extreme_recent_wr: "{wr}% win rate across last {games} rated games (+{z}\u03C3 above opponent Elo expectation)",
-      elevated_recent_wr: "{wr}% win rate across last {games} games (+{z}\u03C3 Elo-adjusted outperformance)",
-      smurf_human_pacing: "Elevated win rate accompanied by organic human move-time entropy (likely smurf / hot streak)",
-      accuracy_excess: "+{excess}% long-game CAPS2 accuracy ({avg}%) above bias-adjusted Elo expectation",
-      accuracy_spikes: "{rate}% of {games} full-length reviewed games hit ceiling accuracy (\u2265{ceil}%)",
-      robotic_pacing: "Collapsed chronometric entropy ({ent} bits) & mechanical move dispersion (QCD: {qcd}, CV: {cv})",
-      midgame_toggle: "Mid-game pause followed by flatline mechanical moves in {count} games (toggle signature)",
-      elo_surge: "+{delta} Elo vertical rating surge over the last 7 days",
-      hot_streak: "Currently on a {streak}-game consecutive rated win streak",
-      tactics_gap: "Massive gap between live rating ({rating}) and tactics rating ({tactics})",
-      natural_human: "Organic human move-time variance (CV: {cv}) and balanced win distribution",
-      established_veteran: "Established veteran account ({years}+ years old, {total} lifetime games)"
+      banned_fair_play: "Account closed by Chess.com for Fair Play violations",
+      verified_title: "Verified FIDE titled player ({title})",
+      fresh_high_elo: "New account ({days}d old) competing at {rating} Elo",
+      fresh_account: "Recently created account ({days}d old)",
+      extreme_recent_wr: "{wr}% win rate in last {games} games (+{z}\u03C3 above Elo expectation)",
+      elevated_recent_wr: "{wr}% win rate in last {games} games (+{z}\u03C3 above expectation)",
+      smurf_human_pacing: "High win rate with natural human move-time spread (likely smurf)",
+      accuracy_excess: "+{excess}% long-game CAPS2 accuracy ({avg}%) above expected band",
+      accuracy_spikes: "{rate}% of {games} long reviewed games reached \u2265{ceil}% accuracy",
+      robotic_pacing: "Low move-time entropy ({ent}b, QCD {qcd}, CV {cv})",
+      midgame_toggle: "Long pause followed by narrow-band move streak in {count} games",
+      elo_surge: "+{delta} Elo gained over the last 7 days",
+      hot_streak: "{streak} consecutive rated wins",
+      tactics_gap: "Large gap between live rating ({rating}) and tactics ({tactics})",
+      natural_human: "Natural human move-time dispersion (CV {cv})",
+      established_veteran: "Established account ({years}+ yr, {total} games)"
     }
   }
 };
@@ -458,13 +562,82 @@ function formatFlag(lang, flagId, params) {
   );
 }
 function formatAgeShort(days, lang) {
-  if (days === null || days < 0) return "\u2014";
+  if (days === null || days < 0) return "-";
   const s = TRANSLATIONS[lang].stats;
   if (days < 60) return `${Math.max(1, days)} ${s.daysShort}`;
   if (days < 365) return `${Math.round(days / 30)} ${s.monthsShort}`;
   const yrs = (days / 365).toFixed(days >= 1095 ? 0 : 1);
   return `${yrs} ${s.yearsShort}`;
 }
+
+// src/utils/icons.ts
+var ICONS = {
+  mark: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M8 1.5L2.5 3.8v4.1c0 3.55 2.34 6.58 5.5 7.6 3.16-1.02 5.5-4.05 5.5-7.6V3.8L8 1.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M5.8 8.1l1.5 1.5 3-3.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`,
+  swap: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M7 16V4m0 0L3 8m4-4l4 4"/>
+    <path d="M17 8v12m0 0l4-4m-4 4l-4-4"/>
+  </svg>`,
+  refresh: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+    <path d="M21 3v6h-6"/>
+  </svg>`,
+  bookmark: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+  </svg>`,
+  bookmarkFilled: `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+  </svg>`,
+  bellOn: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+  </svg>`,
+  bellOff: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+    <path d="M18.63 13A17.89 17.89 0 0 1 18 8"/>
+    <path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/>
+    <path d="M18 8a6 6 0 0 0-9.33-5"/>
+    <line x1="1" y1="1" x2="23" y2="23"/>
+  </svg>`,
+  minimize: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+    <line x1="5" y1="12" x2="19" y2="12"/>
+  </svg>`,
+  close: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+    <line x1="18" y1="6" x2="6" y2="18"/>
+    <line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>`,
+  chevronDown: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <polyline points="6 9 12 15 18 9"/>
+  </svg>`,
+  chevronUp: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <polyline points="18 15 12 9 6 15"/>
+  </svg>`,
+  copy: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+  </svg>`,
+  check: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>`,
+  external: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M7 17L17 7"/>
+    <path d="M8 7h9v9"/>
+  </svg>`,
+  flag: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+    <line x1="4" y1="22" x2="4" y2="15"/>
+  </svg>`,
+  clock: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="9"/>
+    <polyline points="12 7 12 12 15.5 14"/>
+  </svg>`,
+  search: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="11" cy="11" r="8"/>
+    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  </svg>`
+};
 
 // src/utils/safe-dom.ts
 function escapeHtml(raw) {
@@ -479,11 +652,11 @@ function setSafeHtml(target, html) {
 
 // src/popup/index.ts
 function barColor(score) {
-  if (score < 25) return "#10b981";
-  if (score < 45) return "#38bdf8";
-  if (score < 68) return "#f59e0b";
-  if (score < 82) return "#f97316";
-  return "#ef4444";
+  if (score < 25) return "#81b64c";
+  if (score < 45) return "#6ba4d9";
+  if (score < 68) return "#e59934";
+  if (score < 82) return "#e06c35";
+  return "#e04644";
 }
 var PopupController = class {
   root;
@@ -492,6 +665,8 @@ var PopupController = class {
   recentScans = [];
   watchlist = [];
   activeResult = null;
+  activeTabLiveClock = null;
+  activeTabUsername = null;
   scanning = false;
   checkingBans = false;
   copiedReport = false;
@@ -502,13 +677,29 @@ var PopupController = class {
   }
   async init() {
     await this.loadAll();
-    if (this.recentScans.length > 0) {
+    await this.trySyncActiveTabOpponent();
+    if (!this.activeResult && this.recentScans.length > 0) {
       this.activeResult = this.recentScans[0];
     }
     this.render();
   }
   async send(msg) {
     return await chrome.runtime.sendMessage(msg);
+  }
+  async trySyncActiveTabOpponent() {
+    try {
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!activeTab?.id) return;
+      const state = await chrome.tabs.sendMessage(activeTab.id, {
+        type: "GET_ACTIVE_MATCH_STATE"
+      });
+      if (state?.ok && state.result) {
+        this.activeResult = state.result;
+        this.activeTabUsername = state.activeUsername || state.result.username;
+        this.activeTabLiveClock = state.liveClock || null;
+      }
+    } catch {
+    }
   }
   async loadAll() {
     try {
@@ -539,6 +730,7 @@ var PopupController = class {
         this.errorMsg = resp.error === "PLAYER_NOT_FOUND" ? this.settings.language === "tr" ? "Oyuncu bulunamad\u0131." : "Player not found." : resp.error || "API Error";
       } else {
         this.activeResult = resp.result;
+        this.activeTabLiveClock = null;
         const scansResp = await this.send({
           type: "GET_RECENT_SCANS"
         });
@@ -555,9 +747,12 @@ var PopupController = class {
     if (!this.activeResult) return "";
     const r = this.activeResult;
     const t = TRANSLATIONS[lang];
-    const theme = TIER_THEMES[r.tier];
+    const isFromLiveTab = this.activeTabUsername && this.activeTabUsername.toLowerCase() === r.username.toLowerCase();
+    const lc = isFromLiveTab ? this.activeTabLiveClock : null;
+    const eff = computeEffectiveLiveRisk(r, lc);
+    const theme = TIER_THEMES[eff.tier];
     const pf = r.formats[r.primaryFormat];
-    const pctText = lang === "tr" ? `%${r.probability}` : `${r.probability}%`;
+    const pctText = lang === "tr" ? `%${eff.probability}` : `${eff.probability}%`;
     const bars = [
       { lbl: t.signals.recentWinrate, val: r.signals.recentWinrate },
       { lbl: t.signals.overallWinrate, val: r.signals.overallWinrate },
@@ -567,31 +762,35 @@ var PopupController = class {
       { lbl: t.signals.accountTrust, val: r.signals.accountTrust }
     ];
     const flagsHtml = r.flags.slice(0, 3).map(
-      (f) => `<div style="font-size:10.5px;color:#cbd5e1;line-height:1.3">${f.icon} ${escapeHtml(
-        formatFlag(lang, f.id, f.params)
-      )}</div>`
+      (f) => `
+          <div class="popup-flag-row">
+            <span class="flag-dot ${f.severity}"></span>
+            <span>${escapeHtml(formatFlag(lang, f.id, f.params))}</span>
+          </div>
+        `
     ).join("");
     return `
-      <div class="scan-result-card" style="border-color:${theme.border}">
+      <div class="scan-result-card">
+        ${isFromLiveTab ? `<div class="active-tag">${escapeHtml(t.popup.activeMatchLabel)}</div>` : ""}
         <div class="scan-top">
           <div class="scan-user">
             ${r.avatarUrl ? `<img class="scan-avatar" src="${escapeHtml(r.avatarUrl)}" alt="" />` : `<div class="scan-avatar">${escapeHtml(r.displayName[0]?.toUpperCase() || "?")}</div>`}
             <div>
               <div>
-                ${r.title ? `<span style="background:#dc2626;color:#fff;font-size:9px;font-weight:800;padding:1px 4px;border-radius:4px;margin-right:4px">${escapeHtml(r.title)}</span>` : ""}
+                ${r.title ? `<span class="title-tag">${escapeHtml(r.title)}</span>` : ""}
                 <a class="scan-name" href="https://www.chess.com/member/${encodeURIComponent(
       r.displayName
     )}" target="_blank" rel="noopener noreferrer">@${escapeHtml(r.displayName)}</a>
               </div>
               <div class="scan-meta">
-                ${escapeHtml(r.primaryFormat.toUpperCase())} ${pf.currentRating ?? "\u2014"} \u2022
-                ${escapeHtml(formatAgeShort(r.accountAgeDays, lang))} \u2022
-                ${escapeHtml(t.tiers[r.tier].label)}
+                ${escapeHtml(r.primaryFormat.toUpperCase())} ${pf.currentRating ?? "-"} \xB7
+                ${escapeHtml(formatAgeShort(r.accountAgeDays, lang))}
               </div>
             </div>
           </div>
-          <div class="prob-badge-lg" style="background:${theme.accentBg};color:${theme.color};border:1px solid ${theme.border}">
-            ${pctText}
+          <div class="prob-readout" style="border-left-color:${theme.color}">
+            <div class="prob-num" style="color:${theme.color}">${pctText}</div>
+            <div class="prob-lbl">${escapeHtml(t.tiers[eff.tier].label)}</div>
           </div>
         </div>
 
@@ -611,9 +810,10 @@ var PopupController = class {
     ).join("")}
         </div>
 
-        ${flagsHtml ? `<div style="display:flex;flex-direction:column;gap:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,0.06)">${flagsHtml}</div>` : ""}
-        <button id="popup-copy-report-btn" class="pill-btn" style="margin-top:8px;width:100%;justify-content:center;padding:6px 10px;border-color:${this.copiedReport ? "rgba(16,185,129,0.5)" : "rgba(56,189,248,0.3)"};color:${this.copiedReport ? "#6ee7b7" : "#bae6fd"}">
-          ${escapeHtml(this.copiedReport ? t.actions.copiedReport : t.actions.copyReport)}
+        ${flagsHtml ? `<div class="popup-flags">${flagsHtml}</div>` : ""}
+        <button id="popup-copy-report-btn" class="pill-btn ${this.copiedReport ? "copied" : ""}" style="width:100%">
+          ${this.copiedReport ? ICONS.check : ICONS.copy}
+          <span>${escapeHtml(this.copiedReport ? t.actions.copiedReport : t.actions.copyReport)}</span>
         </button>
       </div>
     `;
@@ -629,7 +829,7 @@ var PopupController = class {
                     <div class="row-left">
                       <div>
                         <div class="row-name">@${escapeHtml(item.displayName)}</div>
-                        <div class="row-sub">${escapeHtml(item.primaryFormat.toUpperCase())} \u2022 ${escapeHtml(
+                        <div class="row-sub">${escapeHtml(item.primaryFormat.toUpperCase())} \xB7 ${escapeHtml(
         t.tiers[item.tier].label
       )}</div>
                       </div>
@@ -650,10 +850,10 @@ var PopupController = class {
           autocomplete="off"
         />
         <button class="primary-btn" type="submit" ${this.scanning ? "disabled" : ""}>
-          ${this.scanning ? "\u2026" : escapeHtml(t.popup.scanBtn)}
+          ${this.scanning ? "..." : escapeHtml(t.popup.scanBtn)}
         </button>
       </form>
-      ${this.errorMsg ? `<div style="color:#f87171;font-size:11.5px;font-weight:600">${escapeHtml(this.errorMsg)}</div>` : ""}
+      ${this.errorMsg ? `<div class="error-msg">${escapeHtml(this.errorMsg)}</div>` : ""}
       ${this.renderActiveResultCard(lang)}
       <div class="sec-title">${escapeHtml(t.popup.recentScansTitle)}</div>
       ${recentHtml}
@@ -672,14 +872,14 @@ var PopupController = class {
                         <a class="row-name" style="text-decoration:none" href="https://www.chess.com/member/${encodeURIComponent(
         w.username
       )}" target="_blank" rel="noopener noreferrer">@${escapeHtml(w.username)}</a>
-                        <div class="row-sub">${escapeHtml(initText)} \u2022 ${w.ratingAtSave ?? "\u2014"} Elo</div>
+                        <div class="row-sub">${escapeHtml(initText)} \xB7 ${w.ratingAtSave ?? "-"} Elo</div>
                       </div>
                     </div>
                     <div style="display:flex;align-items:center;gap:6px">
-                      ${w.isBannedFairPlay ? `<span class="banned-pill">\u{1F6A8} ${escapeHtml(t.popup.bannedTag)}</span>` : `<span class="active-pill">${escapeHtml(t.popup.activeTag)}</span>`}
+                      ${w.isBannedFairPlay ? `<span class="banned-pill">${escapeHtml(t.popup.bannedTag)}</span>` : `<span class="active-pill">${escapeHtml(t.popup.activeTag)}</span>`}
                       <button class="pill-btn" data-remove-watch="${escapeHtml(w.username)}" title="${escapeHtml(
         t.popup.removeBtn
-      )}">\u2715</button>
+      )}">${ICONS.close}</button>
                     </div>
                   </div>
                 `;
@@ -688,11 +888,25 @@ var PopupController = class {
     return `
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div class="sec-title">${escapeHtml(t.popup.watchlistTitle)} (${bannedCount}/${this.watchlist.length})</div>
-        <button class="primary-btn" id="refresh-bans-btn" style="padding:6px 10px" ${this.checkingBans || this.watchlist.length === 0 ? "disabled" : ""}>
+        <button class="primary-btn" id="refresh-bans-btn" style="height:26px;padding:0 10px" ${this.checkingBans || this.watchlist.length === 0 ? "disabled" : ""}>
           ${escapeHtml(this.checkingBans ? t.popup.checkingBans : t.popup.checkBansBtn)}
         </button>
       </div>
       ${listHtml}
+    `;
+  }
+  renderSwitchRow(key, checked, title, desc) {
+    return `
+      <div class="setting-item">
+        <div>
+          <div class="setting-title">${escapeHtml(title)}</div>
+          <div class="setting-desc">${escapeHtml(desc)}</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-setting-check="${key}" ${checked ? "checked" : ""} />
+          <span class="switch-slider"></span>
+        </label>
+      </div>
     `;
   }
   renderSettingsTab(lang) {
@@ -726,45 +940,11 @@ var PopupController = class {
         </select>
       </div>
 
-      <div class="setting-item">
-        <div>
-          <div class="setting-title">${escapeHtml(t.popup.settingsAutoHud)}</div>
-          <div class="setting-desc">${escapeHtml(t.popup.settingsAutoHudDesc)}</div>
-        </div>
-        <input class="toggle-input" type="checkbox" data-setting-check="autoShowHud" ${s.autoShowHud ? "checked" : ""} />
-      </div>
-
-      <div class="setting-item">
-        <div>
-          <div class="setting-title">${escapeHtml(t.popup.settingsInlineBadge)}</div>
-          <div class="setting-desc">${escapeHtml(t.popup.settingsInlineBadgeDesc)}</div>
-        </div>
-        <input class="toggle-input" type="checkbox" data-setting-check="showInlineBadge" ${s.showInlineBadge ? "checked" : ""} />
-      </div>
-
-      <div class="setting-item">
-        <div>
-          <div class="setting-title">${escapeHtml(t.popup.settingsCompact)}</div>
-          <div class="setting-desc">${escapeHtml(t.popup.settingsCompactDesc)}</div>
-        </div>
-        <input class="toggle-input" type="checkbox" data-setting-check="compactMode" ${s.compactMode ? "checked" : ""} />
-      </div>
-
-      <div class="setting-item">
-        <div>
-          <div class="setting-title">${escapeHtml(t.popup.settingsRatedOnly)}</div>
-          <div class="setting-desc">${escapeHtml(t.popup.settingsRatedOnlyDesc)}</div>
-        </div>
-        <input class="toggle-input" type="checkbox" data-setting-check="ratedOnly" ${s.ratedOnly ? "checked" : ""} />
-      </div>
-
-      <div class="setting-item">
-        <div>
-          <div class="setting-title">${escapeHtml(t.popup.settingsSoundAlerts)}</div>
-          <div class="setting-desc">${escapeHtml(t.popup.settingsSoundAlertsDesc)}</div>
-        </div>
-        <input class="toggle-input" type="checkbox" data-setting-check="soundAlerts" ${s.soundAlerts ? "checked" : ""} />
-      </div>
+      ${this.renderSwitchRow("autoShowHud", s.autoShowHud, t.popup.settingsAutoHud, t.popup.settingsAutoHudDesc)}
+      ${this.renderSwitchRow("showInlineBadge", s.showInlineBadge, t.popup.settingsInlineBadge, t.popup.settingsInlineBadgeDesc)}
+      ${this.renderSwitchRow("compactMode", s.compactMode, t.popup.settingsCompact, t.popup.settingsCompactDesc)}
+      ${this.renderSwitchRow("ratedOnly", s.ratedOnly, t.popup.settingsRatedOnly, t.popup.settingsRatedOnlyDesc)}
+      ${this.renderSwitchRow("soundAlerts", s.soundAlerts, t.popup.settingsSoundAlerts, t.popup.settingsSoundAlertsDesc)}
     `;
   }
   render() {
@@ -777,19 +957,14 @@ var PopupController = class {
       <div class="popup-shell">
         <div class="top-bar">
           <div class="brand-group">
-            <div class="brand-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
-                <path d="M12 2L4 5.5v6.2c0 5.3 3.4 9.9 8 11.3 4.6-1.4 8-6 8-11.3V5.5L12 2z"/>
-                <path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
+            <div class="brand-icon">${ICONS.mark}</div>
             <div>
               <div class="brand-name">${escapeHtml(t.appName)}</div>
               <div class="brand-sub">${escapeHtml(t.appSubtitle)}</div>
             </div>
           </div>
           <div class="top-controls">
-            <button class="pill-btn" id="quick-lang-btn">${lang === "tr" ? "EN" : "TR"}</button>
+            <button class="pill-btn mono" id="quick-lang-btn">${lang === "tr" ? "EN" : "TR"}</button>
             <button class="pill-btn" id="toggle-hud-btn" title="${escapeHtml(t.popup.toggleInPageHud)}">HUD</button>
           </div>
         </div>
@@ -861,7 +1036,12 @@ var PopupController = class {
     const copyReportBtn = this.root.querySelector("#popup-copy-report-btn");
     copyReportBtn?.addEventListener("click", () => {
       if (!this.activeResult) return;
-      const report = buildFairPlayEvidenceReport(this.activeResult, this.settings.language, null);
+      const isFromLiveTab = this.activeTabUsername && this.activeTabUsername.toLowerCase() === this.activeResult.username.toLowerCase();
+      const report = buildFairPlayEvidenceReport(
+        this.activeResult,
+        this.settings.language,
+        isFromLiveTab ? this.activeTabLiveClock : null
+      );
       void navigator.clipboard?.writeText(report).catch(() => {
       });
       this.copiedReport = true;

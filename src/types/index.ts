@@ -10,6 +10,8 @@ export type ConfidenceLevel = 'low' | 'medium' | 'high';
 
 export type PinpointAnomalyKind = 'midgame_toggle' | 'robotic_flatline' | 'caps2_spike';
 
+export type PageSurfaceKind = 'live' | 'game' | 'profile';
+
 export interface ChessComProfile {
   player_id?: number;
   '@id'?: string;
@@ -107,9 +109,9 @@ export interface PacingGameMetrics {
   meanMoveSec: number;
   stdMoveSec: number;
   cv: number;
-  qcd: number; // Robust Quartile Coefficient of Dispersion (Q3-Q1)/(Q3+Q1)
-  entropyBits: number; // Shannon entropy across 7 log-time buckets (0 - 2.81 bits)
-  bucketCounts: number[]; // Raw move counts across the 7 logarithmic buckets
+  qcd: number;
+  entropyBits: number;
+  bucketCounts: number[];
   fastMoveRatio: number;
   roboticBandRatio: number;
   isFlatline: boolean;
@@ -150,20 +152,20 @@ export interface PacingSummary {
   minCV: number | null;
   meanFastMoveRatio: number | null;
   meanRoboticBandRatio: number | null;
-  bucketDistribution: number[]; // Normalized 0..1 ratios across 7 log-time buckets
+  bucketDistribution: number[];
   flatlineGames: number;
   flatlineRate: number;
   toggleGames: number;
   isConfirmedHumanPacing: boolean;
-  pacingScore: number; // 0-100
+  pacingScore: number;
 }
 
 export interface LiveMatchClockTelemetry {
   opponent: string;
   movesObserved: number;
-  moveTimesSec: number[]; // Most recent up to 16 move durations in current live game
-  moveNumbers: number[]; // Exact full-move numbers aligned with moveTimesSec
-  moveSanLabels: string[]; // Optional SAN labels aligned with moveTimesSec
+  moveTimesSec: number[];
+  moveNumbers: number[];
+  moveSanLabels: string[];
   liveMeanSec: number | null;
   liveQCD: number | null;
   consecutiveRoboticMoves: number;
@@ -174,6 +176,23 @@ export interface LiveMatchClockTelemetry {
   roboticMinSec: number | null;
   roboticMaxSec: number | null;
   isLiveSuspectPacing: boolean;
+  source?: 'live_dom' | 'server_callback';
+  isFinishedGame?: boolean;
+  gameId?: string | null;
+}
+
+export interface GameCallbackHydration {
+  gameId: string;
+  isFinished: boolean;
+  isRated: boolean;
+  isAbortable: boolean;
+  detectedFormat?: TimeClass;
+  topPlayer: string | null;
+  bottomPlayer: string | null;
+  topTimesSec: number[];
+  topMoveNumbers: number[];
+  bottomTimesSec: number[];
+  bottomMoveNumbers: number[];
 }
 
 export interface RecentMatchSummary {
@@ -188,15 +207,16 @@ export interface RecentMatchSummary {
   endTime: number;
   pinpointKind?: PinpointAnomalyKind | null;
   pinpointMoveRange?: string | null;
+  moveTimesSec?: number[];
 }
 
 export interface SignalBreakdown {
-  recentWinrate: number;    // 0-100
-  overallWinrate: number;   // 0-100
-  accuracyAnomaly: number;  // 0-100
-  movePacing: number;       // 0-100
-  eloVelocity: number;      // 0-100
-  accountTrust: number;     // 0-100
+  recentWinrate: number;
+  overallWinrate: number;
+  accuracyAnomaly: number;
+  movePacing: number;
+  eloVelocity: number;
+  accountTrust: number;
 }
 
 export interface FormatTelemetry {
@@ -244,13 +264,13 @@ export interface CheatAnalysisResult {
   accountAgeDays: number | null;
   joinedTimestamp: number | null;
   primaryFormat: TimeClass;
-  probability: number; // 0 - 100 (% cheat probability)
+  probability: number;
   tier: RiskTierId;
   confidence: ConfidenceLevel;
   winStreak: number;
-  recentForm: Array<'W' | 'L' | 'D'>; // Last 8 games
-  recentMatches: RecentMatchSummary[]; // Last 5 detailed matches
-  suspectPinpoints: SuspectGamePinpoint[]; // Pinpointed suspect games & exact move ranges
+  recentForm: Array<'W' | 'L' | 'D'>;
+  recentMatches: RecentMatchSummary[];
+  suspectPinpoints: SuspectGamePinpoint[];
   signals: SignalBreakdown;
   pacing: PacingSummary;
   formats: Record<TimeClass, FormatTelemetry>;
@@ -285,6 +305,7 @@ export interface SentinelSettings {
 
 export type ExtensionMessage =
   | { type: 'ANALYZE_PLAYER'; username: string; preferredFormat?: TimeClass; forceRefresh?: boolean }
+  | { type: 'FETCH_GAME_CALLBACK'; gameId: string }
   | { type: 'GET_SETTINGS' }
   | { type: 'UPDATE_SETTINGS'; patch: Partial<SentinelSettings> }
   | { type: 'GET_WATCHLIST' }
@@ -292,4 +313,5 @@ export type ExtensionMessage =
   | { type: 'REMOVE_WATCHLIST'; username: string }
   | { type: 'REFRESH_WATCHLIST_BANS' }
   | { type: 'GET_RECENT_SCANS' }
-  | { type: 'TOGGLE_HUD_FROM_POPUP' };
+  | { type: 'TOGGLE_HUD_FROM_POPUP' }
+  | { type: 'GET_ACTIVE_MATCH_STATE' };

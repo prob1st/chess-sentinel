@@ -1,24 +1,26 @@
 import { DEFAULT_SETTINGS, TIER_THEMES } from '../core/calibration';
-import { buildFairPlayEvidenceReport } from '../core/engine';
+import { buildFairPlayEvidenceReport, computeEffectiveLiveRisk } from '../core/engine';
 import { formatAgeShort, formatFlag, TRANSLATIONS } from '../i18n/translations';
 import {
   CheatAnalysisResult,
   ExtensionMessage,
   Language,
+  LiveMatchClockTelemetry,
   SensitivityPreset,
   SentinelSettings,
   WatchlistEntry,
 } from '../types';
+import { ICONS } from '../utils/icons';
 import { escapeHtml, setSafeHtml } from '../utils/safe-dom';
 
 type ActiveTab = 'scanner' | 'watchlist' | 'settings';
 
 function barColor(score: number): string {
-  if (score < 25) return '#10b981';
-  if (score < 45) return '#38bdf8';
-  if (score < 68) return '#f59e0b';
-  if (score < 82) return '#f97316';
-  return '#ef4444';
+  if (score < 25) return '#81b64c';
+  if (score < 45) return '#6ba4d9';
+  if (score < 68) return '#e59934';
+  if (score < 82) return '#e06c35';
+  return '#e04644';
 }
 
 class PopupController {
@@ -28,6 +30,8 @@ class PopupController {
   private recentScans: CheatAnalysisResult[] = [];
   private watchlist: WatchlistEntry[] = [];
   private activeResult: CheatAnalysisResult | null = null;
+  private activeTabLiveClock: LiveMatchClockTelemetry | null = null;
+  private activeTabUsername: string | null = null;
   private scanning = false;
   private checkingBans = false;
   private copiedReport = false;
@@ -40,7 +44,8 @@ class PopupController {
 
   async init(): Promise<void> {
     await this.loadAll();
-    if (this.recentScans.length > 0) {
+    await this.trySyncActiveTabOpponent();
+    if (!this.activeResult && this.recentScans.length > 0) {
       this.activeResult = this.recentScans[0];
     }
     this.render();
@@ -48,6 +53,28 @@ class PopupController {
 
   private async send<T>(msg: ExtensionMessage): Promise<T> {
     return (await chrome.runtime.sendMessage(msg)) as T;
+  }
+
+  private async trySyncActiveTabOpponent(): Promise<void> {
+    try {
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!activeTab?.id) return;
+      const state = (await chrome.tabs.sendMessage(activeTab.id, {
+        type: 'GET_ACTIVE_MATCH_STATE',
+      } satisfies ExtensionMessage)) as {
+        ok?: boolean;
+        activeUsername?: string | null;
+        result?: CheatAnalysisResult | null;
+        liveClock?: LiveMatchClockTelemetry | null;
+      };
+      if (state?.ok && state.result) {
+        this.activeResult = state.result;
+        this.activeTabUsername = state.activeUsername || state.result.username;
+        this.activeTabLiveClock = state.liveClock || null;
+      }
+    } catch {
+      // Active tab is not a Chess.com content script page
+    }
   }
 
   private async loadAll(): Promise<void> {
@@ -92,6 +119,7 @@ class PopupController {
             : resp.error || 'API Error';
       } else {
         this.activeResult = resp.result;
+        this.activeTabLiveClock = null;
         const scansResp = await this.send<{ ok: boolean; scans: CheatAnalysisResult[] }>({
           type: 'GET_RECENT_SCANS',
         });
@@ -109,9 +137,15 @@ class PopupController {
     if (!this.activeResult) return '';
     const r = this.activeResult;
     const t = TRANSLATIONS[lang];
-    const theme = TIER_THEMES[r.tier];
+    const isFromLiveTab =
+      this.activeTabUsername &&
+      this.activeTabUsername.toLowerCase() === r.username.toLowerCase();
+    const lc = isFromLiveTab ? this.activeTabLiveClock : null;
+
+    const eff = computeEffectiveLiveRisk(r, lc);
+    const theme = TIER_THEMES[eff.tier];
     const pf = r.formats[r.primaryFormat];
-    const pctText = lang === 'tr' ? `%${r.probability}` : `${r.probability}%`;
+    const pctText = lang === 'tr' ? `%${eff.probability}` : `${eff.probability}%`;
 
     const bars = [
       { lbl: t.signals.recentWinrate, val: r.signals.recentWinrate },
@@ -125,15 +159,18 @@ class PopupController {
     const flagsHtml = r.flags
       .slice(0, 3)
       .map(
-        (f) =>
-          `<div style="font-size:10.5px;color:#cbd5e1;line-height:1.3">${f.icon} ${escapeHtml(
-            formatFlag(lang, f.id, f.params)
-          )}</div>`
+        (f) => `
+          <div class="popup-flag-row">
+            <span class="flag-dot ${f.severity}"></span>
+            <span>${escapeHtml(formatFlag(lang, f.id, f.params))}</span>
+          </div>
+        `
       )
       .join('');
 
     return `
-      <div class="scan-result-card" style="border-color:${theme.border}">
+      <div class="scan-result-card">
+        ${isFromLiveTab ? `<div class="active-tag">${escapeHtml(t.popup.activeMatchLabel)}</div>` : ''}
         <div class="scan-top">
           <div class="scan-user">
             ${
@@ -143,20 +180,20 @@ class PopupController {
             }
             <div>
               <div>
-                ${r.title ? `<span style="background:#dc2626;color:#fff;font-size:9px;font-weight:800;padding:1px 4px;border-radius:4px;margin-right:4px">${escapeHtml(r.title)}</span>` : ''}
+                ${r.title ? `<span class="title-tag">${escapeHtml(r.title)}</span>` : ''}
                 <a class="scan-name" href="https://www.chess.com/member/${encodeURIComponent(
                   r.displayName
                 )}" target="_blank" rel="noopener noreferrer">@${escapeHtml(r.displayName)}</a>
               </div>
               <div class="scan-meta">
-                ${escapeHtml(r.primaryFormat.toUpperCase())} ${pf.currentRating ?? '—'} •
-                ${escapeHtml(formatAgeShort(r.accountAgeDays, lang))} •
-                ${escapeHtml(t.tiers[r.tier].label)}
+                ${escapeHtml(r.primaryFormat.toUpperCase())} ${pf.currentRating ?? '-'} ·
+                ${escapeHtml(formatAgeShort(r.accountAgeDays, lang))}
               </div>
             </div>
           </div>
-          <div class="prob-badge-lg" style="background:${theme.accentBg};color:${theme.color};border:1px solid ${theme.border}">
-            ${pctText}
+          <div class="prob-readout" style="border-left-color:${theme.color}">
+            <div class="prob-num" style="color:${theme.color}">${pctText}</div>
+            <div class="prob-lbl">${escapeHtml(t.tiers[eff.tier].label)}</div>
           </div>
         </div>
 
@@ -178,9 +215,10 @@ class PopupController {
             .join('')}
         </div>
 
-        ${flagsHtml ? `<div style="display:flex;flex-direction:column;gap:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,0.06)">${flagsHtml}</div>` : ''}
-        <button id="popup-copy-report-btn" class="pill-btn" style="margin-top:8px;width:100%;justify-content:center;padding:6px 10px;border-color:${this.copiedReport ? 'rgba(16,185,129,0.5)' : 'rgba(56,189,248,0.3)'};color:${this.copiedReport ? '#6ee7b7' : '#bae6fd'}">
-          ${escapeHtml(this.copiedReport ? t.actions.copiedReport : t.actions.copyReport)}
+        ${flagsHtml ? `<div class="popup-flags">${flagsHtml}</div>` : ''}
+        <button id="popup-copy-report-btn" class="pill-btn ${this.copiedReport ? 'copied' : ''}" style="width:100%">
+          ${this.copiedReport ? ICONS.check : ICONS.copy}
+          <span>${escapeHtml(this.copiedReport ? t.actions.copiedReport : t.actions.copyReport)}</span>
         </button>
       </div>
     `;
@@ -202,7 +240,7 @@ class PopupController {
                     <div class="row-left">
                       <div>
                         <div class="row-name">@${escapeHtml(item.displayName)}</div>
-                        <div class="row-sub">${escapeHtml(item.primaryFormat.toUpperCase())} • ${escapeHtml(
+                        <div class="row-sub">${escapeHtml(item.primaryFormat.toUpperCase())} · ${escapeHtml(
                           t.tiers[item.tier].label
                         )}</div>
                       </div>
@@ -225,10 +263,10 @@ class PopupController {
           autocomplete="off"
         />
         <button class="primary-btn" type="submit" ${this.scanning ? 'disabled' : ''}>
-          ${this.scanning ? '…' : escapeHtml(t.popup.scanBtn)}
+          ${this.scanning ? '...' : escapeHtml(t.popup.scanBtn)}
         </button>
       </form>
-      ${this.errorMsg ? `<div style="color:#f87171;font-size:11.5px;font-weight:600">${escapeHtml(this.errorMsg)}</div>` : ''}
+      ${this.errorMsg ? `<div class="error-msg">${escapeHtml(this.errorMsg)}</div>` : ''}
       ${this.renderActiveResultCard(lang)}
       <div class="sec-title">${escapeHtml(t.popup.recentScansTitle)}</div>
       ${recentHtml}
@@ -253,18 +291,18 @@ class PopupController {
                         <a class="row-name" style="text-decoration:none" href="https://www.chess.com/member/${encodeURIComponent(
                           w.username
                         )}" target="_blank" rel="noopener noreferrer">@${escapeHtml(w.username)}</a>
-                        <div class="row-sub">${escapeHtml(initText)} • ${w.ratingAtSave ?? '—'} Elo</div>
+                        <div class="row-sub">${escapeHtml(initText)} · ${w.ratingAtSave ?? '-'} Elo</div>
                       </div>
                     </div>
                     <div style="display:flex;align-items:center;gap:6px">
                       ${
                         w.isBannedFairPlay
-                          ? `<span class="banned-pill">🚨 ${escapeHtml(t.popup.bannedTag)}</span>`
+                          ? `<span class="banned-pill">${escapeHtml(t.popup.bannedTag)}</span>`
                           : `<span class="active-pill">${escapeHtml(t.popup.activeTag)}</span>`
                       }
                       <button class="pill-btn" data-remove-watch="${escapeHtml(w.username)}" title="${escapeHtml(
                         t.popup.removeBtn
-                      )}">✕</button>
+                      )}">${ICONS.close}</button>
                     </div>
                   </div>
                 `;
@@ -275,13 +313,33 @@ class PopupController {
     return `
       <div style="display:flex;align-items:center;justify-content:space-between">
         <div class="sec-title">${escapeHtml(t.popup.watchlistTitle)} (${bannedCount}/${this.watchlist.length})</div>
-        <button class="primary-btn" id="refresh-bans-btn" style="padding:6px 10px" ${
+        <button class="primary-btn" id="refresh-bans-btn" style="height:26px;padding:0 10px" ${
           this.checkingBans || this.watchlist.length === 0 ? 'disabled' : ''
         }>
           ${escapeHtml(this.checkingBans ? t.popup.checkingBans : t.popup.checkBansBtn)}
         </button>
       </div>
       ${listHtml}
+    `;
+  }
+
+  private renderSwitchRow(
+    key: keyof SentinelSettings,
+    checked: boolean,
+    title: string,
+    desc: string
+  ): string {
+    return `
+      <div class="setting-item">
+        <div>
+          <div class="setting-title">${escapeHtml(title)}</div>
+          <div class="setting-desc">${escapeHtml(desc)}</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" data-setting-check="${key}" ${checked ? 'checked' : ''} />
+          <span class="switch-slider"></span>
+        </label>
+      </div>
     `;
   }
 
@@ -317,55 +375,11 @@ class PopupController {
         </select>
       </div>
 
-      <div class="setting-item">
-        <div>
-          <div class="setting-title">${escapeHtml(t.popup.settingsAutoHud)}</div>
-          <div class="setting-desc">${escapeHtml(t.popup.settingsAutoHudDesc)}</div>
-        </div>
-        <input class="toggle-input" type="checkbox" data-setting-check="autoShowHud" ${
-          s.autoShowHud ? 'checked' : ''
-        } />
-      </div>
-
-      <div class="setting-item">
-        <div>
-          <div class="setting-title">${escapeHtml(t.popup.settingsInlineBadge)}</div>
-          <div class="setting-desc">${escapeHtml(t.popup.settingsInlineBadgeDesc)}</div>
-        </div>
-        <input class="toggle-input" type="checkbox" data-setting-check="showInlineBadge" ${
-          s.showInlineBadge ? 'checked' : ''
-        } />
-      </div>
-
-      <div class="setting-item">
-        <div>
-          <div class="setting-title">${escapeHtml(t.popup.settingsCompact)}</div>
-          <div class="setting-desc">${escapeHtml(t.popup.settingsCompactDesc)}</div>
-        </div>
-        <input class="toggle-input" type="checkbox" data-setting-check="compactMode" ${
-          s.compactMode ? 'checked' : ''
-        } />
-      </div>
-
-      <div class="setting-item">
-        <div>
-          <div class="setting-title">${escapeHtml(t.popup.settingsRatedOnly)}</div>
-          <div class="setting-desc">${escapeHtml(t.popup.settingsRatedOnlyDesc)}</div>
-        </div>
-        <input class="toggle-input" type="checkbox" data-setting-check="ratedOnly" ${
-          s.ratedOnly ? 'checked' : ''
-        } />
-      </div>
-
-      <div class="setting-item">
-        <div>
-          <div class="setting-title">${escapeHtml(t.popup.settingsSoundAlerts)}</div>
-          <div class="setting-desc">${escapeHtml(t.popup.settingsSoundAlertsDesc)}</div>
-        </div>
-        <input class="toggle-input" type="checkbox" data-setting-check="soundAlerts" ${
-          s.soundAlerts ? 'checked' : ''
-        } />
-      </div>
+      ${this.renderSwitchRow('autoShowHud', s.autoShowHud, t.popup.settingsAutoHud, t.popup.settingsAutoHudDesc)}
+      ${this.renderSwitchRow('showInlineBadge', s.showInlineBadge, t.popup.settingsInlineBadge, t.popup.settingsInlineBadgeDesc)}
+      ${this.renderSwitchRow('compactMode', s.compactMode, t.popup.settingsCompact, t.popup.settingsCompactDesc)}
+      ${this.renderSwitchRow('ratedOnly', s.ratedOnly, t.popup.settingsRatedOnly, t.popup.settingsRatedOnlyDesc)}
+      ${this.renderSwitchRow('soundAlerts', s.soundAlerts, t.popup.settingsSoundAlerts, t.popup.settingsSoundAlertsDesc)}
     `;
   }
 
@@ -386,19 +400,14 @@ class PopupController {
       <div class="popup-shell">
         <div class="top-bar">
           <div class="brand-group">
-            <div class="brand-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
-                <path d="M12 2L4 5.5v6.2c0 5.3 3.4 9.9 8 11.3 4.6-1.4 8-6 8-11.3V5.5L12 2z"/>
-                <path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
+            <div class="brand-icon">${ICONS.mark}</div>
             <div>
               <div class="brand-name">${escapeHtml(t.appName)}</div>
               <div class="brand-sub">${escapeHtml(t.appSubtitle)}</div>
             </div>
           </div>
           <div class="top-controls">
-            <button class="pill-btn" id="quick-lang-btn">${lang === 'tr' ? 'EN' : 'TR'}</button>
+            <button class="pill-btn mono" id="quick-lang-btn">${lang === 'tr' ? 'EN' : 'TR'}</button>
             <button class="pill-btn" id="toggle-hud-btn" title="${escapeHtml(t.popup.toggleInPageHud)}">HUD</button>
           </div>
         </div>
@@ -477,7 +486,14 @@ class PopupController {
     const copyReportBtn = this.root.querySelector('#popup-copy-report-btn');
     copyReportBtn?.addEventListener('click', () => {
       if (!this.activeResult) return;
-      const report = buildFairPlayEvidenceReport(this.activeResult, this.settings.language, null);
+      const isFromLiveTab =
+        this.activeTabUsername &&
+        this.activeTabUsername.toLowerCase() === this.activeResult.username.toLowerCase();
+      const report = buildFairPlayEvidenceReport(
+        this.activeResult,
+        this.settings.language,
+        isFromLiveTab ? this.activeTabLiveClock : null
+      );
       void navigator.clipboard?.writeText(report).catch(() => {});
       this.copiedReport = true;
       this.render();

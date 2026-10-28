@@ -1,14 +1,14 @@
 {
   "extName": {
-    "message": "Chess Sentinel — Cheat Probability & Fair-Play HUD",
-    "description": "Extension name in Chrome Web Store"
+    "message": "Chess Sentinel: Fair-Play & Move-Time Monitor",
+    "description": "Extension name"
   },
   "extShortName": {
     "message": "Chess Sentinel",
     "description": "Short extension name"
   },
   "extDescription": {
-    "message": "Real-time opponent cheat probability (%), PGN clock entropy forensics, CAPS2 accuracy telemetry & ban watchlist for Chess.com.",
+    "message": "Opponent cheat probability, 0.1s move-time analysis, CAPS2 accuracy checks and suspect move pinpointer for Chess.com.",
     "description": "Extension description (max 132 chars)"
   }
 }

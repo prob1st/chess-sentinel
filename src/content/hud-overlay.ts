@@ -1,34 +1,28 @@
 import { LIVE_FORMATS, TIER_THEMES } from '../core/calibration';
-import { buildFairPlayEvidenceReport } from '../core/engine';
+import { buildFairPlayEvidenceReport, computeEffectiveLiveRisk } from '../core/engine';
 import { formatAgeShort, formatFlag, TRANSLATIONS } from '../i18n/translations';
 import {
   CheatAnalysisResult,
   Language,
   LiveMatchClockTelemetry,
+  PageSurfaceKind,
   SentinelSettings,
   TimeClass,
 } from '../types';
+import { ICONS } from '../utils/icons';
 import { escapeHtml, setSafeHtml } from '../utils/safe-dom';
 import { HUD_SHADOW_CSS } from './hud-styles';
 
 const HIST_LABELS = ['<0.9s', '1.8s', '3.2s', '5.5s', '9.5s', '18s', '18s+'];
 
-function countryToFlagEmoji(code: string | null): string {
-  if (!code || code.length !== 2) return '';
-  const upper = code.toUpperCase();
-  const A = 0x1f1e6;
-  const first = upper.charCodeAt(0) - 65;
-  const second = upper.charCodeAt(1) - 65;
-  if (first < 0 || first > 25 || second < 0 || second > 25) return '';
-  return String.fromCodePoint(A + first, A + second);
-}
+type HudViewTab = 'overview' | 'clock' | 'games';
 
 function barColor(score: number): string {
-  if (score < 25) return '#10b981';
-  if (score < 45) return '#38bdf8';
-  if (score < 68) return '#f59e0b';
-  if (score < 82) return '#f97316';
-  return '#ef4444';
+  if (score < 25) return '#81b64c';
+  if (score < 45) return '#6ba4d9';
+  if (score < 68) return '#e59934';
+  if (score < 82) return '#e06c35';
+  return '#e04644';
 }
 
 export interface HudCallbacks {
@@ -50,10 +44,13 @@ export class SentinelHudOverlay {
   private callbacks: HudCallbacks;
   private currentResult: CheatAnalysisResult | null = null;
   private liveClock: LiveMatchClockTelemetry | null = null;
+  private surface: PageSurfaceKind = 'live';
   private selectedFormat: TimeClass = 'blitz';
+  private activeTab: HudViewTab = 'overview';
+  private expandedMatchIdx: number | null = null;
   private isMinimized = false;
   private isHidden = true;
-  private detailsExpanded = true;
+  private detailsExpanded = false;
   private isAbortWindowOpen = false;
   private isWatched = false;
   private copiedFeedback = false;
@@ -63,8 +60,8 @@ export class SentinelHudOverlay {
   private dragging = false;
   private dragStartX = 0;
   private dragStartY = 0;
-  private startRight = 20;
-  private startTop = 72;
+  private startRight = 16;
+  private startTop = 64;
 
   constructor(settings: SentinelSettings, callbacks: HudCallbacks) {
     this.settings = settings;
@@ -123,9 +120,20 @@ export class SentinelHudOverlay {
   }
 
   updateLiveClock(telemetry: LiveMatchClockTelemetry | null): void {
+    const wasSuspect = Boolean(this.liveClock?.isLiveSuspectPacing);
     this.liveClock = telemetry;
+    if (telemetry?.isLiveSuspectPacing && !wasSuspect) {
+      this.activeTab = 'clock';
+    }
     if (this.currentResult && !this.isHidden) {
       this.render();
+    }
+  }
+
+  setSurface(surface: PageSurfaceKind): void {
+    if (this.surface !== surface) {
+      this.surface = surface;
+      if (this.currentResult && !this.isHidden) this.render();
     }
   }
 
@@ -146,19 +154,31 @@ export class SentinelHudOverlay {
     this.loadingUsername = username;
     this.currentResult = null;
     this.liveClock = null;
+    this.expandedMatchIdx = null;
     this.isHidden = false;
     this.render();
     this.syncVisibility();
   }
 
-  showResult(result: CheatAnalysisResult, watched: boolean, isAbortWindowOpen: boolean): void {
+  showResult(
+    result: CheatAnalysisResult,
+    watched: boolean,
+    isAbortWindowOpen: boolean,
+    surface: PageSurfaceKind = 'live'
+  ): void {
     this.mount();
+    const isNewUser = this.currentResult?.username !== result.username;
     this.loadingUsername = null;
     this.currentResult = result;
     this.selectedFormat = result.primaryFormat;
     this.isWatched = watched;
     this.isAbortWindowOpen = isAbortWindowOpen;
+    this.surface = surface;
     this.copiedFeedback = false;
+    if (isNewUser) {
+      this.activeTab = 'overview';
+      this.expandedMatchIdx = null;
+    }
     this.isHidden = false;
     this.render();
     this.syncVisibility();
@@ -174,7 +194,6 @@ export class SentinelHudOverlay {
     setSafeHtml(
       this.cardEl,
       `
-      <div class="tier-accent-line"></div>
       ${this.renderHeaderHtml(lang)}
       <div class="loading-box">
         <div>
@@ -262,35 +281,48 @@ export class SentinelHudOverlay {
     });
   }
 
+  private getTargetLiveClock(res: CheatAnalysisResult): LiveMatchClockTelemetry | null {
+    if (!this.liveClock) return null;
+    const lcUser = this.liveClock.opponent.toLowerCase();
+    if (
+      lcUser === res.username.toLowerCase() ||
+      lcUser === res.displayName.toLowerCase()
+    ) {
+      return this.liveClock;
+    }
+    return null;
+  }
+
   private renderHeaderHtml(lang: Language): string {
     const t = TRANSLATIONS[lang];
     const nextLang = lang === 'tr' ? 'EN' : 'TR';
-    const soundIcon = this.settings.soundAlerts ? '🔔' : '🔕';
-    const soundTitle = this.settings.soundAlerts ? t.actions.soundOn : t.actions.soundOff;
+    const surfLabel = t.surfaceBadge[this.surface];
+    const surfCls = this.surface === 'live' ? 'live' : '';
 
     return `
       <div class="hud-header" data-drag-handle="1">
         <div class="brand">
-          <svg class="brand-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-            <path d="M12 2L4 5.5v6.2c0 5.3 3.4 9.9 8 11.3 4.6-1.4 8-6 8-11.3V5.5L12 2z"/>
-            <path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+          <span class="brand-dot"></span>
           <span class="brand-title">Chess Sentinel</span>
+          <span class="surface-tag ${surfCls}">${escapeHtml(surfLabel)}</span>
         </div>
         <div class="header-actions">
-          <button class="icon-btn lang-btn" data-action="lang" title="Switch Language / Dil Değiştir">${nextLang}</button>
-          <button class="icon-btn" data-action="sound" title="${escapeHtml(soundTitle)}">${soundIcon}</button>
-          <button class="icon-btn" data-action="swap" title="${escapeHtml(t.actions.swapTarget)}">⇅</button>
+          <button class="icon-btn lang-btn" data-action="lang" title="TR / EN">${nextLang}</button>
+          ${
+            this.surface !== 'profile'
+              ? `<button class="icon-btn" data-action="swap" title="${escapeHtml(t.actions.swapTarget)}">${ICONS.swap}</button>`
+              : ''
+          }
           ${
             this.currentResult
               ? `<button class="icon-btn ${this.isWatched ? 'active' : ''}" data-action="watch" title="${escapeHtml(
                   this.isWatched ? t.actions.watchingSuspect : t.actions.watchSuspect
-                )}">👁</button>`
+                )}">${this.isWatched ? ICONS.bookmarkFilled : ICONS.bookmark}</button>`
               : ''
           }
-          <button class="icon-btn" data-action="refresh" title="${escapeHtml(t.actions.refresh)}">↻</button>
-          <button class="icon-btn" data-action="minimize" title="${escapeHtml(t.actions.minimize)}">—</button>
-          <button class="icon-btn" data-action="close" title="Close">✕</button>
+          <button class="icon-btn" data-action="refresh" title="${escapeHtml(t.actions.refresh)}">${ICONS.refresh}</button>
+          <button class="icon-btn" data-action="minimize" title="${escapeHtml(t.actions.minimize)}">${ICONS.minimize}</button>
+          <button class="icon-btn" data-action="close" title="Close">${ICONS.close}</button>
         </div>
       </div>
     `;
@@ -339,62 +371,55 @@ export class SentinelHudOverlay {
     });
   }
 
-  private renderAutoVerdictHtml(
+  private resolveStatusLine(
     res: CheatAnalysisResult,
     displayProb: number,
     lang: Language
-  ): string {
+  ): { cls: string; message: string } {
     const t = TRANSLATIONS[lang].v3;
-    const lc =
-      this.liveClock &&
-      (this.liveClock.opponent.toLowerCase() === res.username.toLowerCase() ||
-        this.liveClock.opponent.toLowerCase() === res.displayName.toLowerCase())
-        ? this.liveClock
-        : null;
-
-    let variant = 'safe';
-    let message = t.verdictCleanSafe;
+    const lc = this.getTargetLiveClock(res);
 
     if (res.isBannedFairPlay) {
-      variant = 'danger';
-      message = t.verdictBanned;
-    } else if (lc && lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null) {
-      variant = 'danger';
+      return { cls: 'danger', message: t.verdictBanned };
+    }
+    if (lc && lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null) {
       if (lc.pauseMoveNumber !== null && lc.detectedPauseSec !== null) {
-        message = t.verdictLiveToggle
-          .replace('{pauseMove}', String(lc.pauseMoveNumber))
-          .replace('{pauseSec}', String(lc.detectedPauseSec))
-          .replace('{start}', String(lc.roboticStartMove))
-          .replace('{end}', String(lc.roboticEndMove))
-          .replace('{min}', String(lc.roboticMinSec ?? '—'))
-          .replace('{max}', String(lc.roboticMaxSec ?? '—'));
-      } else {
-        message = t.verdictLiveFlatline
+        return {
+          cls: 'danger',
+          message: t.verdictLiveToggle
+            .replace('{pauseMove}', String(lc.pauseMoveNumber))
+            .replace('{pauseSec}', String(lc.detectedPauseSec))
+            .replace('{start}', String(lc.roboticStartMove))
+            .replace('{end}', String(lc.roboticEndMove))
+            .replace('{min}', String(lc.roboticMinSec ?? '-'))
+            .replace('{max}', String(lc.roboticMaxSec ?? '-')),
+        };
+      }
+      return {
+        cls: 'danger',
+        message: t.verdictLiveFlatline
           .replace('{start}', String(lc.roboticStartMove))
           .replace('{end}', String(lc.roboticEndMove))
           .replace('{count}', String(lc.consecutiveRoboticMoves))
-          .replace('{min}', String(lc.roboticMinSec ?? '—'))
-          .replace('{max}', String(lc.roboticMaxSec ?? '—'));
-      }
-    } else if (displayProb >= 75) {
-      variant = 'danger';
-      message = this.isAbortWindowOpen
-        ? t.verdictAbortNow.replace('{pins}', String(Math.max(1, res.suspectPinpoints.length)))
-        : t.verdictHighWatch;
-    } else if (displayProb >= 55) {
-      variant = 'warn';
-      message = t.verdictElevatedWatch;
-    } else if (res.flags.some((f) => f.id === 'smurf_human_pacing')) {
-      variant = 'smurf';
-      message = t.verdictSmurfHuman;
+          .replace('{min}', String(lc.roboticMinSec ?? '-'))
+          .replace('{max}', String(lc.roboticMaxSec ?? '-')),
+      };
     }
-
-    return `
-      <div class="auto-verdict-card ${variant}">
-        <div class="auto-verdict-head">${escapeHtml(t.autoVerdictTitle)}</div>
-        <div class="auto-verdict-text">${escapeHtml(message)}</div>
-      </div>
-    `;
+    if (displayProb >= 75) {
+      return {
+        cls: 'danger',
+        message: this.isAbortWindowOpen
+          ? t.verdictAbortNow.replace('{pins}', String(Math.max(1, res.suspectPinpoints.length)))
+          : t.verdictHighWatch,
+      };
+    }
+    if (displayProb >= 55) {
+      return { cls: 'warn', message: t.verdictElevatedWatch };
+    }
+    if (res.flags.some((f) => f.id === 'smurf_human_pacing')) {
+      return { cls: '', message: t.verdictSmurfHuman };
+    }
+    return { cls: '', message: t.verdictCleanSafe };
   }
 
   private renderSuspectPinpointsHtml(res: CheatAnalysisResult, lang: Language): string {
@@ -407,42 +432,43 @@ export class SentinelHudOverlay {
           p.gameUrl || `https://www.chess.com/member/${encodeURIComponent(res.displayName)}`;
         let desc = '';
         if (p.kind === 'midgame_toggle') {
-          desc = `⏸→🤖 ${t.pinpointToggleRow
+          desc = t.pinpointToggleRow
             .replace('{pauseMove}', String(p.pauseMoveNumber ?? '?'))
             .replace('{pauseSec}', String(p.pauseSec ?? '?'))
             .replace('{start}', String(p.suspectStartMove))
             .replace('{end}', String(p.suspectEndMove))
-            .replace('{min}', String(p.minBandSec ?? '—'))
-            .replace('{max}', String(p.maxBandSec ?? '—'))}`;
+            .replace('{min}', String(p.minBandSec ?? '-'))
+            .replace('{max}', String(p.maxBandSec ?? '-'));
         } else if (p.kind === 'robotic_flatline') {
-          desc = `🤖 ${t.pinpointFlatlineRow
+          desc = t.pinpointFlatlineRow
             .replace('{start}', String(p.suspectStartMove))
             .replace('{end}', String(p.suspectEndMove))
             .replace('{count}', String(p.roboticMoveCount))
-            .replace('{min}', String(p.minBandSec ?? '—'))
-            .replace('{max}', String(p.maxBandSec ?? '—'))}`;
+            .replace('{min}', String(p.minBandSec ?? '-'))
+            .replace('{max}', String(p.maxBandSec ?? '-'));
         } else {
-          desc = `🎯 ${t.pinpointCapsRow
+          desc = t.pinpointCapsRow
             .replace('{end}', String(p.suspectEndMove))
-            .replace('{acc}', String(p.accuracy ?? '—'))}`;
+            .replace('{acc}', String(p.accuracy ?? '-'));
         }
 
         const sanHtml =
           p.sampleMoves && p.sampleMoves.length > 0
             ? `<div class="pinpoint-san">${escapeHtml(p.sampleMoves.join('  '))}${
-                p.accuracy !== null ? ` • CAPS2: %${p.accuracy}` : ''
+                p.accuracy !== null ? ` · %${p.accuracy}` : ''
               }</div>`
             : p.accuracy !== null && p.kind !== 'caps2_spike'
-              ? `<div class="pinpoint-san">CAPS2: %${p.accuracy}</div>`
+              ? `<div class="pinpoint-san">CAPS2 %${p.accuracy}</div>`
               : '';
 
         return `
           <div class="pinpoint-item">
             <div class="pinpoint-head">
               <span>vs @${escapeHtml(p.opponentUsername)} (${p.opponentRating})</span>
-              <a class="pinpoint-open" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(
-                t.pinpointOpenGame
-              )}</a>
+              <a class="pinpoint-open" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">
+                <span>${escapeHtml(t.pinpointOpenGame)}</span>
+                ${ICONS.external}
+              </a>
             </div>
             <div class="pinpoint-body">${escapeHtml(desc)}</div>
             ${sanHtml}
@@ -453,270 +479,54 @@ export class SentinelHudOverlay {
 
     return `
       <div class="pinpoint-panel">
-        <div class="pinpoint-title">${escapeHtml(t.pinpointSectionTitle)}</div>
+        <div class="sec-head">
+          <span>${escapeHtml(t.pinpointSectionTitle)}</span>
+          <span>${res.suspectPinpoints.length}</span>
+        </div>
         ${itemsHtml}
       </div>
     `;
   }
 
-  private renderLiveClockHtml(lang: Language): string {
-    const lc = this.liveClock;
-    if (!lc || lc.movesObserved < 3) return '';
-    if (
-      this.currentResult &&
-      lc.opponent.toLowerCase() !== this.currentResult.username.toLowerCase() &&
-      lc.opponent.toLowerCase() !== this.currentResult.displayName.toLowerCase()
-    ) {
-      return '';
-    }
-
+  private renderOverviewTabHtml(res: CheatAnalysisResult, lang: Language): string {
     const t = TRANSLATIONS[lang];
-    const maxSec = Math.max(12, ...lc.moveTimesSec);
-    const barsHtml = lc.moveTimesSec
-      .map((sec, idx) => {
-        const moveNo = lc.moveNumbers?.[idx] ?? idx + 2;
-        const san = lc.moveSanLabels?.[idx] || '';
-        const isPauseMove = lc.pauseMoveNumber !== null && moveNo === lc.pauseMoveNumber;
-        const isInRoboticRange =
-          lc.isLiveSuspectPacing &&
-          lc.roboticStartMove !== null &&
-          lc.roboticEndMove !== null &&
-          moveNo >= lc.roboticStartMove &&
-          moveNo <= lc.roboticEndMove;
-
-        const hPx = Math.max(4, Math.min(20, Math.round((sec / maxSec) * 20)));
-        const color = isPauseMove
-          ? '#f59e0b'
-          : isInRoboticRange
-            ? '#ef4444'
-            : sec <= 1.8
-              ? '#34d399'
-              : sec >= 18
-                ? '#f59e0b'
-                : '#38bdf8';
-        const numCls = isPauseMove ? 'pause' : isInRoboticRange ? 'suspect' : '';
-        const tip = `#${moveNo}${san ? ` (${san})` : ''}: ${sec}s`;
-
-        return `
-          <div class="live-spark-item" title="${escapeHtml(tip)}">
-            <div class="live-spark-col" style="height:${hPx}px;background:${color}"></div>
-            <span class="live-spark-num ${numCls}">${moveNo}</span>
-          </div>
-        `;
-      })
-      .join('');
-
-    const statsText = t.v3.liveClockMoves
-      .replace('{count}', String(lc.movesObserved))
-      .replace('{mean}', String(lc.liveMeanSec ?? '—'))
-      .replace('{qcd}', String(lc.liveQCD ?? '—'));
-
-    let pinpointMsg = '';
-    if (lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null) {
-      if (lc.pauseMoveNumber !== null && lc.detectedPauseSec !== null) {
-        pinpointMsg = t.v3.livePinpointToggle
-          .replace('{pauseMove}', String(lc.pauseMoveNumber))
-          .replace('{pauseSec}', String(lc.detectedPauseSec))
-          .replace('{start}', String(lc.roboticStartMove))
-          .replace('{end}', String(lc.roboticEndMove))
-          .replace('{min}', String(lc.roboticMinSec ?? '—'))
-          .replace('{max}', String(lc.roboticMaxSec ?? '—'));
-      } else {
-        pinpointMsg = t.v3.livePinpointFlatline
-          .replace('{start}', String(lc.roboticStartMove))
-          .replace('{end}', String(lc.roboticEndMove))
-          .replace('{count}', String(lc.consecutiveRoboticMoves))
-          .replace('{min}', String(lc.roboticMinSec ?? '—'))
-          .replace('{max}', String(lc.roboticMaxSec ?? '—'));
-      }
-    } else if (lc.isLiveSuspectPacing) {
-      pinpointMsg = t.v3.liveClockSuspect;
-    }
-
-    return `
-      <div class="live-clock-box ${lc.isLiveSuspectPacing ? 'suspect' : ''}">
-        <div class="live-clock-head">
-          <span>${escapeHtml(t.v3.liveClockTitle)}</span>
-          <span>${escapeHtml(statsText)}</span>
-        </div>
-        <div class="live-spark-bars">${barsHtml}</div>
-        ${pinpointMsg ? `<div class="live-suspect-msg">${escapeHtml(pinpointMsg)}</div>` : ''}
-      </div>
-    `;
-  }
-
-  private renderHistogramHtml(res: CheatAnalysisResult, lang: Language): string {
-    if (res.pacing.gamesAnalyzed < 4 || res.pacing.bucketDistribution.length < 7) return '';
-    const t = TRANSLATIONS[lang];
-    const dist = res.pacing.bucketDistribution;
-    const maxRatio = Math.max(0.25, ...dist);
-
-    const colsHtml = dist
-      .map((ratio, idx) => {
-        const hPx = Math.max(3, Math.round((ratio / maxRatio) * 30));
-        const isRoboticZone = (idx === 3 || idx === 4) && res.signals.movePacing >= 55;
-        const color = isRoboticZone
-          ? '#ef4444'
-          : idx <= 1
-            ? '#34d399'
-            : idx >= 5
-              ? '#38bdf8'
-              : '#60a5fa';
-        const pct = Math.round(ratio * 100);
-        return `
-          <div class="hist-col-wrap" title="${HIST_LABELS[idx]}: ${pct}%">
-            <div class="hist-bar" style="height:${hPx}px;background:${color}"></div>
-            <span class="hist-lbl">${HIST_LABELS[idx]}</span>
-          </div>
-        `;
-      })
-      .join('');
-
-    const entTag = t.v3.pacingEntropyTag
-      .replace('{ent}', String(res.pacing.meanEntropyBits ?? '—'))
-      .replace('{qcd}', String(res.pacing.medianQCD ?? '—'));
-
-    return `
-      <div class="hist-card">
-        <div class="sub-sec-head">
-          <span>${escapeHtml(t.v3.pacingHistTitle)}</span>
-          <span>${escapeHtml(entTag)}</span>
-        </div>
-        <div class="hist-grid">${colsHtml}</div>
-      </div>
-    `;
-  }
-
-  private renderRecentMatchesHtml(res: CheatAnalysisResult, lang: Language): string {
-    if (!res.recentMatches || res.recentMatches.length === 0) return '';
-    const t = TRANSLATIONS[lang];
-    const bandCeiling = res.formats[res.primaryFormat]?.highAccCeiling ?? 92;
-
-    const rowsHtml = res.recentMatches
-      .slice(0, 5)
-      .map((m) => {
-        const resLbl = lang === 'tr' ? (m.result === 'W' ? 'G' : m.result === 'L' ? 'M' : 'B') : m.result;
-        const movesCount = Math.max(1, Math.round(m.plies / 2));
-        const accHtml =
-          m.accuracy !== null
-            ? `<span class="match-acc ${m.accuracy >= bandCeiling ? 'high' : ''}">${m.accuracy}%</span>`
-            : '';
-        const pinHtml = m.pinpointMoveRange
-          ? `<span class="match-pin-tag">🎯 ${escapeHtml(m.pinpointMoveRange)}</span>`
-          : '';
-        const href = m.url || `https://www.chess.com/member/${encodeURIComponent(res.displayName)}`;
-        return `
-          <a class="match-row" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">
-            <div class="match-left">
-              <span class="match-res ${m.result}">${resLbl}</span>
-              <span class="match-opp">vs @${escapeHtml(m.opponentUsername)} (${m.opponentRating})</span>
-            </div>
-            <div class="match-right">
-              ${pinHtml}
-              ${accHtml}
-              <span>${movesCount}m</span>
-            </div>
-          </a>
-        `;
-      })
-      .join('');
-
-    return `
-      <div class="hist-card">
-        <div class="sub-sec-head">
-          <span>${escapeHtml(t.v3.recentMatchesTitle)}</span>
-          <span>${res.analyzedGamesCount} total</span>
-        </div>
-        <div class="matches-card">${rowsHtml}</div>
-      </div>
-    `;
-  }
-
-  private render(): void {
-    if (!this.cardEl || !this.minPillEl) return;
-    const lang = this.settings.language;
-    const t = TRANSLATIONS[lang];
-
-    if (this.loadingUsername && !this.currentResult) {
-      this.cardEl.style.setProperty('--tier-color', '#38bdf8');
-      this.cardEl.style.setProperty('--tier-border', 'rgba(56, 189, 248, 0.3)');
-      this.cardEl.style.setProperty('--tier-glow', 'rgba(56, 189, 248, 0.25)');
-      setSafeHtml(
-        this.cardEl,
-        `
-        <div class="tier-accent-line"></div>
-        ${this.renderHeaderHtml(lang)}
-        <div class="loading-box">
-          <div class="spinner"></div>
-          <div>
-            <div class="loading-text">@${escapeHtml(this.loadingUsername)}</div>
-            <div class="loading-sub">${escapeHtml(t.scanningOpponent)}</div>
-          </div>
-        </div>
-      `
-      );
-      setSafeHtml(
-        this.minPillEl,
-        `<span class="min-pct">…</span><span class="min-user">@${escapeHtml(this.loadingUsername)}</span>`
-      );
-      this.bindHeaderEvents();
-      return;
-    }
-
-    const res = this.currentResult;
-    if (!res) return;
-
-    const theme = TIER_THEMES[res.tier];
-    this.cardEl.style.setProperty('--tier-color', theme.color);
-    this.cardEl.style.setProperty('--tier-bg', theme.accentBg);
-    this.cardEl.style.setProperty('--tier-border', theme.border);
-    this.cardEl.style.setProperty('--tier-glow', theme.glow);
-
-    this.minPillEl.style.setProperty('--tier-color', theme.color);
-    this.minPillEl.style.setProperty('--tier-border', theme.border);
-    this.minPillEl.style.setProperty('--tier-glow', theme.glow);
-
     const fmtData = res.formats[this.selectedFormat] || res.formats[res.primaryFormat];
-    const displayProb = res.isBannedFairPlay
-      ? 100
-      : this.selectedFormat === res.primaryFormat
-        ? res.probability
-        : fmtData.formatProbability;
 
-    const radius = 35;
-    const circ = 2 * Math.PI * radius;
-    const offset = circ - (Math.min(100, Math.max(0, displayProb)) / 100) * circ;
+    const formatTabsHtml = LIVE_FORMATS.map((fmt) => {
+      const f = res.formats[fmt];
+      const active = fmt === this.selectedFormat ? 'active' : '';
+      const elo = f.currentRating ? String(f.currentRating) : '-';
+      return `
+        <button class="fmt-tab ${active}" data-fmt="${fmt}">
+          <span>${fmt}</span>
+          <span class="fmt-elo">${elo}</span>
+        </button>
+      `;
+    }).join('');
 
-    let alertHtml = '';
-    if (res.isBannedFairPlay) {
-      alertHtml = `<div class="alert-banner banned">🚨 ${escapeHtml(t.bannedFairPlayBanner)}</div>`;
-    } else if (this.isAbortWindowOpen && displayProb >= 75) {
-      alertHtml = `<div class="alert-banner abort-warn">⚠️ ${escapeHtml(t.abortWindowActive)} — ${escapeHtml(
-        t.considerAborting
-      )}</div>`;
-    } else if (this.isAbortWindowOpen && displayProb < 30) {
-      alertHtml = `<div class="alert-banner abort-safe">🛡️ ${escapeHtml(t.safeToPlay)}</div>`;
-    }
+    const formDotsHtml = res.recentForm
+      .slice(0, 6)
+      .map((r) => `<span class="form-dot ${r}"></span>`)
+      .join('');
 
-    const flagEmoji = countryToFlagEmoji(res.countryCode);
-    const avatarHtml = res.avatarUrl
-      ? `<img class="avatar" src="${escapeHtml(res.avatarUrl)}" alt="" />`
-      : `<div class="avatar">${escapeHtml(res.displayName.slice(0, 1).toUpperCase())}</div>`;
+    const wldVal =
+      fmtData.recentTotal > 0
+        ? lang === 'tr'
+          ? `${fmtData.recentWins}G ${fmtData.recentLosses}M ${fmtData.recentDraws}B`
+          : `${fmtData.recentWins}W ${fmtData.recentLosses}L ${fmtData.recentDraws}D`
+        : lang === 'tr'
+          ? `%${fmtData.overallWinPct}`
+          : `${fmtData.overallWinPct}%`;
+    const wldSub =
+      fmtData.recentTotal > 0
+        ? `%${fmtData.recentWinPct}`
+        : `${fmtData.overallTotal}`;
 
-    const titleBadgeHtml = res.title
-      ? `<span class="title-pill">${escapeHtml(res.title.toUpperCase())}</span>`
-      : '';
+    const perfStr = fmtData.performanceRating ? String(fmtData.performanceRating) : '-';
+    const zSign = fmtData.eloZScore >= 0 ? '+' : '';
+    const zClass = fmtData.eloZScore >= 2.8 ? 'warn' : '';
 
-    const verdictText = res.isBannedFairPlay
-      ? t.tiers.banned.summary
-      : displayProb >= 75
-        ? t.considerAborting
-        : displayProb >= 55
-          ? t.cautionAdvised
-          : t.safeToPlay;
-
-    const ageStr = formatAgeShort(res.accountAgeDays, lang);
-    const accStr = fmtData.avgAccuracy !== null ? `${fmtData.avgAccuracy}%` : '—';
+    const accStr = fmtData.avgAccuracy !== null ? `${fmtData.avgAccuracy}%` : '-';
     const accClass =
       fmtData.avgAccuracy !== null && fmtData.avgAccuracy - fmtData.expectedAccuracy >= 4
         ? 'neg'
@@ -725,35 +535,35 @@ export class SentinelHudOverlay {
           : '';
 
     const cvVal = res.pacing.medianCV;
-    const cvStr = cvVal !== null ? String(cvVal) : '—';
+    const qcdVal = res.pacing.medianQCD;
+    const paceStr = cvVal !== null ? `CV ${cvVal}` : '-';
+    const paceSub = qcdVal !== null ? `QCD ${qcdVal}` : '';
     const cvClass =
-      cvVal !== null && cvVal < 0.48 ? 'neg' : cvVal !== null && cvVal < 0.62 ? 'warn' : 'pos';
+      cvVal !== null && cvVal < 0.45 ? 'neg' : cvVal !== null && cvVal < 0.60 ? 'warn' : 'pos';
 
     const d7 = fmtData.eloDelta7d;
     const d7Str = d7 === null ? '0' : d7 > 0 ? `+${d7}` : `${d7}`;
-    const d7Class = d7 !== null && d7 >= 90 ? 'warn' : d7 !== null && d7 > 0 ? 'pos' : '';
-
-    const formDotsHtml = res.recentForm
-      .map((r) => {
-        const lbl = lang === 'tr' ? (r === 'W' ? 'G' : r === 'L' ? 'M' : 'B') : r;
-        return `<span class="form-dot ${r}">${lbl}</span>`;
-      })
-      .join('');
-
-    const wldLabel =
-      fmtData.recentTotal > 0
+    const d7Class = d7 !== null && d7 >= 100 ? 'warn' : d7 !== null && d7 > 0 ? 'pos' : '';
+    const streakSub =
+      res.winStreak >= 2
         ? lang === 'tr'
-          ? `Son: ${fmtData.recentWins}G ${fmtData.recentLosses}M ${fmtData.recentDraws}B (%${fmtData.recentWinPct})`
-          : `Recent: ${fmtData.recentWins}W ${fmtData.recentLosses}L ${fmtData.recentDraws}D (${fmtData.recentWinPct}%)`
-        : lang === 'tr'
-          ? `Genel: %${fmtData.overallWinPct} (${fmtData.overallTotal})`
-          : `All: ${fmtData.overallWinPct}% (${fmtData.overallTotal})`;
+          ? `${res.winStreak}G seri`
+          : `${res.winStreak}W streak`
+        : '';
+
+    const ageStr = formatAgeShort(res.accountAgeDays, lang);
+    const totalGames =
+      res.formats.rapid.overallTotal +
+      res.formats.blitz.overallTotal +
+      res.formats.bullet.overallTotal +
+      res.formats.daily.overallTotal;
+    const gamesSub = t.stats.lifetimeGames.replace('{count}', String(totalGames));
 
     const flagsHtml = res.flags
       .map(
         (f) => `
-        <div class="flag-chip ${f.severity}">
-          <span>${f.icon}</span>
+        <div class="flag-line">
+          <span class="flag-dot ${f.severity}"></span>
           <span>${escapeHtml(formatFlag(lang, f.id, f.params))}</span>
         </div>
       `
@@ -775,7 +585,7 @@ export class SentinelHudOverlay {
         <div class="sig-row">
           <div class="sig-head">
             <span>${escapeHtml(s.label)}</span>
-            <span class="sig-score">${s.score}/100</span>
+            <span class="sig-score">${s.score}</span>
           </div>
           <div class="sig-bar-bg">
             <div class="sig-bar-fill" style="width:${s.score}%;background:${barColor(s.score)}"></div>
@@ -785,128 +595,476 @@ export class SentinelHudOverlay {
       )
       .join('');
 
-    const formatTabsHtml = LIVE_FORMATS.map((fmt) => {
-      const f = res.formats[fmt];
-      const active = fmt === this.selectedFormat ? 'active' : '';
-      const elo = f.currentRating ? String(f.currentRating) : '—';
-      return `
-        <button class="fmt-tab ${active}" data-fmt="${fmt}">
-          <span>${fmt}</span>
-          <span class="fmt-elo">${elo}</span>
-        </button>
-      `;
-    }).join('');
-
-    const pctDisplay = lang === 'tr' ? `<span>%</span>${displayProb}` : `${displayProb}<span>%</span>`;
-
-    setSafeHtml(
-      this.cardEl,
-      `
-      <div class="tier-accent-line"></div>
-      ${this.renderHeaderHtml(lang)}
-      <div class="hud-scroll-body">
-        ${alertHtml}
-        <div class="hero">
-          <div class="gauge-wrap">
-            <svg class="gauge-svg" viewBox="0 0 86 86">
-              <circle class="gauge-track" cx="43" cy="43" r="${radius}"></circle>
-              <circle
-                class="gauge-progress"
-                cx="43"
-                cy="43"
-                r="${radius}"
-                stroke-dasharray="${circ.toFixed(2)}"
-                stroke-dashoffset="${offset.toFixed(2)}"
-              ></circle>
-            </svg>
-            <div class="gauge-center">
-              <div class="gauge-pct">${pctDisplay}</div>
-              <div class="gauge-caption">${escapeHtml(t.cheatProbability)}</div>
-            </div>
-          </div>
-          <div class="identity">
-            <div class="player-row">
-              ${avatarHtml}
-              ${titleBadgeHtml}
-              <a class="username-link" href="https://www.chess.com/member/${encodeURIComponent(
-                res.displayName
-              )}" target="_blank" rel="noopener noreferrer">
-                ${escapeHtml(res.displayName)}
-              </a>
-              ${flagEmoji ? `<span>${flagEmoji}</span>` : ''}
-            </div>
-            <div class="tier-badge-row">
-              <span class="tier-pill">${escapeHtml(t.tiers[res.tier].label)}</span>
-              <span class="conf-tag">• ${escapeHtml(t.confidenceLabel[res.confidence])}</span>
-            </div>
-            <div class="verdict-sub">${escapeHtml(verdictText)}</div>
-          </div>
-        </div>
-
-        ${this.renderAutoVerdictHtml(res, displayProb, lang)}
-        ${this.renderLiveClockHtml(lang)}
-        ${this.renderSuspectPinpointsHtml(res, lang)}
-
+    return `
+      <div class="tab-pane">
         <div class="format-tabs">${formatTabsHtml}</div>
 
-        <div class="stat-grid">
-          <div class="stat-tile">
-            <div class="stat-val">${escapeHtml(ageStr)}</div>
-            <div class="stat-lbl">${escapeHtml(t.stats.accountAge)}</div>
+        <div class="metric-table">
+          <div class="metric-cell">
+            <div class="metric-lbl">
+              <span>${escapeHtml(t.stats.recentRecord)}</span>
+              <span class="form-dots">${formDotsHtml}</span>
+            </div>
+            <div class="metric-val">${escapeHtml(wldVal)} <span class="metric-sub">${escapeHtml(wldSub)}</span></div>
           </div>
-          <div class="stat-tile">
-            <div class="stat-val ${accClass}">${escapeHtml(accStr)}</div>
-            <div class="stat-lbl">${escapeHtml(t.stats.avgAccuracy)}</div>
+
+          <div class="metric-cell">
+            <div class="metric-lbl"><span>${escapeHtml(t.stats.performance)}</span></div>
+            <div class="metric-val ${zClass}">${escapeHtml(perfStr)} <span class="metric-sub">${zSign}${fmtData.eloZScore}σ</span></div>
           </div>
-          <div class="stat-tile">
-            <div class="stat-val ${cvClass}">${escapeHtml(cvStr)}</div>
-            <div class="stat-lbl">${escapeHtml(t.stats.moveCV)}</div>
+
+          <div class="metric-cell">
+            <div class="metric-lbl"><span>${escapeHtml(t.stats.avgAccuracy)}</span></div>
+            <div class="metric-val ${accClass}">${escapeHtml(accStr)} <span class="metric-sub">${escapeHtml(t.stats.expectedShort)} ${fmtData.expectedAccuracy}%</span></div>
           </div>
-          <div class="stat-tile">
-            <div class="stat-val ${d7Class}">${escapeHtml(d7Str)}</div>
-            <div class="stat-lbl">${escapeHtml(t.stats.elo7d)}</div>
+
+          <div class="metric-cell">
+            <div class="metric-lbl"><span>${escapeHtml(t.stats.moveCV)}</span></div>
+            <div class="metric-val ${cvClass}">${escapeHtml(paceStr)} <span class="metric-sub">${escapeHtml(paceSub)}</span></div>
+          </div>
+
+          <div class="metric-cell">
+            <div class="metric-lbl"><span>${escapeHtml(t.stats.elo7d)}</span></div>
+            <div class="metric-val ${d7Class}">${escapeHtml(d7Str)} <span class="metric-sub">${escapeHtml(streakSub)}</span></div>
+          </div>
+
+          <div class="metric-cell">
+            <div class="metric-lbl"><span>${escapeHtml(t.stats.accountAge)}</span></div>
+            <div class="metric-val">${escapeHtml(ageStr)} <span class="metric-sub">${escapeHtml(gamesSub)}</span></div>
           </div>
         </div>
 
-        ${
-          res.recentForm.length > 0
-            ? `<div class="form-strip">
-                <div class="form-dots">${formDotsHtml}</div>
-                <div class="wld-summary">${escapeHtml(wldLabel)}</div>
-              </div>`
-            : ''
-        }
-
+        ${this.renderSuspectPinpointsHtml(res, lang)}
         ${flagsHtml ? `<div class="flags-list">${flagsHtml}</div>` : ''}
 
         <button class="details-toggle" data-toggle-details="1">
           <span>${escapeHtml(this.detailsExpanded ? t.actions.hideDetails : t.actions.toggleDetails)}</span>
-          <span>${this.detailsExpanded ? '▴' : '▾'}</span>
+          ${this.detailsExpanded ? ICONS.chevronUp : ICONS.chevronDown}
         </button>
 
         <div class="signals-panel ${this.detailsExpanded ? '' : 'collapsed'}">
           ${signalsHtml}
-          ${this.renderHistogramHtml(res, lang)}
-          ${this.renderRecentMatchesHtml(res, lang)}
-          <button class="copy-report-btn ${this.copiedFeedback ? 'copied' : ''}" data-copy-report="1">
-            ${escapeHtml(this.copiedFeedback ? t.actions.copiedReport : t.actions.copyReport)}
+        </div>
+      </div>
+    `;
+  }
+
+  private renderClockTabHtml(res: CheatAnalysisResult, lang: Language): string {
+    const t = TRANSLATIONS[lang];
+    const lc = this.getTargetLiveClock(res);
+
+    let liveBoxHtml = '';
+    if (!lc || lc.movesObserved < 2) {
+      liveBoxHtml = `
+        <div class="chart-box">
+          <div class="sec-head"><span>${escapeHtml(t.v3.liveClockTitle)}</span></div>
+          <div class="empty-note">${escapeHtml(t.v3.emptyLiveClock)}</div>
+        </div>
+      `;
+    } else {
+      const maxSec = Math.max(12, ...lc.moveTimesSec);
+      const barsHtml = lc.moveTimesSec
+        .map((sec, idx) => {
+          const moveNo = lc.moveNumbers?.[idx] ?? idx + 2;
+          const san = lc.moveSanLabels?.[idx] || '';
+          const isPauseMove = lc.pauseMoveNumber !== null && moveNo === lc.pauseMoveNumber;
+          const isInRoboticRange =
+            lc.isLiveSuspectPacing &&
+            lc.roboticStartMove !== null &&
+            lc.roboticEndMove !== null &&
+            moveNo >= lc.roboticStartMove &&
+            moveNo <= lc.roboticEndMove;
+
+          const hPx = Math.max(3, Math.min(32, Math.round((sec / maxSec) * 32)));
+          const color = isPauseMove
+            ? '#e59934'
+            : isInRoboticRange
+              ? '#e04644'
+              : sec <= 1.8
+                ? '#81b64c'
+                : sec >= 18
+                  ? '#d9922b'
+                  : '#6ba4d9';
+          const numCls = isPauseMove ? 'pause' : isInRoboticRange ? 'suspect' : '';
+          const tip = `#${moveNo}${san ? ` (${san})` : ''}: ${sec}s`;
+
+          return `
+            <div class="live-spark-item" title="${escapeHtml(tip)}">
+              <div class="live-spark-col" style="height:${hPx}px;background:${color}"></div>
+              <span class="live-spark-num ${numCls}">${moveNo}</span>
+            </div>
+          `;
+        })
+        .join('');
+
+      const recentChipsHtml = lc.moveTimesSec
+        .slice(-8)
+        .map((sec, idx, arr) => {
+          const globalIdx = lc.moveTimesSec.length - arr.length + idx;
+          const moveNo = lc.moveNumbers?.[globalIdx] ?? globalIdx + 2;
+          const san = lc.moveSanLabels?.[globalIdx] || '';
+          const isSus =
+            lc.isLiveSuspectPacing &&
+            lc.roboticStartMove !== null &&
+            lc.roboticEndMove !== null &&
+            moveNo >= lc.roboticStartMove &&
+            moveNo <= lc.roboticEndMove;
+          return `<span class="move-chip ${isSus ? 'suspect' : ''}">#${moveNo}${san ? ` ${escapeHtml(san)}` : ''} ${sec}s</span>`;
+        })
+        .join('');
+
+      const statsText = t.v3.liveClockMoves
+        .replace('{count}', String(lc.movesObserved))
+        .replace('{mean}', String(lc.liveMeanSec ?? '-'))
+        .replace('{qcd}', String(lc.liveQCD ?? '-'));
+
+      let pinpointMsg = '';
+      if (lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null) {
+        if (lc.pauseMoveNumber !== null && lc.detectedPauseSec !== null) {
+          pinpointMsg = t.v3.livePinpointToggle
+            .replace('{pauseMove}', String(lc.pauseMoveNumber))
+            .replace('{pauseSec}', String(lc.detectedPauseSec))
+            .replace('{start}', String(lc.roboticStartMove))
+            .replace('{end}', String(lc.roboticEndMove))
+            .replace('{min}', String(lc.roboticMinSec ?? '-'))
+            .replace('{max}', String(lc.roboticMaxSec ?? '-'));
+        } else {
+          pinpointMsg = t.v3.livePinpointFlatline
+            .replace('{start}', String(lc.roboticStartMove))
+            .replace('{end}', String(lc.roboticEndMove))
+            .replace('{count}', String(lc.consecutiveRoboticMoves))
+            .replace('{min}', String(lc.roboticMinSec ?? '-'))
+            .replace('{max}', String(lc.roboticMaxSec ?? '-'));
+        }
+      } else if (lc.isLiveSuspectPacing) {
+        pinpointMsg = t.v3.liveClockSuspect;
+      }
+
+      const headTitle = lc.isFinishedGame ? t.v3.finishedClockTitle : t.v3.liveClockTitle;
+
+      liveBoxHtml = `
+        <div class="chart-box ${lc.isLiveSuspectPacing ? 'suspect' : ''}">
+          <div class="sec-head">
+            <span>${escapeHtml(headTitle)}</span>
+            <span>${escapeHtml(statsText)}</span>
+          </div>
+          <div class="live-spark-bars">${barsHtml}</div>
+          <div class="move-chips">${recentChipsHtml}</div>
+          ${pinpointMsg ? `<div class="live-suspect-msg">${escapeHtml(pinpointMsg)}</div>` : ''}
+        </div>
+      `;
+    }
+
+    let histHtml = '';
+    if (res.pacing.gamesAnalyzed >= 4 && res.pacing.bucketDistribution.length >= 7) {
+      const dist = res.pacing.bucketDistribution;
+      const maxRatio = Math.max(0.25, ...dist);
+      const colsHtml = dist
+        .map((ratio, idx) => {
+          const hPx = Math.max(2, Math.round((ratio / maxRatio) * 32));
+          const isRoboticZone = (idx === 3 || idx === 4) && res.signals.movePacing >= 55;
+          const color = isRoboticZone
+            ? '#e04644'
+            : idx <= 1
+              ? '#81b64c'
+              : '#6ba4d9';
+          const pct = Math.round(ratio * 100);
+          return `
+            <div class="hist-col-wrap" title="${HIST_LABELS[idx]}: ${pct}%">
+              <div class="hist-bar" style="height:${hPx}px;background:${color}"></div>
+              <span class="hist-lbl">${HIST_LABELS[idx]}</span>
+            </div>
+          `;
+        })
+        .join('');
+
+      const entTag = t.v3.pacingEntropyTag
+        .replace('{ent}', String(res.pacing.meanEntropyBits ?? '-'))
+        .replace('{qcd}', String(res.pacing.medianQCD ?? '-'));
+
+      histHtml = `
+        <div class="chart-box">
+          <div class="sec-head">
+            <span>${escapeHtml(t.v3.pacingHistTitle)}</span>
+            <span>${escapeHtml(entTag)}</span>
+          </div>
+          <div class="hist-grid">${colsHtml}</div>
+        </div>
+      `;
+    }
+
+    return `<div class="tab-pane">${liveBoxHtml}${histHtml}</div>`;
+  }
+
+  private renderGamesTabHtml(res: CheatAnalysisResult, lang: Language): string {
+    const t = TRANSLATIONS[lang];
+    if (!res.recentMatches || res.recentMatches.length === 0) {
+      return `<div class="tab-pane"><div class="empty-note">${escapeHtml(t.stats.noReviewedGames)}</div></div>`;
+    }
+
+    const bandCeiling = res.formats[res.primaryFormat]?.highAccCeiling ?? 92;
+
+    const rowsHtml = res.recentMatches
+      .slice(0, 8)
+      .map((m, idx) => {
+        const resLbl =
+          lang === 'tr' ? (m.result === 'W' ? 'G' : m.result === 'L' ? 'M' : 'B') : m.result;
+        const movesCount = Math.max(1, Math.round(m.plies / 2));
+        const accHtml =
+          m.accuracy !== null
+            ? `<span class="match-acc ${m.accuracy >= bandCeiling ? 'high' : ''}">${m.accuracy}%</span>`
+            : '';
+        const pinHtml = m.pinpointMoveRange
+          ? `<span class="match-pin-tag">${escapeHtml(m.pinpointMoveRange)}</span>`
+          : '';
+        const href =
+          m.url || `https://www.chess.com/member/${encodeURIComponent(res.displayName)}`;
+
+        const hasSpark = Array.isArray(m.moveTimesSec) && m.moveTimesSec.length >= 4;
+        const isExpanded = this.expandedMatchIdx === idx && hasSpark;
+
+        let drawerHtml = '';
+        if (isExpanded && m.moveTimesSec) {
+          const maxD = Math.max(10, ...m.moveTimesSec);
+          const bars = m.moveTimesSec
+            .map((sec, sIdx) => {
+              const h = Math.max(2, Math.min(26, Math.round((sec / maxD) * 26)));
+              const col =
+                m.pinpointKind && sec >= 2.6 && sec <= 8.5
+                  ? '#e04644'
+                  : sec <= 1.8
+                    ? '#81b64c'
+                    : '#6ba4d9';
+              return `<div class="drawer-bar" style="height:${h}px;background:${col}" title="#${sIdx + 2}: ${sec}s"></div>`;
+            })
+            .join('');
+          drawerHtml = `
+            <div class="match-drawer">
+              <div class="drawer-bars">${bars}</div>
+            </div>
+          `;
+        }
+
+        return `
+          <div class="match-block">
+            <div class="match-row">
+              <div class="match-left">
+                <span class="match-res ${m.result}">${resLbl}</span>
+                <span class="match-opp">@${escapeHtml(m.opponentUsername)}</span>
+                <span class="match-opp-elo">(${m.opponentRating})</span>
+              </div>
+              <div class="match-right">
+                ${pinHtml}
+                ${accHtml}
+                <span>${movesCount}m</span>
+                ${
+                  hasSpark
+                    ? `<button class="mini-link-btn ${isExpanded ? 'active' : ''}" data-expand-match="${idx}" title="${escapeHtml(t.v3.inspectMoves)}">${ICONS.clock}</button>`
+                    : ''
+                }
+                <a class="mini-link-btn" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(t.v3.pinpointOpenGame)}">${ICONS.external}</a>
+              </div>
+            </div>
+            ${drawerHtml}
+          </div>
+        `;
+      })
+      .join('');
+
+    return `
+      <div class="tab-pane">
+        <div class="sec-head">
+          <span>${escapeHtml(t.v3.recentMatchesTitle)}</span>
+          <span>${escapeHtml(t.stats.gamesAnalyzed.replace('{count}', String(res.analyzedGamesCount)))}</span>
+        </div>
+        <div class="matches-list">${rowsHtml}</div>
+      </div>
+    `;
+  }
+
+  private render(): void {
+    if (!this.cardEl || !this.minPillEl) return;
+    const lang = this.settings.language;
+    const t = TRANSLATIONS[lang];
+
+    if (this.loadingUsername && !this.currentResult) {
+      this.cardEl.style.setProperty('--tier-color', '#81b64c');
+      setSafeHtml(
+        this.cardEl,
+        `
+        ${this.renderHeaderHtml(lang)}
+        <div class="loading-box">
+          <div class="spinner"></div>
+          <div>
+            <div class="loading-text">@${escapeHtml(this.loadingUsername)}</div>
+            <div class="loading-sub">${escapeHtml(t.scanningOpponent)}</div>
+          </div>
+        </div>
+      `
+      );
+      setSafeHtml(
+        this.minPillEl,
+        `<span class="min-dot"></span><span class="min-pct">...</span><span class="min-user">@${escapeHtml(this.loadingUsername)}</span>`
+      );
+      this.bindHeaderEvents();
+      return;
+    }
+
+    const res = this.currentResult;
+    if (!res) return;
+
+    const lc = this.getTargetLiveClock(res);
+    const eff = computeEffectiveLiveRisk(res, lc, this.selectedFormat);
+    const theme = TIER_THEMES[eff.tier];
+
+    this.cardEl.style.setProperty('--tier-color', theme.color);
+    this.minPillEl.style.setProperty('--tier-color', theme.color);
+
+    const fmtData = res.formats[this.selectedFormat] || res.formats[res.primaryFormat];
+    const displayProb = eff.probability;
+
+    let alertHtml = '';
+    if (res.isBannedFairPlay) {
+      alertHtml = `<div class="alert-banner banned">${escapeHtml(t.bannedFairPlayBanner)}</div>`;
+    } else if (this.isAbortWindowOpen && displayProb >= 75) {
+      alertHtml = `<div class="alert-banner abort-warn">${escapeHtml(t.abortWindowActive)}: ${escapeHtml(
+        t.considerAborting
+      )}</div>`;
+    }
+
+    const avatarHtml = res.avatarUrl
+      ? `<img class="avatar" src="${escapeHtml(res.avatarUrl)}" alt="" />`
+      : `<div class="avatar">${escapeHtml(res.displayName.slice(0, 1).toUpperCase())}</div>`;
+
+    const titleBadgeHtml = res.title
+      ? `<span class="title-pill">${escapeHtml(res.title.toUpperCase())}</span>`
+      : '';
+
+    const isoHtml =
+      res.countryCode && res.countryCode.length === 2
+        ? `<span class="iso-tag">${escapeHtml(res.countryCode.toUpperCase())}</span>`
+        : '';
+
+    const fmtRatingLabel = `${this.selectedFormat.charAt(0).toUpperCase() + this.selectedFormat.slice(1)} ${fmtData.currentRating ?? '-'}`;
+    const pctText = lang === 'tr' ? `%${displayProb}` : `${displayProb}%`;
+    const statusLine = this.resolveStatusLine(res, displayProb, lang);
+
+    const clockCountBadge =
+      lc && lc.movesObserved >= 2
+        ? `<span class="tab-count ${lc.isLiveSuspectPacing ? 'alert' : ''}">${lc.movesObserved}</span>`
+        : '';
+    const gamesCountBadge =
+      res.suspectPinpoints.length > 0
+        ? `<span class="tab-count alert">${res.suspectPinpoints.length}</span>`
+        : `<span class="tab-count">${res.recentMatches.length}</span>`;
+
+    const tabContentHtml =
+      this.activeTab === 'overview'
+        ? this.renderOverviewTabHtml(res, lang)
+        : this.activeTab === 'clock'
+          ? this.renderClockTabHtml(res, lang)
+          : this.renderGamesTabHtml(res, lang);
+
+    const soundIcon = this.settings.soundAlerts ? ICONS.bellOn : ICONS.bellOff;
+    const soundTitle = this.settings.soundAlerts ? t.actions.soundOn : t.actions.soundOff;
+
+    setSafeHtml(
+      this.cardEl,
+      `
+      ${this.renderHeaderHtml(lang)}
+      ${alertHtml}
+      <div class="hud-scroll-body">
+        <div class="hero">
+          <div class="hero-top">
+            <div class="identity">
+              ${avatarHtml}
+              <div class="id-meta">
+                <div class="player-row">
+                  ${titleBadgeHtml}
+                  <a class="username-link" href="https://www.chess.com/member/${encodeURIComponent(
+                    res.displayName
+                  )}" target="_blank" rel="noopener noreferrer">
+                    ${escapeHtml(res.displayName)}
+                  </a>
+                  ${isoHtml}
+                </div>
+                <div class="sub-meta-row">
+                  <span>${escapeHtml(fmtRatingLabel)}</span>
+                  <span>·</span>
+                  <span>${escapeHtml(t.confidenceLabel[res.confidence])}</span>
+                </div>
+              </div>
+            </div>
+            <div class="score-readout">
+              <div class="score-num">${pctText}</div>
+              <div class="score-tier">${escapeHtml(t.tiers[eff.tier].label)}</div>
+            </div>
+          </div>
+
+          <div class="meter-wrap">
+            <div class="meter-track">
+              <div class="meter-fill" style="width:${Math.max(2, displayProb)}%"></div>
+            </div>
+          </div>
+          <div class="verdict-line ${statusLine.cls}">${escapeHtml(statusLine.message)}</div>
+        </div>
+
+        <div class="view-tabs">
+          <button class="view-tab ${this.activeTab === 'overview' ? 'active' : ''}" data-view-tab="overview">
+            <span>${escapeHtml(t.hudTabs.overview)}</span>
           </button>
+          <button class="view-tab ${this.activeTab === 'clock' ? 'active' : ''}" data-view-tab="clock">
+            <span>${escapeHtml(t.hudTabs.clock)}</span>
+            ${clockCountBadge}
+          </button>
+          <button class="view-tab ${this.activeTab === 'games' ? 'active' : ''}" data-view-tab="games">
+            <span>${escapeHtml(t.hudTabs.games)}</span>
+            ${gamesCountBadge}
+          </button>
+        </div>
+
+        ${tabContentHtml}
+      </div>
+
+      <div class="hud-footer">
+        <div class="footer-left">
+          <button class="footer-btn ${this.copiedFeedback ? 'copied' : ''}" data-copy-report="1">
+            ${this.copiedFeedback ? ICONS.check : ICONS.copy}
+            <span>${escapeHtml(this.copiedFeedback ? t.actions.copiedReport : t.actions.copyReport)}</span>
+          </button>
+          <button class="footer-btn ${displayProb >= 45 ? 'report-warn' : ''}" data-open-report="1" title="${escapeHtml(t.actions.openProfile)}">
+            ${ICONS.flag}
+            <span>${escapeHtml(t.actions.reportFairPlay)}</span>
+          </button>
+        </div>
+        <div class="footer-right">
+          <button class="icon-btn" data-action="sound" title="${escapeHtml(soundTitle)}">${soundIcon}</button>
+          <span class="kbd-hint">Alt+S</span>
         </div>
       </div>
     `
     );
 
-    const minPctText = lang === 'tr' ? `%${displayProb}` : `${displayProb}%`;
     setSafeHtml(
       this.minPillEl,
       `
-      <span>🛡️</span>
-      <span class="min-pct">${minPctText}</span>
+      <span class="min-dot"></span>
+      <span class="min-pct">${pctText}</span>
       <span class="min-user">@${escapeHtml(res.displayName)}</span>
     `
     );
 
     this.bindHeaderEvents();
+
+    this.cardEl.querySelectorAll('button[data-view-tab]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tab = (btn as HTMLElement).dataset.viewTab as HudViewTab;
+        if (tab && tab !== this.activeTab) {
+          this.activeTab = tab;
+          this.render();
+        }
+      });
+    });
 
     this.cardEl.querySelectorAll('button[data-fmt]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -926,17 +1084,38 @@ export class SentinelHudOverlay {
       });
     }
 
+    this.cardEl.querySelectorAll('button[data-expand-match]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = Number((btn as HTMLElement).dataset.expandMatch);
+        this.expandedMatchIdx = this.expandedMatchIdx === idx ? null : idx;
+        this.render();
+      });
+    });
+
     const copyBtn = this.cardEl.querySelector('[data-copy-report="1"]');
     if (copyBtn) {
       copyBtn.addEventListener('click', () => {
-        const text = buildFairPlayEvidenceReport(res, lang, this.liveClock);
+        const text = buildFairPlayEvidenceReport(res, lang, lc);
         void navigator.clipboard?.writeText(text).catch(() => {});
         this.copiedFeedback = true;
         this.render();
         setTimeout(() => {
           this.copiedFeedback = false;
           if (!this.isHidden) this.render();
-        }, 2200);
+        }, 2000);
+      });
+    }
+
+    const reportBtn = this.cardEl.querySelector('[data-open-report="1"]');
+    if (reportBtn) {
+      reportBtn.addEventListener('click', () => {
+        const text = buildFairPlayEvidenceReport(res, lang, lc);
+        void navigator.clipboard?.writeText(text).catch(() => {});
+        window.open(
+          `https://www.chess.com/member/${encodeURIComponent(res.displayName)}`,
+          '_blank',
+          'noopener,noreferrer'
+        );
       });
     }
   }

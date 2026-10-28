@@ -48,7 +48,12 @@ export function summarizeLiveMoveTimes(
   opponent: string,
   allMoveTimesSec: number[],
   allMoveNumbers?: number[],
-  allSanLabels?: string[]
+  allSanLabels?: string[],
+  meta?: {
+    source?: 'live_dom' | 'server_callback';
+    isFinishedGame?: boolean;
+    gameId?: string | null;
+  }
 ): LiveMatchClockTelemetry {
   const n = allMoveTimesSec.length;
   const resolvedMoveNums =
@@ -60,9 +65,9 @@ export function summarizeLiveMoveTimes(
       ? allSanLabels
       : Array.from({ length: n }, () => '');
 
-  const recentTimes = allMoveTimesSec.slice(-16);
-  const recentNums = resolvedMoveNums.slice(-16);
-  const recentSan = resolvedSan.slice(-16);
+  const recentTimes = allMoveTimesSec.slice(-24);
+  const recentNums = resolvedMoveNums.slice(-24);
+  const recentSan = resolvedSan.slice(-24);
 
   if (n < 4) {
     return {
@@ -81,6 +86,9 @@ export function summarizeLiveMoveTimes(
       roboticMinSec: null,
       roboticMaxSec: null,
       isLiveSuspectPacing: false,
+      source: meta?.source,
+      isFinishedGame: meta?.isFinishedGame,
+      gameId: meta?.gameId ?? null,
     };
   }
 
@@ -161,13 +169,15 @@ export function summarizeLiveMoveTimes(
     roboticMinSec,
     roboticMaxSec,
     isLiveSuspectPacing,
+    source: meta?.source,
+    isFinishedGame: meta?.isFinishedGame,
+    gameId: meta?.gameId ?? null,
   };
 }
 
 /**
- * Passively observes the active Chess.com game clock DOM to measure real-time
- * opponent move durations (`Δt`) AND exact move numbers (`#2..#N`) during a live match.
- * Strictly read-only passive clock/ply telemetry — zero chess engine / zero board evaluation.
+ * Passively observes the active Chess.com game clock DOM AND accepts server-hydrated
+ * decisecond move timestamps (`callback/live/game/{id}`) for finished or mid-refresh games.
  */
 export class LiveMatchClockMonitor {
   private onUpdate: (telemetry: LiveMatchClockTelemetry) => void;
@@ -177,6 +187,9 @@ export class LiveMatchClockMonitor {
   private moveTimesSec: number[] = [];
   private moveNumbers: number[] = [];
   private moveSanLabels: string[] = [];
+  private source: 'live_dom' | 'server_callback' = 'live_dom';
+  private isFinishedGame = false;
+  private gameId: string | null = null;
   private wasTargetTurn = false;
   private turnStartMs = 0;
   private lastKnownPlyCount = 0;
@@ -185,19 +198,55 @@ export class LiveMatchClockMonitor {
     this.onUpdate = onUpdate;
   }
 
-  setTarget(opponent: string, side: 'top' | 'bottom'): void {
+  setTarget(opponent: string, side: 'top' | 'bottom', gameId: string | null = null): void {
     const normalized = opponent.toLowerCase();
-    if (this.targetOpponent?.toLowerCase() !== normalized || this.targetSide !== side) {
+    if (
+      this.targetOpponent?.toLowerCase() !== normalized ||
+      this.targetSide !== side ||
+      (gameId && this.gameId && gameId !== this.gameId)
+    ) {
       this.targetOpponent = opponent;
       this.targetSide = side;
+      this.gameId = gameId;
       this.moveTimesSec = [];
       this.moveNumbers = [];
       this.moveSanLabels = [];
+      this.source = 'live_dom';
+      this.isFinishedGame = false;
       this.wasTargetTurn = false;
       this.turnStartMs = 0;
       this.lastKnownPlyCount = this.countDomPlies();
+    } else if (gameId) {
+      this.gameId = gameId;
     }
     this.ensureRunning();
+  }
+
+  hydrateServerMoves(
+    opponent: string,
+    timesSec: number[],
+    moveNumbers: number[],
+    isFinished: boolean,
+    gameId: string
+  ): void {
+    if (!this.targetOpponent || this.targetOpponent.toLowerCase() !== opponent.toLowerCase()) {
+      return;
+    }
+    if (timesSec.length === 0 || timesSec.length < this.moveTimesSec.length) {
+      return;
+    }
+    this.moveTimesSec = [...timesSec];
+    this.moveNumbers =
+      moveNumbers.length === timesSec.length
+        ? [...moveNumbers]
+        : Array.from({ length: timesSec.length }, (_, idx) => idx + 2);
+    this.moveSanLabels = Array.from({ length: timesSec.length }, () => '');
+    this.source = 'server_callback';
+    this.isFinishedGame = isFinished;
+    this.gameId = gameId;
+
+    const snap = this.getLatestTelemetry();
+    if (snap) this.onUpdate(snap);
   }
 
   stop(): void {
@@ -209,6 +258,8 @@ export class LiveMatchClockMonitor {
     this.moveTimesSec = [];
     this.moveNumbers = [];
     this.moveSanLabels = [];
+    this.isFinishedGame = false;
+    this.gameId = null;
     this.wasTargetTurn = false;
   }
 
@@ -218,7 +269,12 @@ export class LiveMatchClockMonitor {
       this.targetOpponent,
       this.moveTimesSec,
       this.moveNumbers,
-      this.moveSanLabels
+      this.moveSanLabels,
+      {
+        source: this.source,
+        isFinishedGame: this.isFinishedGame,
+        gameId: this.gameId,
+      }
     );
   }
 
@@ -325,7 +381,12 @@ export class LiveMatchClockMonitor {
             this.targetOpponent,
             this.moveTimesSec,
             this.moveNumbers,
-            this.moveSanLabels
+            this.moveSanLabels,
+            {
+              source: this.source,
+              isFinishedGame: false,
+              gameId: this.gameId,
+            }
           )
         );
       }

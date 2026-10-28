@@ -53,7 +53,7 @@ async function refreshWatchlistBans(): Promise<WatchlistEntry[]> {
 
 chrome.runtime.onInstalled.addListener(() => {
   if (chrome.alarms) {
-    chrome.alarms.create(WATCHLIST_ALARM, { periodInMinutes: 720 }); // Check every 12h
+    chrome.alarms.create(WATCHLIST_ALARM, { periodInMinutes: 720 });
   }
 });
 
@@ -84,6 +84,12 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
           await recordRecentScan(result);
           setTabBadge(sender.tab?.id, result.probability, TIER_THEMES[result.tier].color);
           sendResponse({ ok: true, result });
+          break;
+        }
+
+        case 'FETCH_GAME_CALLBACK': {
+          const data = await chessComApi.fetchGameCallback(message.gameId);
+          sendResponse({ ok: Boolean(data), data });
           break;
         }
 
@@ -138,5 +144,5 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
     }
   })();
 
-  return true; // Keep async message channel open
+  return true;
 });

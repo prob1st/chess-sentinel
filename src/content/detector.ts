@@ -1,4 +1,4 @@
-import { TimeClass } from '../types';
+import { PageSurfaceKind, TimeClass } from '../types';
 
 export interface DetectedMatchContext {
   topPlayer: string | null;
@@ -7,6 +7,9 @@ export interface DetectedMatchContext {
   opponentSide: 'top' | 'bottom';
   detectedFormat: TimeClass | undefined;
   isAbortWindowOpen: boolean;
+  surface: PageSurfaceKind;
+  gameId: string | null;
+  isSelfProfile?: boolean;
   url: string;
 }
 
@@ -84,7 +87,20 @@ export function sanitizeChessUsername(raw: string | null | undefined): string | 
 }
 
 export function isChessComBoardUrl(url: string): boolean {
-  return /chess\.com\/(game|play\/online|live|analysis\/game|events)/i.test(url);
+  return /chess\.com\/(?:[a-z]{2}\/)?(game|play\/online|live|analysis\/game|events)/i.test(url);
+}
+
+export function extractGameIdFromUrl(url: string): string | null {
+  const m =
+    url.match(/\/(?:analysis\/)?game\/(?:live|daily)?\/?(\d{6,16})/i) ||
+    url.match(/[?#&]g=(\d{6,16})/i);
+  return m?.[1] || null;
+}
+
+export function extractMemberProfileFromUrl(url: string): string | null {
+  const m = url.match(/chess\.com\/(?:[a-z]{2}\/)?member\/([a-zA-Z0-9_-]{2,32})(?:[/?#]|$)/i);
+  if (!m?.[1]) return null;
+  return sanitizeChessUsername(m[1]);
 }
 
 const TOP_ZONE_SELECTORS = [
@@ -185,7 +201,7 @@ export class ChessComOpponentDetector {
     );
   }
 
-  private getLoggedInUsername(): string | null {
+  getLoggedInUsername(): string | null {
     const notif = document.getElementById('notifications-request');
     const fromNotif = sanitizeChessUsername(notif?.getAttribute('username'));
     if (fromNotif) return fromNotif;
@@ -398,7 +414,11 @@ export class ChessComOpponentDetector {
   }
 
   private evaluateDom(): void {
-    if (!this.hasBoardOnPage()) {
+    const currentUrl = window.location.href;
+    const gameId = extractGameIdFromUrl(currentUrl);
+    const memberProfile = !this.hasBoardOnPage() ? extractMemberProfileFromUrl(currentUrl) : null;
+
+    if (!this.hasBoardOnPage() && !memberProfile) {
       if (this.lastSignature !== '') {
         this.lastSignature = '';
         this.onMatchLeft();
@@ -406,8 +426,29 @@ export class ChessComOpponentDetector {
       return;
     }
 
-    const { topPlayer, bottomPlayer } = this.extractPlayers();
     const loggedIn = this.getLoggedInUsername()?.toLowerCase();
+
+    if (memberProfile && !this.hasBoardOnPage()) {
+      const isSelfProfile = Boolean(loggedIn && memberProfile.toLowerCase() === loggedIn);
+      const sig = `profile|${memberProfile.toLowerCase()}|${isSelfProfile ? '1' : '0'}`;
+      if (sig === this.lastSignature) return;
+      this.lastSignature = sig;
+      this.onContextChange({
+        topPlayer: memberProfile,
+        bottomPlayer: loggedIn || null,
+        opponent: memberProfile,
+        opponentSide: 'top',
+        detectedFormat: undefined,
+        isAbortWindowOpen: false,
+        surface: 'profile',
+        gameId: null,
+        isSelfProfile,
+        url: currentUrl,
+      });
+      return;
+    }
+
+    const { topPlayer, bottomPlayer } = this.extractPlayers();
 
     // Smart orientation resolution: if the user flipped the board so their own name is on top,
     // automatically target the actual opponent on the bottom!
@@ -429,8 +470,13 @@ export class ChessComOpponentDetector {
 
     const detectedFormat = this.detectActiveFormat();
     const isAbortWindowOpen = this.detectAbortWindow();
+    const hasActiveClock = !!document.querySelector(
+      '.clock-player-turn, [class*="clock-player-turn"]'
+    );
+    const surface: PageSurfaceKind =
+      hasActiveClock || /\/play\/online|\/live/i.test(currentUrl) ? 'live' : 'game';
 
-    const sig = `${opponent.toLowerCase()}|${opponentSide}|${(bottomPlayer || '').toLowerCase()}|${isAbortWindowOpen ? '1' : '0'}`;
+    const sig = `${surface}|${opponent.toLowerCase()}|${opponentSide}|${(bottomPlayer || '').toLowerCase()}|${isAbortWindowOpen ? '1' : '0'}|${gameId || ''}`;
     if (sig === this.lastSignature) return;
 
     this.lastSignature = sig;
@@ -441,7 +487,9 @@ export class ChessComOpponentDetector {
       opponentSide,
       detectedFormat,
       isAbortWindowOpen,
-      url: window.location.href,
+      surface,
+      gameId,
+      url: currentUrl,
     });
   }
 }

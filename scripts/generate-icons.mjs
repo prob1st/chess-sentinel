@@ -119,39 +119,34 @@ function renderShieldIcon(size) {
 
           if (!inCard) continue;
 
-          // Base dark obsidian gradient
-          let r = 11 + (1 - uy) * 7;
-          let g = 17 + (1 - uy) * 11;
-          let b = 31 + (1 - uy) * 16;
+          // Native Chess.com warm dark matte card (#21201d)
+          let r = 33;
+          let g = 32;
+          let b = 29;
 
           const inOuter = pointInShield(ux, uy);
           const inInner = pointInShield(ux * 1.15, uy * 1.15);
 
           if (inOuter && !inInner) {
-            // Glowing emerald-to-cyan shield rim
-            const mix = (uy + 0.8) / 1.6;
-            r = 16 * (1 - mix) + 56 * mix;
-            g = 185 * (1 - mix) + 189 * mix;
-            b = 129 * (1 - mix) + 248 * mix;
+            // Crisp Chess.com olive green rim (#81b64c)
+            r = 129;
+            g = 182;
+            b = 76;
           } else if (inInner) {
-            // Inner tactical radar surface
-            r = 13;
-            g = 34;
-            b = 48;
+            // Subtle dark olive-charcoal core
+            r = 25;
+            g = 28;
+            b = 22;
           }
 
-          // Radar check / pulse mark inside shield
+          // Clean check mark inside shield
           const d1 = distToSegment(ux, uy, -0.26, 0.02, -0.05, 0.24);
           const d2 = distToSegment(ux, uy, -0.05, 0.24, 0.30, -0.18);
           const strokeD = Math.min(d1, d2);
           if (strokeD <= 0.105) {
-            r = 52;
-            g = 211;
-            b = 153;
-          } else if (strokeD <= 0.16 && inInner) {
-            r += 18;
-            g += 65;
-            b += 55;
+            r = 149;
+            g = 201;
+            b = 95;
           }
 
           rSum += Math.min(255, r);

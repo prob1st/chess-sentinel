@@ -69,7 +69,8 @@ describe('v3.2 Auto-Verdict, Exact Move-Range Pinpointer & Forensic Evidence Exp
     };
 
     const res = analyzePlayerBundle(bundle, { nowMs: 1760000000000 });
-    expect(res.recentMatches.length).toBe(5);
+    expect(res.recentMatches.length).toBe(8);
+    expect(res.recentMatches[0].moveTimesSec?.length).toBeGreaterThanOrEqual(20);
     expect(res.suspectPinpoints.length).toBeGreaterThan(0);
     expect(res.suspectPinpoints[0].suspectStartMove).toBeGreaterThanOrEqual(6);
     expect(res.suspectPinpoints[0].suspectEndMove).toBeGreaterThanOrEqual(20);
@@ -83,7 +84,7 @@ describe('v3.2 Auto-Verdict, Exact Move-Range Pinpointer & Forensic Evidence Exp
     );
     const trReport = buildFairPlayEvidenceReport(res, 'tr', liveSnap);
     const enReport = buildFairPlayEvidenceReport(res, 'en', liveSnap);
-    expect(trReport).toContain('Chess Sentinel v3.2');
+    expect(trReport).toContain('Chess Sentinel v4.0');
     expect(trReport).toContain('9. hamlede 36sn duraksama -> 10.-17. hamleler robotik');
     expect(enReport).toContain('Move #9 (36s pause) -> Moves #10-#17 mechanical');
     expect(enReport).toContain('https://www.chess.com/game/live/999000');

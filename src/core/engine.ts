@@ -9,6 +9,7 @@ import {
   LiveMatchClockTelemetry,
   PlayerRawBundle,
   RecentMatchSummary,
+  RiskTierId,
   SensitivityPreset,
   SignalBreakdown,
   TimeClass,
@@ -20,7 +21,11 @@ import {
   probabilityToTier,
   SENSITIVITY_MULTIPLIERS,
 } from './calibration';
-import { computeAggregatePacing, extractSuspectGamePinpoints } from './pgn-pacing';
+import {
+  computeAggregatePacing,
+  extractPlayerMoveTimes,
+  extractSuspectGamePinpoints,
+} from './pgn-pacing';
 
 const ALL_FORMATS: TimeClass[] = ['rapid', 'blitz', 'bullet', 'daily'];
 const CLK_COUNT_REGEX = /\[%clk\s+/g;
@@ -531,7 +536,7 @@ export function analyzePlayerBundle(
     }
   );
 
-  const recentMatches: RecentMatchSummary[] = validGames.slice(0, 5).map((g) => {
+  const recentMatches: RecentMatchSummary[] = validGames.slice(0, 8).map((g) => {
     const isWhite = g.white?.username?.toLowerCase() === usernameLower;
     const player = isWhite ? g.white : g.black;
     const opp = isWhite ? g.black : g.white;
@@ -546,6 +551,10 @@ export function analyzePlayerBundle(
       typeof rawAcc === 'number' && !Number.isNaN(rawAcc) ? Number(rawAcc.toFixed(1)) : null;
     const pinKey = g.url || String(g.end_time || '');
     const pin = pinKey ? byUrlOrEndTime.get(pinKey) : undefined;
+    const parsedTimes = g.pgn ? extractPlayerMoveTimes(g.pgn, isWhite) : null;
+    const moveTimesSec = parsedTimes
+      ? parsedTimes.moveDurationsSec.slice(0, 32).map((v) => Number(v.toFixed(1)))
+      : undefined;
 
     return {
       result: resCode,
@@ -558,7 +567,8 @@ export function analyzePlayerBundle(
       url: g.url || null,
       endTime: g.end_time || 0,
       pinpointKind: pin ? pin.kind : null,
-      pinpointMoveRange: pin ? `#${pin.suspectStartMove}–#${pin.suspectEndMove}` : null,
+      pinpointMoveRange: pin ? `#${pin.suspectStartMove}-#${pin.suspectEndMove}` : null,
+      moveTimesSec,
     };
   });
 
@@ -784,18 +794,18 @@ export function analyzePlayerBundle(
     confidence = 'medium';
   }
 
-  // Build Forensic Insight Flags
+  // Build Insight Flags (Zero Emojis — clean semantic status markers)
   const flags: InsightFlag[] = [];
 
   if (isBannedFairPlay) {
-    flags.push({ id: 'banned_fair_play', severity: 'danger', icon: '🚨' });
+    flags.push({ id: 'banned_fair_play', severity: 'danger', icon: '' });
   }
 
   if (profile.title) {
     flags.push({
       id: 'verified_title',
       severity: 'info',
-      icon: '👑',
+      icon: '',
       params: { title: profile.title.toUpperCase() },
     });
   }
@@ -804,14 +814,14 @@ export function analyzePlayerBundle(
     flags.push({
       id: 'fresh_high_elo',
       severity: probability >= 55 ? 'danger' : 'warning',
-      icon: '🆕',
+      icon: '',
       params: { days: Math.max(1, accountAgeDays), rating: pf.currentRating || 0 },
     });
   } else if (accountAgeDays !== null && accountAgeDays <= 21 && probability >= 30) {
     flags.push({
       id: 'fresh_account',
       severity: 'warning',
-      icon: '🆕',
+      icon: '',
       params: { days: Math.max(1, accountAgeDays) },
     });
   }
@@ -820,14 +830,14 @@ export function analyzePlayerBundle(
     flags.push({
       id: 'extreme_recent_wr',
       severity: 'danger',
-      icon: '🚩',
+      icon: '',
       params: { games: pf.recentTotal, wr: pf.recentWinPct, z: pf.eloZScore },
     });
   } else if (pf.recentTotal >= 8 && pf.eloZScore >= 2.0) {
     flags.push({
       id: 'elevated_recent_wr',
       severity: 'warning',
-      icon: '📈',
+      icon: '',
       params: { games: pf.recentTotal, wr: pf.recentWinPct, z: pf.eloZScore },
     });
   }
@@ -841,7 +851,7 @@ export function analyzePlayerBundle(
     flags.push({
       id: 'smurf_human_pacing',
       severity: 'info',
-      icon: '🧭',
+      icon: '',
     });
   }
 
@@ -850,7 +860,7 @@ export function analyzePlayerBundle(
     flags.push({
       id: 'accuracy_excess',
       severity: signals.accuracyAnomaly >= 70 ? 'danger' : 'warning',
-      icon: '🎯',
+      icon: '',
       params: { excess: Math.max(1.5, excess), avg: pf.avgAccuracy },
     });
   }
@@ -859,7 +869,7 @@ export function analyzePlayerBundle(
     flags.push({
       id: 'accuracy_spikes',
       severity: pf.highAccRate >= 0.45 ? 'danger' : 'warning',
-      icon: '⚡',
+      icon: '',
       params: {
         games: pf.reviewedGames,
         rate: Math.round(pf.highAccRate * 100),
@@ -878,7 +888,7 @@ export function analyzePlayerBundle(
     flags.push({
       id: 'robotic_pacing',
       severity: signals.movePacing >= 72 ? 'danger' : 'warning',
-      icon: '⏱️',
+      icon: '',
       params: {
         cv: pacing.medianCV,
         qcd: pacing.medianQCD,
@@ -891,7 +901,7 @@ export function analyzePlayerBundle(
     flags.push({
       id: 'midgame_toggle',
       severity: pacing.toggleGames >= 3 ? 'danger' : 'warning',
-      icon: '🤖',
+      icon: '',
       params: { count: pacing.toggleGames },
     });
   }
@@ -900,7 +910,7 @@ export function analyzePlayerBundle(
     flags.push({
       id: 'elo_surge',
       severity: pf.eloDelta7d >= 185 ? 'danger' : 'warning',
-      icon: '🚀',
+      icon: '',
       params: { delta: pf.eloDelta7d },
     });
   }
@@ -909,7 +919,7 @@ export function analyzePlayerBundle(
     flags.push({
       id: 'hot_streak',
       severity: winStreak >= 12 ? 'danger' : 'warning',
-      icon: '🔥',
+      icon: '',
       params: { streak: winStreak },
     });
   }
@@ -918,7 +928,7 @@ export function analyzePlayerBundle(
     flags.push({
       id: 'tactics_gap',
       severity: 'warning',
-      icon: '🧩',
+      icon: '',
       params: { rating: pf.currentRating || bestLiveRating, tactics: tacticsGapRating },
     });
   }
@@ -928,7 +938,7 @@ export function analyzePlayerBundle(
       flags.push({
         id: 'natural_human',
         severity: 'positive',
-        icon: '✅',
+        icon: '',
         params: { cv: pacing.medianCV },
       });
     }
@@ -936,7 +946,7 @@ export function analyzePlayerBundle(
       flags.push({
         id: 'established_veteran',
         severity: 'positive',
-        icon: '🛡️',
+        icon: '',
         params: { years: Math.floor(accountAgeDays / 365), total: lifetimeGames },
       });
     }
@@ -984,9 +994,56 @@ export function analyzePlayerBundle(
 }
 
 /**
+ * Computes real-time effective probability by combining historical Bayesian risk
+ * with Zero-FP live/current-match chronometric evidence (`isLiveSuspectPacing`).
+ * Never inflates normal human live pacing (0% false positive impact).
+ */
+export function computeEffectiveLiveRisk(
+  res: CheatAnalysisResult,
+  liveClock?: LiveMatchClockTelemetry | null,
+  selectedFormat?: TimeClass
+): {
+  probability: number;
+  tier: RiskTierId;
+  liveEscalated: boolean;
+} {
+  if (res.isBannedFairPlay) {
+    return { probability: 100, tier: 'banned', liveEscalated: false };
+  }
+
+  const fmt = selectedFormat || res.primaryFormat;
+  const fmtData = res.formats[fmt] || res.formats[res.primaryFormat];
+  const baseProb = fmt === res.primaryFormat ? res.probability : fmtData.formatProbability;
+
+  const belongsToTarget =
+    liveClock &&
+    (liveClock.opponent.toLowerCase() === res.username.toLowerCase() ||
+      liveClock.opponent.toLowerCase() === res.displayName.toLowerCase());
+
+  if (!belongsToTarget || !liveClock.isLiveSuspectPacing || res.title) {
+    return {
+      probability: baseProb,
+      tier: probabilityToTier(baseProb, false),
+      liveEscalated: false,
+    };
+  }
+
+  const streakBonus = Math.min(18, Math.max(0, liveClock.consecutiveRoboticMoves - 7) * 3);
+  const liveFloor =
+    liveClock.pauseMoveNumber !== null ? 68 + streakBonus : 60 + streakBonus;
+  const combined = Math.min(94, Math.max(baseProb, Math.round(liveFloor + baseProb * 0.18)));
+
+  return {
+    probability: combined,
+    tier: probabilityToTier(combined, false),
+    liveEscalated: combined > baseProb,
+  };
+}
+
+/**
  * Generates a factual, structured Fair-Play telemetry summary suitable for pasting
  * directly into Chess.com's Fair Play Report description box, including exact
- * game URLs and exact suspect move numbers (`#start–#end`).
+ * game URLs and exact suspect move numbers (`#start-#end`).
  */
 export function buildFairPlayEvidenceReport(
   res: CheatAnalysisResult,
@@ -994,29 +1051,30 @@ export function buildFairPlayEvidenceReport(
   liveClock?: LiveMatchClockTelemetry | null
 ): string {
   const pf = res.formats[res.primaryFormat];
+  const eff = computeEffectiveLiveRisk(res, liveClock, res.primaryFormat);
   const lines: string[] = [];
 
   if (lang === 'tr') {
-    lines.push(`[Chess Sentinel v3.2 (Zero-FP) — Adil Oyun & Hamle Bazlı Kanıt Özeti]`);
+    lines.push(`[Chess Sentinel v4.0 - Adil Oyun Kanit Ozeti]`);
     lines.push(
-      `Oyuncu: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Hesap Yaşı: ${
-        res.accountAgeDays !== null ? `${res.accountAgeDays} gün` : 'Bilinmiyor'
+      `Oyuncu: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Hesap Yasi: ${
+        res.accountAgeDays !== null ? `${res.accountAgeDays} gun` : 'Bilinmiyor'
       }`
     );
     lines.push(
-      `Birincil Format: ${res.primaryFormat.toUpperCase()} (${pf.currentRating ?? '—'} Elo) | İstatistiksel Anomali Olasılığı: %${res.probability}`
+      `Format: ${res.primaryFormat.toUpperCase()} (${pf.currentRating ?? '-'} Elo) | Anomali Skoru: %${eff.probability}`
     );
     lines.push(
-      `Son Performans: ${pf.recentWins}G / ${pf.recentLosses}M / ${pf.recentDraws}B (%${pf.recentWinPct} galibiyet, Rakip Elo beklentisine göre ${pf.eloZScore >= 0 ? '+' : ''}${pf.eloZScore}σ Z-Skoru)`
+      `Son Performans: ${pf.recentWins}G / ${pf.recentLosses}M / ${pf.recentDraws}B (%${pf.recentWinPct} galibiyet, ${pf.eloZScore >= 0 ? '+' : ''}${pf.eloZScore}σ Z-Skoru${pf.performanceRating ? `, Perf: ${pf.performanceRating}` : ''})`
     );
     if (pf.avgAccuracy !== null) {
       lines.push(
-        `Uzun Maç CAPS2 Doğruluk: %${pf.avgAccuracy} (Elo bandı beklentisi: %${pf.expectedAccuracy}, İncelenen tam maç: ${pf.reviewedGames})`
+        `Uzun Mac CAPS2 Dogruluk: %${pf.avgAccuracy} (Beklenen: %${pf.expectedAccuracy}, Incelenen tam mac: ${pf.reviewedGames})`
       );
     }
     if (res.pacing.gamesAnalyzed >= 4) {
       lines.push(
-        `Kronometrik Saat Analizi (%clk): Entropi ${res.pacing.meanEntropyBits ?? '—'} bit | Medyan QCD: ${res.pacing.medianQCD ?? '—'} | Medyan CV: ${res.pacing.medianCV ?? '—'} | Mekanik Maç Oranı: %${Math.round(res.pacing.flatlineRate * 100)}`
+        `Hamle Suresi Analizi (%clk): Entropi ${res.pacing.meanEntropyBits ?? '-'} bit | Medyan QCD: ${res.pacing.medianQCD ?? '-'} | Medyan CV: ${res.pacing.medianCV ?? '-'} | Mekanik Mac Orani: %${Math.round(res.pacing.flatlineRate * 100)}`
       );
     }
     if (liveClock && liveClock.movesObserved >= 4) {
@@ -1027,21 +1085,21 @@ export function buildFairPlayEvidenceReport(
             ? ` | Nokta Atışı: ${liveClock.roboticStartMove}.-${liveClock.roboticEndMove}. hamleler kesintisiz mekanik (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}sn)`
             : '';
       lines.push(
-        `Canlı Maç Saat Verisi: ${liveClock.movesObserved} hamle izlendi | Ort: ${liveClock.liveMeanSec ?? '—'} sn | Canlı QCD: ${liveClock.liveQCD ?? '—'}${livePin}`
+        `Aktif Mac Saat Verisi: ${liveClock.movesObserved} hamle | Ort: ${liveClock.liveMeanSec ?? '-'} sn | QCD: ${liveClock.liveQCD ?? '-'}${livePin}`
       );
     }
     if (res.suspectPinpoints && res.suspectPinpoints.length > 0) {
-      lines.push(`Tespit Edilen Şüpheli Maç & Hamle Aralıkları:`);
+      lines.push(`Şüpheli Maç ve Hamle Aralıkları:`);
       for (const p of res.suspectPinpoints) {
-        const urlPart = p.gameUrl ? ` — ${p.gameUrl}` : '';
+        const urlPart = p.gameUrl ? ` | ${p.gameUrl}` : '';
         const samples = p.sampleMoves.length > 0 ? ` [${p.sampleMoves.join(' ')}]` : '';
         if (p.kind === 'midgame_toggle') {
           lines.push(
-            `- vs @${p.opponentUsername}: ${p.pauseMoveNumber}. hamlede ${p.pauseSec}sn duraksama -> ${p.suspectStartMove}.-${p.suspectEndMove}. hamleler sabit robotik tempo (${p.minBandSec}-${p.maxBandSec}sn)${samples}${urlPart}`
+            `- vs @${p.opponentUsername}: ${p.pauseMoveNumber}. hamlede ${p.pauseSec}sn duraksama -> ${p.suspectStartMove}.-${p.suspectEndMove}. hamleler robotik tempo (${p.minBandSec}-${p.maxBandSec}sn)${samples}${urlPart}`
           );
         } else if (p.kind === 'robotic_flatline') {
           lines.push(
-            `- vs @${p.opponentUsername}: ${p.suspectStartMove}.-${p.suspectEndMove}. hamleler sıfır refleksli mekanik tempo (${p.minBandSec}-${p.maxBandSec}sn)${p.accuracy !== null ? ` [%${p.accuracy}]` : ''}${samples}${urlPart}`
+            `- vs @${p.opponentUsername}: ${p.suspectStartMove}.-${p.suspectEndMove}. hamleler sabit mekanik tempo (${p.minBandSec}-${p.maxBandSec}sn)${p.accuracy !== null ? ` [%${p.accuracy}]` : ''}${samples}${urlPart}`
           );
         } else {
           lines.push(
@@ -1059,26 +1117,26 @@ export function buildFairPlayEvidenceReport(
       }
     }
   } else {
-    lines.push(`[Chess Sentinel v3.2 (Zero-FP) — Fair-Play & Move-Range Evidence Summary]`);
+    lines.push(`[Chess Sentinel v4.0 - Fair-Play Evidence Summary]`);
     lines.push(
       `Player: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Account Age: ${
         res.accountAgeDays !== null ? `${res.accountAgeDays} days` : 'Unknown'
       }`
     );
     lines.push(
-      `Primary Format: ${res.primaryFormat.toUpperCase()} (${pf.currentRating ?? '—'} Elo) | Statistical Anomaly Probability: ${res.probability}%`
+      `Format: ${res.primaryFormat.toUpperCase()} (${pf.currentRating ?? '-'} Elo) | Statistical Anomaly Score: ${eff.probability}%`
     );
     lines.push(
-      `Recent Performance: ${pf.recentWins}W / ${pf.recentLosses}L / ${pf.recentDraws}D (${pf.recentWinPct}% WR, ${pf.eloZScore >= 0 ? '+' : ''}${pf.eloZScore}σ Elo-adjusted Z-Score)`
+      `Recent Performance: ${pf.recentWins}W / ${pf.recentLosses}L / ${pf.recentDraws}D (${pf.recentWinPct}% WR, ${pf.eloZScore >= 0 ? '+' : ''}${pf.eloZScore}σ Z-Score${pf.performanceRating ? `, Perf: ${pf.performanceRating}` : ''})`
     );
     if (pf.avgAccuracy !== null) {
       lines.push(
-        `Long-Game CAPS2 Accuracy: ${pf.avgAccuracy}% (Band expected: ${pf.expectedAccuracy}%, Full-length reviewed games: ${pf.reviewedGames})`
+        `Long-Game CAPS2 Accuracy: ${pf.avgAccuracy}% (Expected: ${pf.expectedAccuracy}%, Full-length reviewed games: ${pf.reviewedGames})`
       );
     }
     if (res.pacing.gamesAnalyzed >= 4) {
       lines.push(
-        `Chronometric PGN [%clk] Profile: Entropy ${res.pacing.meanEntropyBits ?? '—'} bits | Median QCD: ${res.pacing.medianQCD ?? '—'} | Median CV: ${res.pacing.medianCV ?? '—'} | Flatline Rate: ${Math.round(res.pacing.flatlineRate * 100)}%`
+        `Move-Time [%clk] Profile: Entropy ${res.pacing.meanEntropyBits ?? '-'} bits | Median QCD: ${res.pacing.medianQCD ?? '-'} | Median CV: ${res.pacing.medianCV ?? '-'} | Flatline Rate: ${Math.round(res.pacing.flatlineRate * 100)}%`
       );
     }
     if (liveClock && liveClock.movesObserved >= 4) {
@@ -1089,13 +1147,13 @@ export function buildFairPlayEvidenceReport(
             ? ` | Pinpoint: Moves #${liveClock.roboticStartMove}-#${liveClock.roboticEndMove} continuous mechanical band (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}s)`
             : '';
       lines.push(
-        `Live Match Clock Radar: ${liveClock.movesObserved} moves | Mean: ${liveClock.liveMeanSec ?? '—'}s | Live QCD: ${liveClock.liveQCD ?? '—'}${livePin}`
+        `Match Clock Data: ${liveClock.movesObserved} moves | Mean: ${liveClock.liveMeanSec ?? '-'}s | QCD: ${liveClock.liveQCD ?? '-'}${livePin}`
       );
     }
     if (res.suspectPinpoints && res.suspectPinpoints.length > 0) {
       lines.push(`Pinpointed Suspect Games & Move Ranges:`);
       for (const p of res.suspectPinpoints) {
-        const urlPart = p.gameUrl ? ` — ${p.gameUrl}` : '';
+        const urlPart = p.gameUrl ? ` | ${p.gameUrl}` : '';
         const samples = p.sampleMoves.length > 0 ? ` [${p.sampleMoves.join(' ')}]` : '';
         if (p.kind === 'midgame_toggle') {
           lines.push(

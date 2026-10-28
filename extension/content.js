@@ -1,50 +1,95 @@
 "use strict";
 (() => {
   // src/core/calibration.ts
+  var CAPS2_ACCURACY_BANDS = {
+    bullet: [
+      { maxRating: 800, expected: 69, ceiling: 80 },
+      { maxRating: 1100, expected: 74, ceiling: 84 },
+      { maxRating: 1400, expected: 77, ceiling: 86 },
+      { maxRating: 1700, expected: 80, ceiling: 88 },
+      { maxRating: 2e3, expected: 82.5, ceiling: 90 },
+      { maxRating: 2400, expected: 85.5, ceiling: 92 },
+      { maxRating: Infinity, expected: 88.5, ceiling: 94.5 }
+    ],
+    blitz: [
+      { maxRating: 800, expected: 70, ceiling: 80 },
+      { maxRating: 1100, expected: 75, ceiling: 84 },
+      { maxRating: 1400, expected: 78.5, ceiling: 87 },
+      { maxRating: 1700, expected: 81, ceiling: 89 },
+      { maxRating: 2e3, expected: 83.5, ceiling: 90.5 },
+      { maxRating: 2400, expected: 86.5, ceiling: 92.5 },
+      { maxRating: Infinity, expected: 89.5, ceiling: 95 }
+    ],
+    rapid: [
+      { maxRating: 800, expected: 71, ceiling: 81 },
+      { maxRating: 1100, expected: 76, ceiling: 85 },
+      { maxRating: 1400, expected: 79.5, ceiling: 88 },
+      { maxRating: 1700, expected: 82, ceiling: 90 },
+      { maxRating: 2e3, expected: 84.5, ceiling: 91.5 },
+      { maxRating: Infinity, expected: 84.5, ceiling: 91.5 }
+    ].slice(0, 5).concat([
+      { maxRating: 2400, expected: 88, ceiling: 93.5 },
+      { maxRating: Infinity, expected: 91, ceiling: 96 }
+    ]),
+    daily: [
+      { maxRating: 1200, expected: 78, ceiling: 88 },
+      { maxRating: 1800, expected: 84, ceiling: 92 },
+      { maxRating: 2400, expected: 89, ceiling: 95 },
+      { maxRating: Infinity, expected: 92, ceiling: 97 }
+    ]
+  };
   var TIER_THEMES = {
     low: {
       id: "low",
-      color: "#10b981",
-      accentBg: "rgba(16, 185, 129, 0.14)",
-      glow: "rgba(16, 185, 129, 0.38)",
-      border: "rgba(16, 185, 129, 0.35)"
+      color: "#81b64c",
+      accentBg: "rgba(129, 182, 76, 0.14)",
+      glow: "transparent",
+      border: "rgba(129, 182, 76, 0.34)"
     },
     guarded: {
       id: "guarded",
-      color: "#38bdf8",
-      accentBg: "rgba(56, 189, 248, 0.14)",
-      glow: "rgba(56, 189, 248, 0.35)",
-      border: "rgba(56, 189, 248, 0.35)"
+      color: "#6ba4d9",
+      accentBg: "rgba(107, 164, 217, 0.14)",
+      glow: "transparent",
+      border: "rgba(107, 164, 217, 0.34)"
     },
     elevated: {
       id: "elevated",
-      color: "#f59e0b",
-      accentBg: "rgba(245, 158, 11, 0.15)",
-      glow: "rgba(245, 158, 11, 0.42)",
-      border: "rgba(245, 158, 11, 0.40)"
+      color: "#e59934",
+      accentBg: "rgba(229, 153, 52, 0.15)",
+      glow: "transparent",
+      border: "rgba(229, 153, 52, 0.38)"
     },
     high: {
       id: "high",
-      color: "#f97316",
-      accentBg: "rgba(249, 115, 22, 0.16)",
-      glow: "rgba(249, 115, 22, 0.46)",
-      border: "rgba(249, 115, 22, 0.45)"
+      color: "#e06c35",
+      accentBg: "rgba(224, 108, 53, 0.16)",
+      glow: "transparent",
+      border: "rgba(224, 108, 53, 0.44)"
     },
     critical: {
       id: "critical",
-      color: "#ef4444",
-      accentBg: "rgba(239, 68, 68, 0.18)",
-      glow: "rgba(239, 68, 68, 0.55)",
-      border: "rgba(239, 68, 68, 0.55)"
+      color: "#e04644",
+      accentBg: "rgba(224, 70, 68, 0.18)",
+      glow: "transparent",
+      border: "rgba(224, 70, 68, 0.52)"
     },
     banned: {
       id: "banned",
-      color: "#f43f5e",
-      accentBg: "rgba(244, 63, 94, 0.22)",
-      glow: "rgba(244, 63, 94, 0.65)",
-      border: "rgba(244, 63, 94, 0.70)"
+      color: "#e04644",
+      accentBg: "rgba(224, 70, 68, 0.22)",
+      glow: "transparent",
+      border: "rgba(224, 70, 68, 0.62)"
     }
   };
+  function probabilityToTier(probability, isBanned = false) {
+    if (isBanned) return "banned";
+    if (probability < 30) return "low";
+    if (probability < 55) return "guarded";
+    if (probability < 75) return "elevated";
+    if (probability < 90) return "high";
+    return "critical";
+  }
   var DEFAULT_SETTINGS = {
     language: "tr",
     autoShowHud: true,
@@ -191,7 +236,16 @@
     return candidate;
   }
   function isChessComBoardUrl(url) {
-    return /chess\.com\/(game|play\/online|live|analysis\/game|events)/i.test(url);
+    return /chess\.com\/(?:[a-z]{2}\/)?(game|play\/online|live|analysis\/game|events)/i.test(url);
+  }
+  function extractGameIdFromUrl(url) {
+    const m = url.match(/\/(?:analysis\/)?game\/(?:live|daily)?\/?(\d{6,16})/i) || url.match(/[?#&]g=(\d{6,16})/i);
+    return m?.[1] || null;
+  }
+  function extractMemberProfileFromUrl(url) {
+    const m = url.match(/chess\.com\/(?:[a-z]{2}\/)?member\/([a-zA-Z0-9_-]{2,32})(?:[/?#]|$)/i);
+    if (!m?.[1]) return null;
+    return sanitizeChessUsername(m[1]);
   }
   var TOP_ZONE_SELECTORS = [
     "#board-layout-player-top",
@@ -446,15 +500,37 @@
       return false;
     }
     evaluateDom() {
-      if (!this.hasBoardOnPage()) {
+      const currentUrl = window.location.href;
+      const gameId = extractGameIdFromUrl(currentUrl);
+      const memberProfile = !this.hasBoardOnPage() ? extractMemberProfileFromUrl(currentUrl) : null;
+      if (!this.hasBoardOnPage() && !memberProfile) {
         if (this.lastSignature !== "") {
           this.lastSignature = "";
           this.onMatchLeft();
         }
         return;
       }
-      const { topPlayer, bottomPlayer } = this.extractPlayers();
       const loggedIn = this.getLoggedInUsername()?.toLowerCase();
+      if (memberProfile && !this.hasBoardOnPage()) {
+        const isSelfProfile = Boolean(loggedIn && memberProfile.toLowerCase() === loggedIn);
+        const sig2 = `profile|${memberProfile.toLowerCase()}|${isSelfProfile ? "1" : "0"}`;
+        if (sig2 === this.lastSignature) return;
+        this.lastSignature = sig2;
+        this.onContextChange({
+          topPlayer: memberProfile,
+          bottomPlayer: loggedIn || null,
+          opponent: memberProfile,
+          opponentSide: "top",
+          detectedFormat: void 0,
+          isAbortWindowOpen: false,
+          surface: "profile",
+          gameId: null,
+          isSelfProfile,
+          url: currentUrl
+        });
+        return;
+      }
+      const { topPlayer, bottomPlayer } = this.extractPlayers();
       let opponent = topPlayer;
       let opponentSide = "top";
       if (loggedIn && topPlayer && bottomPlayer && topPlayer.toLowerCase() === loggedIn && bottomPlayer.toLowerCase() !== loggedIn) {
@@ -464,7 +540,11 @@
       if (!opponent) return;
       const detectedFormat = this.detectActiveFormat();
       const isAbortWindowOpen = this.detectAbortWindow();
-      const sig = `${opponent.toLowerCase()}|${opponentSide}|${(bottomPlayer || "").toLowerCase()}|${isAbortWindowOpen ? "1" : "0"}`;
+      const hasActiveClock = !!document.querySelector(
+        '.clock-player-turn, [class*="clock-player-turn"]'
+      );
+      const surface = hasActiveClock || /\/play\/online|\/live/i.test(currentUrl) ? "live" : "game";
+      const sig = `${surface}|${opponent.toLowerCase()}|${opponentSide}|${(bottomPlayer || "").toLowerCase()}|${isAbortWindowOpen ? "1" : "0"}|${gameId || ""}`;
       if (sig === this.lastSignature) return;
       this.lastSignature = sig;
       this.onContextChange({
@@ -474,54 +554,81 @@
         opponentSide,
         detectedFormat,
         isAbortWindowOpen,
-        url: window.location.href
+        surface,
+        gameId,
+        url: currentUrl
       });
     }
   };
 
   // src/core/engine.ts
+  function computeEffectiveLiveRisk(res, liveClock, selectedFormat) {
+    if (res.isBannedFairPlay) {
+      return { probability: 100, tier: "banned", liveEscalated: false };
+    }
+    const fmt = selectedFormat || res.primaryFormat;
+    const fmtData = res.formats[fmt] || res.formats[res.primaryFormat];
+    const baseProb = fmt === res.primaryFormat ? res.probability : fmtData.formatProbability;
+    const belongsToTarget = liveClock && (liveClock.opponent.toLowerCase() === res.username.toLowerCase() || liveClock.opponent.toLowerCase() === res.displayName.toLowerCase());
+    if (!belongsToTarget || !liveClock.isLiveSuspectPacing || res.title) {
+      return {
+        probability: baseProb,
+        tier: probabilityToTier(baseProb, false),
+        liveEscalated: false
+      };
+    }
+    const streakBonus = Math.min(18, Math.max(0, liveClock.consecutiveRoboticMoves - 7) * 3);
+    const liveFloor = liveClock.pauseMoveNumber !== null ? 68 + streakBonus : 60 + streakBonus;
+    const combined = Math.min(94, Math.max(baseProb, Math.round(liveFloor + baseProb * 0.18)));
+    return {
+      probability: combined,
+      tier: probabilityToTier(combined, false),
+      liveEscalated: combined > baseProb
+    };
+  }
   function buildFairPlayEvidenceReport(res, lang, liveClock) {
     const pf = res.formats[res.primaryFormat];
+    const eff = computeEffectiveLiveRisk(res, liveClock, res.primaryFormat);
     const lines = [];
     if (lang === "tr") {
-      lines.push(`[Chess Sentinel v3.2 (Zero-FP) \u2014 Adil Oyun & Hamle Bazl\u0131 Kan\u0131t \xD6zeti]`);
+      lines.push(`[Chess Sentinel v4.0 - Adil Oyun Kanit Ozeti]`);
       lines.push(
-        `Oyuncu: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Hesap Ya\u015F\u0131: ${res.accountAgeDays !== null ? `${res.accountAgeDays} g\xFCn` : "Bilinmiyor"}`
+        `Oyuncu: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Hesap Yasi: ${res.accountAgeDays !== null ? `${res.accountAgeDays} gun` : "Bilinmiyor"}`
       );
       lines.push(
-        `Birincil Format: ${res.primaryFormat.toUpperCase()} (${pf.currentRating ?? "\u2014"} Elo) | \u0130statistiksel Anomali Olas\u0131l\u0131\u011F\u0131: %${res.probability}`
+        `Format: ${res.primaryFormat.toUpperCase()} (${pf.currentRating ?? "-"} Elo) | Anomali Skoru: %${eff.probability}`
       );
       lines.push(
-        `Son Performans: ${pf.recentWins}G / ${pf.recentLosses}M / ${pf.recentDraws}B (%${pf.recentWinPct} galibiyet, Rakip Elo beklentisine g\xF6re ${pf.eloZScore >= 0 ? "+" : ""}${pf.eloZScore}\u03C3 Z-Skoru)`
+        `Son Performans: ${pf.recentWins}G / ${pf.recentLosses}M / ${pf.recentDraws}B (%${pf.recentWinPct} galibiyet, ${pf.eloZScore >= 0 ? "+" : ""}${pf.eloZScore}\u03C3 Z-Skoru${pf.performanceRating ? `, Perf: ${pf.performanceRating}` : ""})`
       );
       if (pf.avgAccuracy !== null) {
         lines.push(
-          `Uzun Ma\xE7 CAPS2 Do\u011Fruluk: %${pf.avgAccuracy} (Elo band\u0131 beklentisi: %${pf.expectedAccuracy}, \u0130ncelenen tam ma\xE7: ${pf.reviewedGames})`
+          `Uzun Mac CAPS2 Dogruluk: %${pf.avgAccuracy} (Beklenen: %${pf.expectedAccuracy}, Incelenen tam mac: ${pf.reviewedGames})`
         );
       }
       if (res.pacing.gamesAnalyzed >= 4) {
         lines.push(
-          `Kronometrik Saat Analizi (%clk): Entropi ${res.pacing.meanEntropyBits ?? "\u2014"} bit | Medyan QCD: ${res.pacing.medianQCD ?? "\u2014"} | Medyan CV: ${res.pacing.medianCV ?? "\u2014"} | Mekanik Ma\xE7 Oran\u0131: %${Math.round(res.pacing.flatlineRate * 100)}`
+          `Hamle Suresi Analizi (%clk): Entropi ${res.pacing.meanEntropyBits ?? "-"} bit | Medyan QCD: ${res.pacing.medianQCD ?? "-"} | Medyan CV: ${res.pacing.medianCV ?? "-"} | Mekanik Mac Orani: %${Math.round(res.pacing.flatlineRate * 100)}`
         );
       }
       if (liveClock && liveClock.movesObserved >= 4) {
         const livePin = liveClock.pauseMoveNumber !== null && liveClock.roboticStartMove !== null ? ` | Nokta At\u0131\u015F\u0131: ${liveClock.pauseMoveNumber}. hamlede ${liveClock.detectedPauseSec}sn duraksama -> ${liveClock.roboticStartMove}.-${liveClock.roboticEndMove}. hamleler robotik (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}sn)` : liveClock.roboticStartMove !== null && liveClock.consecutiveRoboticMoves >= 6 ? ` | Nokta At\u0131\u015F\u0131: ${liveClock.roboticStartMove}.-${liveClock.roboticEndMove}. hamleler kesintisiz mekanik (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}sn)` : "";
         lines.push(
-          `Canl\u0131 Ma\xE7 Saat Verisi: ${liveClock.movesObserved} hamle izlendi | Ort: ${liveClock.liveMeanSec ?? "\u2014"} sn | Canl\u0131 QCD: ${liveClock.liveQCD ?? "\u2014"}${livePin}`
+          `Aktif Mac Saat Verisi: ${liveClock.movesObserved} hamle | Ort: ${liveClock.liveMeanSec ?? "-"} sn | QCD: ${liveClock.liveQCD ?? "-"}${livePin}`
         );
       }
       if (res.suspectPinpoints && res.suspectPinpoints.length > 0) {
-        lines.push(`Tespit Edilen \u015E\xFCpheli Ma\xE7 & Hamle Aral\u0131klar\u0131:`);
+        lines.push(`\u015E\xFCpheli Ma\xE7 ve Hamle Aral\u0131klar\u0131:`);
         for (const p of res.suspectPinpoints) {
-          const urlPart = p.gameUrl ? ` \u2014 ${p.gameUrl}` : "";
+          const urlPart = p.gameUrl ? ` | ${p.gameUrl}` : "";
           const samples = p.sampleMoves.length > 0 ? ` [${p.sampleMoves.join(" ")}]` : "";
           if (p.kind === "midgame_toggle") {
             lines.push(
-              `- vs @${p.opponentUsername}: ${p.pauseMoveNumber}. hamlede ${p.pauseSec}sn duraksama -> ${p.suspectStartMove}.-${p.suspectEndMove}. hamleler sabit robotik tempo (${p.minBandSec}-${p.maxBandSec}sn)${samples}${urlPart}`
+              `- vs @${p.opponentUsername}: ${p.pauseMoveNumber}. hamlede ${p.pauseSec}sn duraksama -> ${p.suspectStartMove}.-${p.suspectEndMove}. hamleler robotik tempo (${p.minBandSec}-${p.maxBandSec}sn)${samples}${urlPart}`
             );
           } else if (p.kind === "robotic_flatline") {
             lines.push(
-              `- vs @${p.opponentUsername}: ${p.suspectStartMove}.-${p.suspectEndMove}. hamleler s\u0131f\u0131r refleksli mekanik tempo (${p.minBandSec}-${p.maxBandSec}sn)${p.accuracy !== null ? ` [%${p.accuracy}]` : ""}${samples}${urlPart}`
+              `- vs @${p.opponentUsername}: ${p.suspectStartMove}.-${p.suspectEndMove}. hamleler sabit mekanik tempo (${p.minBandSec}-${p.maxBandSec}sn)${p.accuracy !== null ? ` [%${p.accuracy}]` : ""}${samples}${urlPart}`
             );
           } else {
             lines.push(
@@ -537,36 +644,36 @@
         }
       }
     } else {
-      lines.push(`[Chess Sentinel v3.2 (Zero-FP) \u2014 Fair-Play & Move-Range Evidence Summary]`);
+      lines.push(`[Chess Sentinel v4.0 - Fair-Play Evidence Summary]`);
       lines.push(
         `Player: @${res.displayName} (https://www.chess.com/member/${res.displayName}) | Account Age: ${res.accountAgeDays !== null ? `${res.accountAgeDays} days` : "Unknown"}`
       );
       lines.push(
-        `Primary Format: ${res.primaryFormat.toUpperCase()} (${pf.currentRating ?? "\u2014"} Elo) | Statistical Anomaly Probability: ${res.probability}%`
+        `Format: ${res.primaryFormat.toUpperCase()} (${pf.currentRating ?? "-"} Elo) | Statistical Anomaly Score: ${eff.probability}%`
       );
       lines.push(
-        `Recent Performance: ${pf.recentWins}W / ${pf.recentLosses}L / ${pf.recentDraws}D (${pf.recentWinPct}% WR, ${pf.eloZScore >= 0 ? "+" : ""}${pf.eloZScore}\u03C3 Elo-adjusted Z-Score)`
+        `Recent Performance: ${pf.recentWins}W / ${pf.recentLosses}L / ${pf.recentDraws}D (${pf.recentWinPct}% WR, ${pf.eloZScore >= 0 ? "+" : ""}${pf.eloZScore}\u03C3 Z-Score${pf.performanceRating ? `, Perf: ${pf.performanceRating}` : ""})`
       );
       if (pf.avgAccuracy !== null) {
         lines.push(
-          `Long-Game CAPS2 Accuracy: ${pf.avgAccuracy}% (Band expected: ${pf.expectedAccuracy}%, Full-length reviewed games: ${pf.reviewedGames})`
+          `Long-Game CAPS2 Accuracy: ${pf.avgAccuracy}% (Expected: ${pf.expectedAccuracy}%, Full-length reviewed games: ${pf.reviewedGames})`
         );
       }
       if (res.pacing.gamesAnalyzed >= 4) {
         lines.push(
-          `Chronometric PGN [%clk] Profile: Entropy ${res.pacing.meanEntropyBits ?? "\u2014"} bits | Median QCD: ${res.pacing.medianQCD ?? "\u2014"} | Median CV: ${res.pacing.medianCV ?? "\u2014"} | Flatline Rate: ${Math.round(res.pacing.flatlineRate * 100)}%`
+          `Move-Time [%clk] Profile: Entropy ${res.pacing.meanEntropyBits ?? "-"} bits | Median QCD: ${res.pacing.medianQCD ?? "-"} | Median CV: ${res.pacing.medianCV ?? "-"} | Flatline Rate: ${Math.round(res.pacing.flatlineRate * 100)}%`
         );
       }
       if (liveClock && liveClock.movesObserved >= 4) {
         const livePin = liveClock.pauseMoveNumber !== null && liveClock.roboticStartMove !== null ? ` | Pinpoint: Move #${liveClock.pauseMoveNumber} (${liveClock.detectedPauseSec}s pause) -> Moves #${liveClock.roboticStartMove}-#${liveClock.roboticEndMove} mechanical (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}s)` : liveClock.roboticStartMove !== null && liveClock.consecutiveRoboticMoves >= 6 ? ` | Pinpoint: Moves #${liveClock.roboticStartMove}-#${liveClock.roboticEndMove} continuous mechanical band (${liveClock.roboticMinSec}-${liveClock.roboticMaxSec}s)` : "";
         lines.push(
-          `Live Match Clock Radar: ${liveClock.movesObserved} moves | Mean: ${liveClock.liveMeanSec ?? "\u2014"}s | Live QCD: ${liveClock.liveQCD ?? "\u2014"}${livePin}`
+          `Match Clock Data: ${liveClock.movesObserved} moves | Mean: ${liveClock.liveMeanSec ?? "-"}s | QCD: ${liveClock.liveQCD ?? "-"}${livePin}`
         );
       }
       if (res.suspectPinpoints && res.suspectPinpoints.length > 0) {
         lines.push(`Pinpointed Suspect Games & Move Ranges:`);
         for (const p of res.suspectPinpoints) {
-          const urlPart = p.gameUrl ? ` \u2014 ${p.gameUrl}` : "";
+          const urlPart = p.gameUrl ? ` | ${p.gameUrl}` : "";
           const samples = p.sampleMoves.length > 0 ? ` [${p.sampleMoves.join(" ")}]` : "";
           if (p.kind === "midgame_toggle") {
             lines.push(
@@ -597,36 +704,46 @@
   var TRANSLATIONS = {
     tr: {
       appName: "Chess Sentinel",
-      appSubtitle: "Canl\u0131 Hile Olas\u0131l\u0131\u011F\u0131 & Adil Oyun Radar\u0131",
-      cheatProbability: "H\u0130LE OLASILI\u011EI",
-      scanningOpponent: "Rakip telemetrisi analiz ediliyor\u2026",
-      waitingForMatch: "Rakip bekleniyor\u2026",
-      abortWindowActive: "G\xFCvenli \u0130ptal (Abort) Penceresi A\xE7\u0131k",
-      safeToPlay: "Normal oyuncu profili \u2014 g\xFCvenle oynanabilir",
-      cautionAdvised: "Ola\u011Fand\u0131\u015F\u0131 sinyaller var \u2014 dikkatli oynay\u0131n",
-      considerAborting: "Y\xFCksek hile / smurf riski \u2014 iptal (abort) d\xFC\u015F\xFCn\xFCn",
-      bannedFairPlayBanner: "CHESS.COM TARAFINDAN H\u0130LEDEN KAPATILDI",
+      appSubtitle: "Rakip Analizi ve Adil Oyun Kontrol\xFC",
+      cheatProbability: "Risk Skoru",
+      scanningOpponent: "Rakip ge\xE7mi\u015Fi inceleniyor...",
+      waitingForMatch: "Rakip bekleniyor...",
+      abortWindowActive: "\xDCcretsiz iptal (abort) s\xFCresi a\xE7\u0131k",
+      safeToPlay: "Do\u011Fal insan profili, g\xFCvenle oynanabilir",
+      cautionAdvised: "Ola\u011Fand\u0131\u015F\u0131 metrikler var, dikkatli oynay\u0131n",
+      considerAborting: "Y\xFCksek risk sinyali, ma\xE7\u0131 iptal edebilirsiniz",
+      bannedFairPlayBanner: "Bu hesap Chess.com taraf\u0131ndan adil oyun ihlalinden kapat\u0131ld\u0131",
       confidenceLabel: {
-        low: "D\xFC\u015F\xFCk Veri G\xFCveni",
-        medium: "Orta Veri G\xFCveni",
-        high: "Y\xFCksek Veri G\xFCveni"
+        low: "Az \xF6rneklem",
+        medium: "Orta \xF6rneklem",
+        high: "Y\xFCksek \xF6rneklem"
+      },
+      surfaceBadge: {
+        live: "Canl\u0131",
+        game: "Ma\xE7",
+        profile: "Profil"
+      },
+      hudTabs: {
+        overview: "\xD6zet",
+        clock: "Ma\xE7 Saati",
+        games: "Ge\xE7mi\u015F"
       },
       tiers: {
-        low: { label: "D\xDC\u015E\xDCK R\u0130SK", summary: "Do\u011Fal insan istatistikleri" },
-        guarded: { label: "NORMAL / \u0130ZLE", summary: "Hafif form art\u0131\u015F\u0131, normal s\u0131n\u0131rda" },
-        elevated: { label: "\u015E\xDCPHEL\u0130", summary: "Birden fazla ola\u011Fand\u0131\u015F\u0131 metrik" },
-        high: { label: "Y\xDCKSEK R\u0130SK", summary: "G\xFC\xE7l\xFC motor veya smurf sinyalleri" },
-        critical: { label: "KR\u0130T\u0130K H\u0130LE R\u0130SK\u0130", summary: "A\u015F\u0131r\u0131 istatistiksel anomali!" },
-        banned: { label: "YASAKLANDI (%100)", summary: "Adil Oyun (Fair Play) ihlali" }
+        low: { label: "Temiz", summary: "Do\u011Fal insan istatistikleri" },
+        guarded: { label: "Normal+", summary: "Formda, normal s\u0131n\u0131rlar i\xE7inde" },
+        elevated: { label: "\u015E\xFCpheli", summary: "Birden fazla ola\u011Fand\u0131\u015F\u0131 metrik" },
+        high: { label: "Y\xFCksek Risk", summary: "G\xFC\xE7l\xFC motor veya d\u0131\u015F destek sinyali" },
+        critical: { label: "Kritik Risk", summary: "\xC7oklu do\u011Frulanm\u0131\u015F motor imzas\u0131" },
+        banned: { label: "Yasakl\u0131", summary: "Adil oyun ihlalinden kapat\u0131ld\u0131" }
       },
       signals: {
-        sectionTitle: "6-S\u0130NYALL\u0130 ADL\u0130 TELEMETR\u0130",
-        recentWinrate: "Son Ma\xE7 Kazanma Anomalisi",
-        overallWinrate: "Genel Glicko Sapmas\u0131",
-        accuracyAnomaly: "CAPS2 Do\u011Fruluk Sapmas\u0131",
-        movePacing: "Motor Hamle Ritmi (%clk)",
-        eloVelocity: "Elo S\u0131\xE7rama H\u0131z\u0131",
-        accountTrust: "Hesap Ya\u015F\u0131 & G\xFCven Riski"
+        sectionTitle: "Alt Sinyaller",
+        recentWinrate: "Son Ma\xE7 Kazanma Sapmas\u0131",
+        overallWinrate: "Genel Glicko Dengesi",
+        accuracyAnomaly: "Uzun Ma\xE7 CAPS2 Sapmas\u0131",
+        movePacing: "Hamle S\xFCresi Tutarl\u0131l\u0131\u011F\u0131 (%clk)",
+        eloVelocity: "Puan Art\u0131\u015F H\u0131z\u0131",
+        accountTrust: "Hesap Ya\u015F\u0131 ve Ge\xE7mi\u015F"
       },
       stats: {
         accountAge: "Hesap Ya\u015F\u0131",
@@ -634,138 +751,155 @@
         monthsShort: "ay",
         yearsShort: "y\u0131l",
         recentRecord: "Son Form",
-        avgAccuracy: "Ort. Do\u011Fruluk",
-        expectedShort: "beklenen",
-        moveCV: "Hamle Ritmi CV",
-        elo7d: "7G Elo Fark\u0131",
+        performance: "Performans",
+        avgAccuracy: "CAPS2 Ort.",
+        expectedShort: "bek.",
+        moveCV: "Hamle Ritmi",
+        elo7d: "7 G\xFCnl\xFCk Elo",
         streak: "Seri",
-        noReviewedGames: "Analizli ma\xE7 yok",
-        gamesAnalyzed: "{count} ma\xE7 incelendi"
+        noReviewedGames: "\u0130ncelenen ma\xE7 yok",
+        gamesAnalyzed: "{count} ma\xE7",
+        lifetimeGames: "{count} ma\xE7"
       },
       actions: {
-        swapTarget: "\xDCst / Alt Oyuncu De\u011Fi\u015Ftir",
-        watchSuspect: "\u015E\xFCpheliyi Takibe Al",
-        watchingSuspect: "Takipte (Ban \u0130zleniyor)",
-        refresh: "Yeniden Analiz Et",
+        swapTarget: "\xDCst / Alt oyuncuyu de\u011Fi\u015Ftir",
+        watchSuspect: "Takip listesine ekle",
+        watchingSuspect: "Takipte (ban kontrol\xFC aktif)",
+        refresh: "Verileri yenile",
         minimize: "K\xFC\xE7\xFClt (Alt+S)",
-        expand: "B\xFCy\xFCt",
-        openProfile: "Chess.com Profilini A\xE7",
-        toggleDetails: "Adli Detaylar\u0131 & Grafikleri G\xF6ster",
-        hideDetails: "Detaylar\u0131 Gizle",
-        copyReport: "\u{1F4CB} Kan\u0131t Raporunu Kopyala",
-        copiedReport: "\u2713 Rapor Panoya Kopyaland\u0131!",
-        soundOn: "Sesli Risk Uyar\u0131s\u0131: A\xE7\u0131k",
-        soundOff: "Sesli Risk Uyar\u0131s\u0131: Kapal\u0131"
+        expand: "Paneli a\xE7",
+        openProfile: "Chess.com profilini a\xE7",
+        toggleDetails: "Alt sinyalleri g\xF6ster",
+        hideDetails: "Alt sinyalleri gizle",
+        copyReport: "Kan\u0131t Kopyala",
+        copiedReport: "Kopyaland\u0131",
+        reportFairPlay: "Bildir",
+        soundOn: "Sesli uyar\u0131 a\xE7\u0131k",
+        soundOff: "Sesli uyar\u0131 kapal\u0131"
       },
       v3: {
-        liveClockTitle: "CANLI MA\xC7 HAMLE RADARI",
-        liveClockMoves: "{count} hamle \u2022 Ort {mean}s \u2022 QCD {qcd}",
-        liveClockSuspect: "\u26A1 Canl\u0131 ma\xE7ta mekanik hamle temposu alg\u0131land\u0131!",
-        livePinpointToggle: "\u{1F3AF} {pauseMove}. hamlede {pauseSec}sn duraksad\u0131 \u2192 {start}.\u2013{end}. hamleler sabit robotik ({min}\u2013{max}sn)",
-        livePinpointFlatline: "\u{1F3AF} {start}.\u2013{end}. hamleler aras\u0131 \xFCst \xFCste {count} hamle sabit robotik ({min}\u2013{max}sn)",
-        pacingHistTitle: "HAMLE S\xDCRES\u0130 DA\u011EILIMI (%clk)",
-        pacingEntropyTag: "Entropi: {ent}b \u2022 QCD: {qcd}",
-        recentMatchesTitle: "SON PUANLI MA\xC7LAR",
-        autoVerdictTitle: "OTOMAT\u0130K S\u0130STEM KARARI",
-        verdictBanned: "\u{1F6A8} Bu hesap Chess.com taraf\u0131ndan Adil Oyun (Hile) ihlali nedeniyle resmen kapat\u0131lm\u0131\u015Ft\u0131r.",
-        verdictLiveToggle: "\u{1F3AF} CANLI TESP\u0130T: Rakip {pauseMove}. hamlede {pauseSec}sn bekleyip {start}.\u2013{end}. hamleleri sabit makine ritminde ({min}\u2013{max}sn) oynad\u0131! Ma\xE7 sonu alttan kan\u0131t raporunu kopyalay\u0131n.",
-        verdictLiveFlatline: "\u{1F3AF} CANLI TESP\u0130T: Rakip {start}.\u2013{end}. hamleler boyunca \xFCst \xFCste {count} hamleyi s\u0131f\u0131r refleksli sabit robotik s\xFCrede ({min}\u2013{max}sn) oynuyor!",
-        verdictAbortNow: "\u26D4 \xC7OKLU MOTOR KANITI ({pins} \u015F\xFCpheli ma\xE7 aral\u0131\u011F\u0131): Hen\xFCz ilk hamlelerdesiniz \u2014 puan kaybetmeden MA\xC7I \u0130PTAL ED\u0130N (Abort).",
-        verdictHighWatch: "\u26A0\uFE0F Ge\xE7mi\u015F ma\xE7larda \xE7oklu motor imzas\u0131 bulundu (a\u015Fa\u011F\u0131da tam hamle numaralar\u0131 listelendi). Canl\u0131 saat radar\u0131 \u015Fu an her hamleyi izliyor.",
-        verdictElevatedWatch: "\u{1F536} \u015E\xFCpheli hamle ritmi/do\u011Fruluk sinyalleri var. Canl\u0131 radar aktif \u2014 robotik seri olu\u015Fursa tam hamle numaras\u0131yla burada otomatik yazacak.",
-        verdictSmurfHuman: "\u{1F9ED} Kazanma serisi y\xFCksek ancak hamle s\xFCreleri tamamen do\u011Fal insan ritminde. Motor kan\u0131t\u0131 YOK (el ile oynayan g\xFC\xE7l\xFC oyuncu / smurf).",
-        verdictCleanSafe: "\u2705 \u0130ncelenen ma\xE7larda \u015F\xFCpheli hamle aral\u0131\u011F\u0131 veya motor ge\xE7i\u015Fi yok. Do\u011Fal insan profili \u2014 g\xFCvenle oynayabilirsiniz.",
-        pinpointSectionTitle: "TESP\u0130T ED\u0130LEN \u015E\xDCPHEL\u0130 MA\xC7 & HAMLE ARALIKLARI",
-        pinpointOpenGame: "Ma\xE7\u0131 A\xE7 \u2197",
-        pinpointToggleRow: "{pauseMove}. hamlede {pauseSec}sn duraksama \u2192 {start}.\u2013{end}. hamleler robotik ({min}\u2013{max}sn)",
-        pinpointFlatlineRow: "{start}.\u2013{end}. hamleler aras\u0131 {count} hamle sabit mekanik tempo ({min}\u2013{max}sn)",
-        pinpointCapsRow: "1.\u2013{end}. hamleler boyunca %{acc} motor seviyesi CAPS2 do\u011Fruluk"
+        liveClockTitle: "Canl\u0131 Ma\xE7 Hamle S\xFCreleri",
+        finishedClockTitle: "Bu Ma\xE7\u0131n Hamle S\xFCreleri (0.1sn)",
+        emptyLiveClock: "Canl\u0131 hamle s\xFCreleri 3. hamleden itibaren burada grafiklenir.",
+        liveClockMoves: "{count} hamle \xB7 Ort {mean}sn \xB7 QCD {qcd}",
+        liveClockSuspect: "Bu ma\xE7ta mekanik hamle temposu tespit edildi.",
+        livePinpointToggle: "{pauseMove}. hamlede {pauseSec}sn duraksama -> {start}.-{end}. hamleler sabit ({min}-{max}sn)",
+        livePinpointFlatline: "{start}.-{end}. hamleler aras\u0131 \xFCst \xFCste {count} hamle sabit aral\u0131kta ({min}-{max}sn)",
+        pacingHistTitle: "Ge\xE7mi\u015F Hamle S\xFCresi Da\u011F\u0131l\u0131m\u0131",
+        pacingEntropyTag: "Entropi {ent}b \xB7 QCD {qcd}",
+        recentMatchesTitle: "Son Puanl\u0131 Ma\xE7lar",
+        inspectMoves: "S\xFCreler",
+        autoVerdictTitle: "Durum",
+        verdictBanned: "Hesap Chess.com taraf\u0131ndan adil oyun ihlali nedeniyle kapat\u0131lm\u0131\u015F.",
+        verdictLiveToggle: "Aktif ma\xE7 tespiti: {pauseMove}. hamlede {pauseSec}sn bekleyip {start}.-{end}. hamleleri sabit ritimde ({min}-{max}sn) oynad\u0131.",
+        verdictLiveFlatline: "Aktif ma\xE7 tespiti: {start}.-{end}. hamleler boyunca \xFCst \xFCste {count} hamleyi sabit s\xFCrede ({min}-{max}sn) oynuyor.",
+        verdictAbortNow: "Ge\xE7mi\u015Fte {pins} \u015F\xFCpheli ma\xE7 aral\u0131\u011F\u0131 bulundu. \u0130lk hamlelerdesiniz, puan kaybetmeden iptal (abort) edebilirsiniz.",
+        verdictHighWatch: "Ge\xE7mi\u015F ma\xE7larda do\u011Frulanm\u0131\u015F motor imzas\u0131 var. Tam hamle aral\u0131klar\u0131 a\u015Fa\u011F\u0131da listelendi.",
+        verdictElevatedWatch: "Hamle temposu veya do\u011Fruluk verilerinde sapma var. Canl\u0131 saat takibi aktif.",
+        verdictSmurfHuman: "Kazanma oran\u0131 y\xFCksek fakat hamle s\xFCreleri do\u011Fal insan da\u011F\u0131l\u0131m\u0131nda (olas\u0131 smurf veya formda oyuncu).",
+        verdictCleanSafe: "\u0130ncelenen ma\xE7larda robotik tempo veya oyun ortas\u0131 motor ge\xE7i\u015Fi g\xF6r\xFClmedi.",
+        pinpointSectionTitle: "\u015E\xFCpheli Ma\xE7 ve Hamle Aral\u0131klar\u0131",
+        pinpointOpenGame: "Ma\xE7\u0131 a\xE7",
+        pinpointToggleRow: "{pauseMove}. hamlede {pauseSec}sn duraksama -> {start}.-{end}. hamleler sabit ({min}-{max}sn)",
+        pinpointFlatlineRow: "{start}.-{end}. hamleler aras\u0131 {count} hamle sabit mekanik tempo ({min}-{max}sn)",
+        pinpointCapsRow: "1.-{end}. hamleler boyunca %{acc} CAPS2 do\u011Fruluk"
       },
       popup: {
-        tabScanner: "Oyuncu Tara",
-        tabWatchlist: "Ban Takibi",
+        tabScanner: "Sorgula",
+        tabWatchlist: "Takip Listesi",
         tabSettings: "Ayarlar",
-        searchPlaceholder: "Chess.com kullan\u0131c\u0131 ad\u0131 yaz\u0131n (\xF6rn. hikaru)\u2026",
-        scanBtn: "Analiz Et",
-        recentScansTitle: "SON \u0130NCELENEN RAK\u0130PLER",
-        emptyScans: "Hen\xFCz incelenen rakip yok. Chess.com'da ma\xE7a girin veya yukar\u0131dan arat\u0131n.",
-        watchlistTitle: "\u015E\xDCPHEL\u0130 & BAN TAK\u0130P L\u0130STES\u0130",
-        checkBansBtn: "Ban Durumlar\u0131n\u0131 Kontrol Et",
-        checkingBans: "Kontrol ediliyor\u2026",
-        emptyWatchlist: "Takip listeniz bo\u015F. \u015E\xFCpheli rakipleri HUD \xFCzerindeki g\xF6z ikonuyla ekleyin.",
-        bannedTag: "BANLANDI (H\u0130LE)",
-        activeTag: "Aktif Hesap",
+        activeMatchLabel: "A\xE7\u0131k sekmedeki rakip",
+        searchPlaceholder: "Kullan\u0131c\u0131 ad\u0131 (\xF6rn. hikaru)",
+        scanBtn: "\u0130ncele",
+        recentScansTitle: "Son \u0130ncelenenler",
+        emptyScans: "Hen\xFCz oyuncu incelenmedi. Chess.com'da ma\xE7a girin veya yukar\u0131dan arat\u0131n.",
+        watchlistTitle: "Takip Edilen Hesaplar",
+        checkBansBtn: "Ban Kontrol\xFC",
+        checkingBans: "Kontrol ediliyor...",
+        emptyWatchlist: "Takip listeniz bo\u015F. HUD \xFCzerindeki yer imi simgesiyle oyuncu ekleyebilirsiniz.",
+        bannedTag: "Kapat\u0131ld\u0131",
+        activeTag: "Aktif",
         addedOn: "\u0130lk skor: %{prob}",
-        removeBtn: "Kald\u0131r",
-        settingsLanguage: "Aray\xFCz Dili / Language",
-        settingsAutoHud: "Ma\xE7 Ba\u015Flad\u0131\u011F\u0131nda HUD Pop-up A\xE7",
-        settingsAutoHudDesc: "Yeni rakip bulundu\u011Funda Chess.com ekran\u0131nda y\xFCzen analiz kart\u0131n\u0131 otomatik a\xE7ar.",
-        settingsInlineBadge: "\u0130sim Yan\u0131 Mini % Rozeti",
-        settingsInlineBadgeDesc: "Rakibin kullan\u0131c\u0131 ad\u0131n\u0131n hemen yan\u0131na renkli hile olas\u0131l\u0131\u011F\u0131 ve G/M/B rozeti ekler.",
-        settingsCompact: "Kompakt Pop-up Modu",
-        settingsCompactDesc: "HUD kart\u0131n\u0131 varsay\u0131lan olarak daralt\u0131lm\u0131\u015F g\xF6r\xFCn\xFCmde ba\u015Flat\u0131r.",
-        settingsRatedOnly: "Sadece Puanl\u0131 (Rated) Ma\xE7lar",
-        settingsRatedOnlyDesc: "Arkada\u015Fl\u0131k / puans\u0131z ma\xE7lar\u0131 olas\u0131l\u0131k hesab\u0131ndan hari\xE7 tutar.",
-        settingsSoundAlerts: "Kritik Risk Sesli Uyar\u0131s\u0131",
-        settingsSoundAlertsDesc: "Y\xFCksek/Kritik riskli (%68+) veya takipteki rakip geldi\u011Finde hafif radar sesi \xE7alar.",
-        settingsSensitivity: "Alg\u0131lama Hassasiyeti",
+        removeBtn: "Sil",
+        settingsLanguage: "Dil / Language",
+        settingsAutoHud: "Ma\xE7ta paneli otomatik a\xE7",
+        settingsAutoHudDesc: "Rakip alg\u0131land\u0131\u011F\u0131nda sa\u011F \xFCstteki analiz panelini otomatik g\xF6sterir.",
+        settingsInlineBadge: "Kullan\u0131c\u0131 ad\u0131 yan\u0131 rozeti",
+        settingsInlineBadgeDesc: "Rakibin ad\u0131n\u0131n yan\u0131na sade y\xFCzdelik skor ve galibiyet etiketi ekler.",
+        settingsCompact: "Daralt\u0131lm\u0131\u015F g\xF6r\xFCn\xFCm",
+        settingsCompactDesc: "Alt sinyal \xE7ubuklar\u0131n\u0131 varsay\u0131lan olarak kapal\u0131 tutar.",
+        settingsRatedOnly: "Yaln\u0131zca puanl\u0131 ma\xE7lar",
+        settingsRatedOnlyDesc: "Puans\u0131z ma\xE7lar\u0131 hesaplamaya dahil etmez.",
+        settingsSoundAlerts: "Y\xFCksek risk ses uyar\u0131s\u0131",
+        settingsSoundAlertsDesc: "Y\xFCksek riskli veya takipteki rakip geldi\u011Finde k\u0131sa uyar\u0131 sesi \xE7alar.",
+        settingsSensitivity: "Hassasiyet",
         sensitivityConservative: "Esnek",
         sensitivityBalanced: "Dengeli (\xD6nerilen)",
         sensitivityStrict: "S\u0131k\u0131",
-        toggleInPageHud: "Aktif Sekmede HUD G\xF6ster/Gizle",
-        privacyNote: "100% Gizli \u2022 S\u0131f\u0131r veri toplama \u2022 Yaln\u0131zca resmi Chess.com PubAPI kullan\u0131l\u0131r."
+        toggleInPageHud: "Sekmede Paneli G\xF6ster / Gizle",
+        privacyNote: "Veri toplanmaz. Yaln\u0131zca herkese a\xE7\u0131k Chess.com verileri kullan\u0131l\u0131r."
       },
       flags: {
-        banned_fair_play: "Hesap Chess.com Adil Oyun (Hile) ihlali nedeniyle kapat\u0131lm\u0131\u015F!",
-        verified_title: "Do\u011Frulanm\u0131\u015F FIDE unvanl\u0131 usta ({title}) \u2014 elit istatistik kalibrasyonu uyguland\u0131",
-        fresh_high_elo: "\xC7ok yeni hesap ({days} g\xFCnl\xFCk) olmas\u0131na ra\u011Fmen {rating} Elo seviyesinde",
-        fresh_account: "Yeni a\xE7\u0131lm\u0131\u015F hesap ({days} g\xFCnl\xFCk) \u2014 smurf veya yeni hile hesab\u0131 riski",
-        extreme_recent_wr: "Son {games} puanl\u0131 ma\xE7ta %{wr} galibiyet (Rakip Elo g\xF6re +{z}\u03C3 sapma)",
-        elevated_recent_wr: "Son {games} ma\xE7ta %{wr} galibiyet (+{z}\u03C3 Elo \xFCst\xFC performans)",
-        smurf_human_pacing: "Y\xFCksek kazanma oran\u0131 ancak hamle ritmi do\u011Fal insan da\u011F\u0131l\u0131m\u0131nda (olas\u0131 smurf / formda oyuncu)",
-        accuracy_excess: "Uzun ma\xE7larda Elo band\u0131 beklentisinin (+%{excess}) \xFCzerinde do\u011Fruluk (%{avg})",
-        accuracy_spikes: "\u0130ncelenen {games} uzun ma\xE7\u0131n %{rate} kadar\u0131nda tavan do\u011Fruluk (\u2265%{ceil})",
-        robotic_pacing: "D\xFC\u015F\xFCk zaman entropisi ({ent} bit) ve mekanik hamle da\u011F\u0131l\u0131m\u0131 (QCD: {qcd}, CV: {cv})",
-        midgame_toggle: "{count} ma\xE7ta oyun ortas\u0131 uzun duraksama sonras\u0131 mekanik seri (motor a\xE7ma imzas\u0131)",
-        elo_surge: "Son 7 g\xFCnde +{delta} Elo dikey puan s\u0131\xE7ramas\u0131",
-        hot_streak: "\xDCst \xFCste {streak} puanl\u0131 galibiyet serisinde",
-        tactics_gap: "Canl\u0131 puan ({rating}) ile bulmaca puan\u0131 ({tactics}) aras\u0131nda u\xE7urum var",
-        natural_human: "Do\u011Fal insan hamle s\xFCresi varyans\u0131 (CV: {cv}) ve dengeli kazanma oran\u0131",
-        established_veteran: "K\xF6kl\xFC hesap ({years}+ y\u0131ll\u0131k ge\xE7mi\u015F, {total} toplam ma\xE7)"
+        banned_fair_play: "Chess.com taraf\u0131ndan adil oyun ihlalinden kapat\u0131ld\u0131",
+        verified_title: "Onayl\u0131 FIDE unvanl\u0131 oyuncu ({title})",
+        fresh_high_elo: "Yeni hesap ({days} g\xFCnl\xFCk), {rating} Elo seviyesinde",
+        fresh_account: "Yeni a\xE7\u0131lm\u0131\u015F hesap ({days} g\xFCnl\xFCk)",
+        extreme_recent_wr: "Son {games} ma\xE7ta %{wr} galibiyet (+{z}\u03C3 Elo \xFCst\xFC performans)",
+        elevated_recent_wr: "Son {games} ma\xE7ta %{wr} galibiyet (+{z}\u03C3 beklenti \xFCst\xFC)",
+        smurf_human_pacing: "Y\xFCksek kazanma oran\u0131, do\u011Fal insan hamle s\xFCreleri (olas\u0131 smurf)",
+        accuracy_excess: "Uzun ma\xE7larda beklentinin +%{excess} \xFCzerinde do\u011Fruluk (%{avg})",
+        accuracy_spikes: "{games} uzun ma\xE7\u0131n %{rate} kadar\u0131nda \u2265%{ceil} tavan do\u011Fruluk",
+        robotic_pacing: "D\xFC\u015F\xFCk s\xFCre \xE7e\u015Fitlili\u011Fi ({ent} bit, QCD {qcd}, CV {cv})",
+        midgame_toggle: "{count} ma\xE7ta uzun duraksama sonras\u0131 sabit s\xFCreli hamle serisi",
+        elo_surge: "Son 7 g\xFCnde +{delta} Elo art\u0131\u015F",
+        hot_streak: "\xDCst \xFCste {streak} puanl\u0131 galibiyet serisi",
+        tactics_gap: "Canl\u0131 puan ({rating}) ile bulmaca puan\u0131 ({tactics}) fark\u0131 y\xFCksek",
+        natural_human: "Do\u011Fal hamle s\xFCresi da\u011F\u0131l\u0131m\u0131 (CV {cv})",
+        established_veteran: "K\xF6kl\xFC hesap ({years}+ y\u0131l, {total} ma\xE7)"
       }
     },
     en: {
       appName: "Chess Sentinel",
-      appSubtitle: "Live Cheat Probability & Fair-Play Radar",
-      cheatProbability: "CHEAT PROBABILITY",
-      scanningOpponent: "Analyzing opponent telemetry\u2026",
-      waitingForMatch: "Waiting for opponent\u2026",
-      abortWindowActive: "Safe Abort Window Open",
-      safeToPlay: "Normal player patterns \u2014 safe to play",
-      cautionAdvised: "Elevated anomaly signals \u2014 play with caution",
-      considerAborting: "High engine / smurf probability \u2014 consider aborting",
-      bannedFairPlayBanner: "CLOSED BY CHESS.COM FOR FAIR PLAY VIOLATIONS",
+      appSubtitle: "Opponent Analysis & Fair-Play Monitor",
+      cheatProbability: "Risk Score",
+      scanningOpponent: "Loading opponent history...",
+      waitingForMatch: "Waiting for opponent...",
+      abortWindowActive: "Safe abort window open",
+      safeToPlay: "Organic human profile, safe to play",
+      cautionAdvised: "Unusual signals present, play with care",
+      considerAborting: "High risk indicators, consider aborting",
+      bannedFairPlayBanner: "Account closed by Chess.com for Fair Play violations",
       confidenceLabel: {
-        low: "Low Sample Confidence",
-        medium: "Medium Confidence",
-        high: "High Telemetry Confidence"
+        low: "Low sample",
+        medium: "Medium sample",
+        high: "High sample"
+      },
+      surfaceBadge: {
+        live: "Live",
+        game: "Game",
+        profile: "Profile"
+      },
+      hudTabs: {
+        overview: "Summary",
+        clock: "Match Clock",
+        games: "Games"
       },
       tiers: {
-        low: { label: "LOW RISK", summary: "Organic human patterns" },
-        guarded: { label: "GUARDED", summary: "Slight hot streak, within normal bounds" },
-        elevated: { label: "SUSPICIOUS", summary: "Multiple elevated statistical anomalies" },
-        high: { label: "HIGH RISK", summary: "Strong engine assistance or smurf signals" },
-        critical: { label: "CRITICAL CHEAT RISK", summary: "Extreme multi-signal anomaly!" },
-        banned: { label: "BANNED (100%)", summary: "Confirmed Fair Play violation" }
+        low: { label: "Clean", summary: "Organic human statistics" },
+        guarded: { label: "Normal+", summary: "In form, within normal bounds" },
+        elevated: { label: "Suspicious", summary: "Multiple elevated metrics" },
+        high: { label: "High Risk", summary: "Strong engine or relay indicators" },
+        critical: { label: "Critical", summary: "Corroborated multi-signal anomaly" },
+        banned: { label: "Banned", summary: "Closed for Fair Play violation" }
       },
       signals: {
-        sectionTitle: "6-SIGNAL FORENSIC TELEMETRY",
-        recentWinrate: "Recent Win-Rate Anomaly",
-        overallWinrate: "Lifetime Glicko Deviation",
-        accuracyAnomaly: "CAPS2 Accuracy Excess",
-        movePacing: "Engine Move Pacing (%clk)",
-        eloVelocity: "Elo Surge Velocity",
-        accountTrust: "Account Age & Trust Risk"
+        sectionTitle: "Signal Breakdown",
+        recentWinrate: "Recent Win-Rate Deviation",
+        overallWinrate: "Lifetime Glicko Balance",
+        accuracyAnomaly: "Long-Game CAPS2 Excess",
+        movePacing: "Move-Time Consistency (%clk)",
+        eloVelocity: "Rating Velocity",
+        accountTrust: "Account Age & Provenance"
       },
       stats: {
         accountAge: "Account Age",
@@ -773,104 +907,111 @@
         monthsShort: "mo",
         yearsShort: "yr",
         recentRecord: "Recent Form",
-        avgAccuracy: "Avg Accuracy",
+        performance: "Performance",
+        avgAccuracy: "CAPS2 Avg",
         expectedShort: "exp",
-        moveCV: "Move Pace CV",
-        elo7d: "7d Elo Delta",
+        moveCV: "Move Pace",
+        elo7d: "7d Rating",
         streak: "Streak",
         noReviewedGames: "No reviewed games",
-        gamesAnalyzed: "{count} games analyzed"
+        gamesAnalyzed: "{count} games",
+        lifetimeGames: "{count} games"
       },
       actions: {
-        swapTarget: "Swap Top / Bottom Player",
-        watchSuspect: "Add to Suspect Watchlist",
-        watchingSuspect: "Watching (Ban Monitor Active)",
-        refresh: "Re-scan Opponent",
+        swapTarget: "Swap top / bottom player",
+        watchSuspect: "Add to watchlist",
+        watchingSuspect: "Bookmarked (ban check active)",
+        refresh: "Refresh data",
         minimize: "Minimize (Alt+S)",
-        expand: "Expand HUD",
-        openProfile: "Open Chess.com Profile",
-        toggleDetails: "Show Forensic Charts & Breakdown",
-        hideDetails: "Hide Breakdown",
-        copyReport: "\u{1F4CB} Copy Fair-Play Report",
-        copiedReport: "\u2713 Evidence Copied!",
-        soundOn: "Critical Risk Audio Alert: ON",
-        soundOff: "Critical Risk Audio Alert: OFF"
+        expand: "Open panel",
+        openProfile: "Open Chess.com profile",
+        toggleDetails: "Show signal breakdown",
+        hideDetails: "Hide signal breakdown",
+        copyReport: "Copy Evidence",
+        copiedReport: "Copied",
+        reportFairPlay: "Report",
+        soundOn: "Sound alert on",
+        soundOff: "Sound alert off"
       },
       v3: {
-        liveClockTitle: "LIVE MATCH CLOCK RADAR",
-        liveClockMoves: "{count} moves \u2022 Avg {mean}s \u2022 QCD {qcd}",
-        liveClockSuspect: "\u26A1 Mechanical move pacing detected in live game!",
-        livePinpointToggle: "\u{1F3AF} Move #{pauseMove} ({pauseSec}s pause) \u2192 Moves #{start}\u2013#{end} mechanical ({min}\u2013{max}s)",
-        livePinpointFlatline: "\u{1F3AF} Moves #{start}\u2013#{end} ({count} straight moves) locked in mechanical band ({min}\u2013{max}s)",
-        pacingHistTitle: "MOVE-TIME HISTOGRAM (%clk)",
-        pacingEntropyTag: "Entropy: {ent}b \u2022 QCD: {qcd}",
-        recentMatchesTitle: "RECENT RATED MATCHES",
-        autoVerdictTitle: "AUTOMATIC SYSTEM VERDICT",
-        verdictBanned: "\u{1F6A8} This account has been officially closed by Chess.com for Fair Play violations.",
-        verdictLiveToggle: "\u{1F3AF} LIVE PINPOINT: Opponent paused {pauseSec}s on Move #{pauseMove}, then played Moves #{start}\u2013#{end} at fixed robotic pace ({min}\u2013{max}s)! Copy the evidence report after the game.",
-        verdictLiveFlatline: "\u{1F3AF} LIVE PINPOINT: Opponent played {count} consecutive moves (#{start}\u2013#{end}) in a zero-reflex mechanical band ({min}\u2013{max}s)!",
-        verdictAbortNow: "\u26D4 CORROBORATED ENGINE EVIDENCE ({pins} suspect game spans): Safe abort window is open \u2014 ABORT MATCH NOW to protect your Elo.",
-        verdictHighWatch: "\u26A0\uFE0F Corroborated engine signatures found in match history (exact move numbers listed below). Live radar is tracking every move.",
-        verdictElevatedWatch: "\u{1F536} Elevated chronometric/accuracy signals. Live radar is active and will pinpoint exact move numbers automatically if triggered.",
-        verdictSmurfHuman: "\u{1F9ED} High win rate, but move times follow natural human variance. NO engine proof (likely hand-played smurf or hot streak).",
-        verdictCleanSafe: "\u2705 Zero suspect move ranges or engine toggles found across match history. Organic human profile \u2014 safe to play.",
-        pinpointSectionTitle: "PINPOINTED SUSPECT GAMES & MOVE RANGES",
-        pinpointOpenGame: "Open \u2197",
-        pinpointToggleRow: "Move #{pauseMove} ({pauseSec}s pause) \u2192 Moves #{start}\u2013#{end} robotic ({min}\u2013{max}s)",
-        pinpointFlatlineRow: "Moves #{start}\u2013#{end} ({count} moves) zero-reflex mechanical pace ({min}\u2013{max}s)",
-        pinpointCapsRow: "Moves #1\u2013#{end} played at {acc}% ceiling CAPS2 accuracy"
+        liveClockTitle: "Live Match Move Times",
+        finishedClockTitle: "Match Move Times (0.1s)",
+        emptyLiveClock: "Live move durations appear here starting from move 3.",
+        liveClockMoves: "{count} moves \xB7 Avg {mean}s \xB7 QCD {qcd}",
+        liveClockSuspect: "Mechanical move pacing detected in this game.",
+        livePinpointToggle: "Move #{pauseMove} ({pauseSec}s pause) -> Moves #{start}-#{end} fixed ({min}-{max}s)",
+        livePinpointFlatline: "Moves #{start}-#{end} ({count} straight moves) in narrow band ({min}-{max}s)",
+        pacingHistTitle: "Historical Move-Time Distribution",
+        pacingEntropyTag: "Entropy {ent}b \xB7 QCD {qcd}",
+        recentMatchesTitle: "Recent Rated Games",
+        inspectMoves: "Pacing",
+        autoVerdictTitle: "Status",
+        verdictBanned: "Account closed by Chess.com for Fair Play violations.",
+        verdictLiveToggle: "Live match detection: paused {pauseSec}s on Move #{pauseMove}, then played Moves #{start}-#{end} at {min}-{max}s per move.",
+        verdictLiveFlatline: "Live match detection: played {count} straight moves (#{start}-#{end}) within {min}-{max}s per move.",
+        verdictAbortNow: "{pins} suspect game spans found in history. Safe abort window is open.",
+        verdictHighWatch: "Corroborated engine patterns found in recent history. Exact move ranges are listed below.",
+        verdictElevatedWatch: "Elevated pacing or accuracy metrics. Live move-clock tracking is active.",
+        verdictSmurfHuman: "High win rate with natural human move-time variance (likely smurf or hot streak).",
+        verdictCleanSafe: "No mechanical move spans or mid-game toggles found across analyzed games.",
+        pinpointSectionTitle: "Suspect Games & Move Ranges",
+        pinpointOpenGame: "Open",
+        pinpointToggleRow: "Move #{pauseMove} ({pauseSec}s pause) -> Moves #{start}-#{end} fixed ({min}-{max}s)",
+        pinpointFlatlineRow: "Moves #{start}-#{end} ({count} moves) narrow mechanical band ({min}-{max}s)",
+        pinpointCapsRow: "Moves #1-#{end} played at {acc}% CAPS2 accuracy"
       },
       popup: {
-        tabScanner: "Live Scanner",
-        tabWatchlist: "Ban Watchlist",
+        tabScanner: "Lookup",
+        tabWatchlist: "Watchlist",
         tabSettings: "Settings",
-        searchPlaceholder: "Enter Chess.com username (e.g. hikaru)\u2026",
-        scanBtn: "Analyze",
-        recentScansTitle: "RECENTLY SCANNED OPPONENTS",
-        emptyScans: "No opponents scanned yet. Start a game on Chess.com or search above.",
-        watchlistTitle: "SUSPECT & BAN TRACKER",
-        checkBansBtn: "Check Ban Status Now",
-        checkingBans: "Checking API\u2026",
-        emptyWatchlist: "Watchlist is empty. Click the eye icon on the HUD to track suspicious opponents.",
-        bannedTag: "BANNED (FAIR PLAY)",
-        activeTag: "Active Account",
-        addedOn: "Initial risk: {prob}%",
+        activeMatchLabel: "Active tab opponent",
+        searchPlaceholder: "Username (e.g. hikaru)",
+        scanBtn: "Inspect",
+        recentScansTitle: "Recent Lookups",
+        emptyScans: "No players inspected yet. Open a game on Chess.com or search above.",
+        watchlistTitle: "Bookmarked Accounts",
+        checkBansBtn: "Check Bans",
+        checkingBans: "Checking...",
+        emptyWatchlist: "Watchlist is empty. Use the bookmark icon on the panel to track accounts.",
+        bannedTag: "Banned",
+        activeTag: "Active",
+        addedOn: "Initial: {prob}%",
         removeBtn: "Remove",
-        settingsLanguage: "Interface Language / Dil",
-        settingsAutoHud: "Auto-Open Floating HUD on Match Start",
-        settingsAutoHudDesc: "Automatically opens the glassmorphic HUD overlay on Chess.com when an opponent is detected.",
-        settingsInlineBadge: "Inline Username % Risk Badge",
-        settingsInlineBadgeDesc: "Injects a compact risk percentage and W/L/D pill right next to the opponent username.",
-        settingsCompact: "Compact HUD Mode",
-        settingsCompactDesc: "Starts the in-page HUD popup with telemetry bars collapsed by default.",
-        settingsRatedOnly: "Rated Games Only",
-        settingsRatedOnlyDesc: "Excludes casual / unrated games when computing cheat probability.",
-        settingsSoundAlerts: "Critical Risk Audio Chime",
-        settingsSoundAlertsDesc: "Plays a subtle radar tone when matched against a High/Critical (\u226568%) or watched opponent.",
-        settingsSensitivity: "Detection Sensitivity",
+        settingsLanguage: "Language / Dil",
+        settingsAutoHud: "Auto-open panel on match start",
+        settingsAutoHudDesc: "Shows the analysis panel automatically when an opponent is detected.",
+        settingsInlineBadge: "Inline username badge",
+        settingsInlineBadgeDesc: "Places a compact percentage and record tag next to the username.",
+        settingsCompact: "Collapsed breakdown by default",
+        settingsCompactDesc: "Keeps individual signal bars collapsed until expanded.",
+        settingsRatedOnly: "Rated games only",
+        settingsRatedOnlyDesc: "Excludes unrated games from probability calculations.",
+        settingsSoundAlerts: "High-risk audio alert",
+        settingsSoundAlertsDesc: "Plays a short tone when matched with a high-risk or bookmarked account.",
+        settingsSensitivity: "Sensitivity",
         sensitivityConservative: "Conservative",
         sensitivityBalanced: "Balanced (Default)",
         sensitivityStrict: "Strict",
-        toggleInPageHud: "Toggle HUD on Active Chess.com Tab",
-        privacyNote: "100% Private \u2022 Zero data collection \u2022 Powered strictly by official Chess.com PubAPI."
+        toggleInPageHud: "Show / Hide Panel on Tab",
+        privacyNote: "Zero tracking. Uses public Chess.com API data only."
       },
       flags: {
-        banned_fair_play: "Account closed by Chess.com for Fair Play (Cheating) violations!",
-        verified_title: "Verified FIDE titled player ({title}) \u2014 elite outlier calibration applied",
-        fresh_high_elo: "Brand-new account ({days} days old) already competing at {rating} Elo",
-        fresh_account: "Recently created account ({days} days old) \u2014 elevated smurf / burner risk",
-        extreme_recent_wr: "{wr}% win rate across last {games} rated games (+{z}\u03C3 above opponent Elo expectation)",
-        elevated_recent_wr: "{wr}% win rate across last {games} games (+{z}\u03C3 Elo-adjusted outperformance)",
-        smurf_human_pacing: "Elevated win rate accompanied by organic human move-time entropy (likely smurf / hot streak)",
-        accuracy_excess: "+{excess}% long-game CAPS2 accuracy ({avg}%) above bias-adjusted Elo expectation",
-        accuracy_spikes: "{rate}% of {games} full-length reviewed games hit ceiling accuracy (\u2265{ceil}%)",
-        robotic_pacing: "Collapsed chronometric entropy ({ent} bits) & mechanical move dispersion (QCD: {qcd}, CV: {cv})",
-        midgame_toggle: "Mid-game pause followed by flatline mechanical moves in {count} games (toggle signature)",
-        elo_surge: "+{delta} Elo vertical rating surge over the last 7 days",
-        hot_streak: "Currently on a {streak}-game consecutive rated win streak",
-        tactics_gap: "Massive gap between live rating ({rating}) and tactics rating ({tactics})",
-        natural_human: "Organic human move-time variance (CV: {cv}) and balanced win distribution",
-        established_veteran: "Established veteran account ({years}+ years old, {total} lifetime games)"
+        banned_fair_play: "Account closed by Chess.com for Fair Play violations",
+        verified_title: "Verified FIDE titled player ({title})",
+        fresh_high_elo: "New account ({days}d old) competing at {rating} Elo",
+        fresh_account: "Recently created account ({days}d old)",
+        extreme_recent_wr: "{wr}% win rate in last {games} games (+{z}\u03C3 above Elo expectation)",
+        elevated_recent_wr: "{wr}% win rate in last {games} games (+{z}\u03C3 above expectation)",
+        smurf_human_pacing: "High win rate with natural human move-time spread (likely smurf)",
+        accuracy_excess: "+{excess}% long-game CAPS2 accuracy ({avg}%) above expected band",
+        accuracy_spikes: "{rate}% of {games} long reviewed games reached \u2265{ceil}% accuracy",
+        robotic_pacing: "Low move-time entropy ({ent}b, QCD {qcd}, CV {cv})",
+        midgame_toggle: "Long pause followed by narrow-band move streak in {count} games",
+        elo_surge: "+{delta} Elo gained over the last 7 days",
+        hot_streak: "{streak} consecutive rated wins",
+        tactics_gap: "Large gap between live rating ({rating}) and tactics ({tactics})",
+        natural_human: "Natural human move-time dispersion (CV {cv})",
+        established_veteran: "Established account ({years}+ yr, {total} games)"
       }
     }
   };
@@ -883,7 +1024,7 @@
     );
   }
   function formatAgeShort(days, lang) {
-    if (days === null || days < 0) return "\u2014";
+    if (days === null || days < 0) return "-";
     const s = TRANSLATIONS[lang].stats;
     if (days < 60) return `${Math.max(1, days)} ${s.daysShort}`;
     if (days < 365) return `${Math.round(days / 30)} ${s.monthsShort}`;
@@ -891,16 +1032,86 @@
     return `${yrs} ${s.yearsShort}`;
   }
 
+  // src/utils/icons.ts
+  var ICONS = {
+    mark: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+    <path d="M8 1.5L2.5 3.8v4.1c0 3.55 2.34 6.58 5.5 7.6 3.16-1.02 5.5-4.05 5.5-7.6V3.8L8 1.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M5.8 8.1l1.5 1.5 3-3.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`,
+    swap: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M7 16V4m0 0L3 8m4-4l4 4"/>
+    <path d="M17 8v12m0 0l4-4m-4 4l-4-4"/>
+  </svg>`,
+    refresh: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+    <path d="M21 3v6h-6"/>
+  </svg>`,
+    bookmark: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+  </svg>`,
+    bookmarkFilled: `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+  </svg>`,
+    bellOn: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+  </svg>`,
+    bellOff: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+    <path d="M18.63 13A17.89 17.89 0 0 1 18 8"/>
+    <path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/>
+    <path d="M18 8a6 6 0 0 0-9.33-5"/>
+    <line x1="1" y1="1" x2="23" y2="23"/>
+  </svg>`,
+    minimize: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+    <line x1="5" y1="12" x2="19" y2="12"/>
+  </svg>`,
+    close: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+    <line x1="18" y1="6" x2="6" y2="18"/>
+    <line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>`,
+    chevronDown: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <polyline points="6 9 12 15 18 9"/>
+  </svg>`,
+    chevronUp: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <polyline points="18 15 12 9 6 15"/>
+  </svg>`,
+    copy: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+  </svg>`,
+    check: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>`,
+    external: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M7 17L17 7"/>
+    <path d="M8 7h9v9"/>
+  </svg>`,
+    flag: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+    <line x1="4" y1="22" x2="4" y2="15"/>
+  </svg>`,
+    clock: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="9"/>
+    <polyline points="12 7 12 12 15.5 14"/>
+  </svg>`,
+    search: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="11" cy="11" r="8"/>
+    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  </svg>`
+  };
+
   // src/content/hud-styles.ts
   var HUD_SHADOW_CSS = `
   :host {
     all: initial;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    color: #f8fafc;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    color: #e7e5e4;
     z-index: 2147483640;
     position: fixed;
     pointer-events: none;
     inset: 0;
+    -webkit-font-smoothing: antialiased;
   }
 
   * {
@@ -910,76 +1121,45 @@
   .sentinel-card {
     pointer-events: auto;
     position: fixed;
-    top: 72px;
-    right: 20px;
-    width: 356px;
-    max-height: calc(100vh - 88px);
+    top: 64px;
+    right: 16px;
+    width: 336px;
+    max-height: calc(100vh - 80px);
     display: flex;
     flex-direction: column;
-    background: linear-gradient(165deg, rgba(13, 18, 30, 0.94) 0%, rgba(8, 11, 20, 0.97) 100%);
-    backdrop-filter: blur(22px) saturate(165%);
-    -webkit-backdrop-filter: blur(22px) saturate(165%);
-    border: 1px solid var(--tier-border, rgba(148, 163, 184, 0.22));
-    border-radius: 18px;
-    box-shadow:
-      0 24px 54px -12px rgba(0, 0, 0, 0.72),
-      0 0 0 1px rgba(255, 255, 255, 0.04) inset,
-      0 0 28px -8px var(--tier-glow, rgba(16, 185, 129, 0.22));
+    background: #21201d;
+    border: 1px solid #383530;
+    border-radius: 8px;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.56), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
     overflow: hidden;
-    transition:
-      opacity 0.24s cubic-bezier(0.16, 1, 0.3, 1),
-      transform 0.24s cubic-bezier(0.16, 1, 0.3, 1),
-      border-color 0.3s ease,
-      box-shadow 0.3s ease;
-    animation: sentinelSlideIn 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: opacity 0.16s ease, transform 0.16s ease;
     user-select: none;
+  }
+
+  .sentinel-card.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-4px);
   }
 
   .hud-scroll-body {
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: thin;
-    scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
+    scrollbar-color: #3f3c37 transparent;
   }
 
-  .sentinel-card.hidden {
-    opacity: 0;
-    pointer-events: none;
-    transform: translateY(-8px) scale(0.97);
-  }
-
-  @keyframes sentinelSlideIn {
-    from {
-      opacity: 0;
-      transform: translateY(-12px) scale(0.96);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
-
-  @keyframes pulseDanger {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45); }
-    50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
-  }
-
-  /* Top Glow Bar */
-  .tier-accent-line {
-    height: 3px;
-    width: 100%;
-    background: linear-gradient(90deg, transparent 0%, var(--tier-color, #10b981) 50%, transparent 100%);
-    opacity: 0.95;
-  }
-
-  /* Header / Drag Handle */
+  /* Titlebar */
   .hud-header {
+    height: 34px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 13px 8px;
+    padding: 0 8px 0 11px;
+    background: #1a1917;
+    border-bottom: 1px solid #302e2a;
     cursor: grab;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
   }
 
   .hud-header:active {
@@ -989,213 +1169,162 @@
   .brand {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 6px;
+    min-width: 0;
   }
 
-  .brand-shield {
-    width: 18px;
-    height: 18px;
-    color: var(--tier-color, #10b981);
-    filter: drop-shadow(0 0 6px var(--tier-glow, rgba(16, 185, 129, 0.4)));
+  .brand-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--tier-color, #81b64c);
     flex-shrink: 0;
   }
 
   .brand-title {
-    font-size: 11.5px;
-    font-weight: 800;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-    background: linear-gradient(90deg, #f8fafc, #cbd5e1);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    font-size: 12px;
+    font-weight: 600;
+    color: #d6d3ce;
+    letter-spacing: -0.01em;
+  }
+
+  .surface-tag {
+    font-size: 9.5px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: #292724;
+    color: #a8a29e;
+    border: 1px solid #36332e;
+  }
+
+  .surface-tag.live {
+    color: #95c95f;
+    border-color: rgba(129, 182, 76, 0.32);
+    background: rgba(129, 182, 76, 0.1);
   }
 
   .header-actions {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
   }
 
   .icon-btn {
     appearance: none;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.04);
-    color: #94a3b8;
-    border-radius: 7px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #9c968f;
+    border-radius: 4px;
     height: 24px;
     min-width: 24px;
-    padding: 0 6px;
-    font-size: 11px;
-    font-weight: 700;
+    padding: 0 5px;
+    font-size: 10.5px;
+    font-weight: 600;
+    font-family: inherit;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background-color 0.12s ease, color 0.12s ease;
   }
 
   .icon-btn:hover {
-    background: rgba(255, 255, 255, 0.11);
-    color: #f8fafc;
-    border-color: rgba(255, 255, 255, 0.18);
+    background: #2c2a26;
+    color: #f5f5f4;
   }
 
   .icon-btn.active {
-    color: #fbbf24;
-    border-color: rgba(251, 191, 36, 0.45);
-    background: rgba(251, 191, 36, 0.14);
+    color: #e59934;
+    background: rgba(229, 153, 52, 0.12);
   }
 
   .lang-btn {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 10px;
-    letter-spacing: 0.04em;
-    color: #cbd5e1;
+    color: #b8b2aa;
   }
 
-  /* Banned or Abort Alert Banner */
+  /* Critical / Abort Callout Bar (only shown on danger/banned) */
   .alert-banner {
-    margin: 10px 13px 0;
-    padding: 7px 10px;
-    border-radius: 9px;
+    padding: 6px 12px;
     font-size: 11px;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    letter-spacing: 0.02em;
+    font-weight: 600;
+    line-height: 1.35;
+    border-bottom: 1px solid #302e2a;
   }
 
-  .alert-banner.banned {
-    background: rgba(244, 63, 94, 0.2);
-    border: 1px solid rgba(244, 63, 94, 0.55);
-    color: #fda4af;
-    animation: pulseDanger 2s infinite;
-  }
-
+  .alert-banner.banned,
   .alert-banner.abort-warn {
-    background: rgba(239, 68, 68, 0.16);
-    border: 1px solid rgba(239, 68, 68, 0.42);
+    background: rgba(224, 70, 68, 0.15);
     color: #fca5a5;
+    border-bottom-color: rgba(224, 70, 68, 0.35);
   }
 
-  .alert-banner.abort-safe {
-    background: rgba(56, 189, 248, 0.11);
-    border: 1px solid rgba(56, 189, 248, 0.28);
-    color: #bae6fd;
-  }
-
-  /* Hero Section: Gauge + Player Identity */
+  /* Identity + Tabular Score Readout */
   .hero {
+    padding: 11px 12px 10px;
+    border-bottom: 1px solid #2e2c28;
+  }
+
+  .hero-top {
     display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 13px 14px 11px;
-  }
-
-  .gauge-wrap {
-    position: relative;
-    width: 86px;
-    height: 86px;
-    flex-shrink: 0;
-  }
-
-  .gauge-svg {
-    width: 86px;
-    height: 86px;
-    transform: rotate(-90deg);
-  }
-
-  .gauge-track {
-    fill: none;
-    stroke: rgba(255, 255, 255, 0.07);
-    stroke-width: 7;
-  }
-
-  .gauge-progress {
-    fill: none;
-    stroke: var(--tier-color, #10b981);
-    stroke-width: 7;
-    stroke-linecap: round;
-    transition: stroke-dashoffset 0.75s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.3s ease;
-    filter: drop-shadow(0 0 6px var(--tier-glow, rgba(16, 185, 129, 0.5)));
-  }
-
-  .gauge-center {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-  }
-
-  .gauge-pct {
-    font-size: 23px;
-    font-weight: 800;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: -0.03em;
-    line-height: 1;
-    color: #f8fafc;
-  }
-
-  .gauge-pct span {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--tier-color, #10b981);
-  }
-
-  .gauge-caption {
-    margin-top: 3px;
-    font-size: 7.5px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    color: #94a3b8;
-    text-transform: uppercase;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
   }
 
   .identity {
-    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 9px;
     min-width: 0;
+    flex: 1;
+  }
+
+  .avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 5px;
+    object-fit: cover;
+    border: 1px solid #3a3732;
+    background: #2b2926;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: #d6d3ce;
+  }
+
+  .id-meta {
+    min-width: 0;
+    flex: 1;
   }
 
   .player-row {
     display: flex;
     align-items: center;
-    gap: 7px;
-  }
-
-  .avatar {
-    width: 26px;
-    height: 26px;
-    border-radius: 7px;
-    object-fit: cover;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    background: #1e293b;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    font-weight: 800;
-    color: #cbd5e1;
+    gap: 5px;
+    min-width: 0;
   }
 
   .title-pill {
-    padding: 1px 5px;
-    border-radius: 4px;
-    background: linear-gradient(135deg, #b91c1c, #dc2626);
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: #a62b28;
     color: #fff;
     font-size: 9.5px;
-    font-weight: 800;
-    letter-spacing: 0.04em;
+    font-weight: 700;
+    letter-spacing: 0.02em;
     flex-shrink: 0;
   }
 
   .username-link {
-    font-size: 14.5px;
-    font-weight: 700;
-    color: #f8fafc;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #f5f5f4;
     text-decoration: none;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1204,242 +1333,387 @@
 
   .username-link:hover {
     text-decoration: underline;
-    color: #38bdf8;
   }
 
-  .tier-badge-row {
+  .iso-tag {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 9.5px;
+    font-weight: 600;
+    color: #8c867e;
+    background: #2a2825;
+    padding: 0 4px;
+    border-radius: 3px;
+    border: 1px solid #36332e;
+    flex-shrink: 0;
+  }
+
+  .sub-meta-row {
+    margin-top: 2px;
+    font-size: 11px;
+    color: #9c968f;
     display: flex;
     align-items: center;
-    gap: 6px;
-    margin-top: 6px;
-    flex-wrap: wrap;
-  }
-
-  .tier-pill {
-    display: inline-flex;
-    align-items: center;
     gap: 5px;
-    padding: 2.5px 8px;
-    border-radius: 999px;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    background: var(--tier-bg, rgba(16, 185, 129, 0.15));
-    color: var(--tier-color, #10b981);
-    border: 1px solid var(--tier-border, rgba(16, 185, 129, 0.35));
+    font-variant-numeric: tabular-nums;
   }
 
-  .conf-tag {
+  .score-readout {
+    text-align: right;
+    flex-shrink: 0;
+    padding-left: 8px;
+    border-left: 2px solid var(--tier-color, #81b64c);
+  }
+
+  .score-num {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--tier-color, #81b64c);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .score-tier {
+    margin-top: 3px;
     font-size: 10px;
-    color: #94a3b8;
+    font-weight: 600;
+    color: #d6d3ce;
+  }
+
+  /* Segmented Risk Meter */
+  .meter-wrap {
+    margin-top: 9px;
+  }
+
+  .meter-track {
+    position: relative;
+    height: 4px;
+    background: #171614;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .meter-fill {
+    height: 100%;
+    background: var(--tier-color, #81b64c);
+    border-radius: 2px;
+    transition: width 0.35s ease, background-color 0.25s ease;
+  }
+
+  .meter-ticks {
+    position: relative;
+    height: 0;
+  }
+
+  .verdict-line {
+    margin-top: 7px;
+    font-size: 11px;
+    line-height: 1.38;
+    color: #a8a29e;
+  }
+
+  .verdict-line.warn {
+    color: #f3c37a;
+  }
+
+  .verdict-line.danger {
+    color: #fca5a5;
     font-weight: 500;
   }
 
-  .verdict-sub {
-    margin-top: 5px;
-    font-size: 11px;
-    color: #cbd5e1;
-    line-height: 1.3;
+  /* 3-View Segmented Navigation */
+  .view-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2px;
+    padding: 5px 10px;
+    background: #1b1a17;
+    border-bottom: 1px solid #2e2c28;
+    flex-shrink: 0;
   }
 
-  /* Format Tabs */
-  .format-tabs {
-    display: flex;
+  .view-tab {
+    appearance: none;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #9c968f;
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     gap: 5px;
-    padding: 0 14px 10px;
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+
+  .view-tab:hover {
+    color: #e7e5e4;
+    background: #252320;
+  }
+
+  .view-tab.active {
+    background: #2c2a26;
+    color: #f5f5f4;
+    border-color: #3d3a34;
+  }
+
+  .tab-count {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 9.5px;
+    padding: 0 4px;
+    border-radius: 3px;
+    background: #191816;
+    color: #a8a29e;
+  }
+
+  .tab-count.alert {
+    background: rgba(224, 70, 68, 0.22);
+    color: #fca5a5;
+  }
+
+  /* Tab Content Container */
+  .tab-pane {
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* Speed Switcher */
+  .format-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
   }
 
   .fmt-tab {
-    flex: 1;
     appearance: none;
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    background: rgba(255, 255, 255, 0.03);
-    color: #94a3b8;
-    border-radius: 8px;
-    padding: 5px 6px;
+    border: 1px solid #302e2a;
+    background: #1b1a17;
+    color: #9c968f;
+    border-radius: 4px;
+    padding: 4px 7px;
     font-size: 10.5px;
-    font-weight: 700;
+    font-weight: 600;
+    font-family: inherit;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    transition: all 0.15s ease;
     text-transform: capitalize;
+    transition: border-color 0.12s ease, color 0.12s ease, background-color 0.12s ease;
   }
 
   .fmt-tab:hover {
-    background: rgba(255, 255, 255, 0.07);
-    color: #e2e8f0;
+    border-color: #423f39;
+    color: #e7e5e4;
   }
 
   .fmt-tab.active {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: var(--tier-border, rgba(56, 189, 248, 0.4));
-    color: #f8fafc;
+    background: #2a2824;
+    border-color: #524e47;
+    color: #f5f5f4;
   }
 
   .fmt-elo {
-    font-variant-numeric: tabular-nums;
-    color: #cbd5e1;
-    font-weight: 600;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 10.5px;
+    color: #d6d3ce;
   }
 
-  /* 4-Tile Stat Grid */
-  .stat-grid {
+  /* Hairline 3x2 Telemetry Grid */
+  .metric-table {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 6px;
-    padding: 0 14px 10px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1px;
+    background: #302e2a;
+    border: 1px solid #302e2a;
+    border-radius: 5px;
+    overflow: hidden;
   }
 
-  .stat-tile {
-    background: rgba(255, 255, 255, 0.035);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 9px;
-    padding: 6px 7px;
-    text-align: center;
+  .metric-cell {
+    background: #21201d;
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
   }
 
-  .stat-val {
-    font-size: 12.5px;
-    font-weight: 800;
-    color: #f8fafc;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
+  .metric-lbl {
+    font-size: 10px;
+    color: #8c867e;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
 
-  .stat-val.pos { color: #34d399; }
-  .stat-val.warn { color: #fbbf24; }
-  .stat-val.neg { color: #f87171; }
-
-  .stat-lbl {
-    margin-top: 2px;
-    font-size: 9px;
+  .metric-val {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11.5px;
     font-weight: 600;
-    color: #94a3b8;
+    color: #e7e5e4;
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  /* Recent Form Strip */
-  .form-strip {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 14px 10px;
-    gap: 8px;
+  .metric-val.pos { color: #95c95f; }
+  .metric-val.warn { color: #e59934; }
+  .metric-val.neg { color: #ef6b68; }
+
+  .metric-sub {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-size: 10px;
+    font-weight: 400;
+    color: #8c867e;
   }
 
+  /* Form Squares */
   .form-dots {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
   }
 
   .form-dot {
-    width: 17px;
-    height: 17px;
-    border-radius: 5px;
-    font-size: 9.5px;
-    font-weight: 800;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    width: 6px;
+    height: 6px;
+    border-radius: 1.5px;
   }
+  .form-dot.W { background: #81b64c; }
+  .form-dot.L { background: #ca3431; }
+  .form-dot.D { background: #78716c; }
 
-  .form-dot.W {
-    background: rgba(16, 185, 129, 0.18);
-    color: #34d399;
-    border: 1px solid rgba(16, 185, 129, 0.35);
-  }
-  .form-dot.L {
-    background: rgba(239, 68, 68, 0.16);
-    color: #f87171;
-    border: 1px solid rgba(239, 68, 68, 0.3);
-  }
-  .form-dot.D {
-    background: rgba(148, 163, 184, 0.16);
-    color: #cbd5e1;
-    border: 1px solid rgba(148, 163, 184, 0.28);
-  }
-
-  .wld-summary {
-    font-size: 10.5px;
-    font-weight: 700;
-    color: #cbd5e1;
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* Insight Flags */
+  /* Findings List (Clean Dot-Prefixed Lines, Zero Rainbow Boxes) */
   .flags-list {
     display: flex;
     flex-direction: column;
     gap: 5px;
-    padding: 0 14px 10px;
   }
 
-  .flag-chip {
+  .flag-line {
     display: flex;
     align-items: flex-start;
+    gap: 7px;
+    font-size: 11px;
+    line-height: 1.35;
+    color: #d6d3ce;
+  }
+
+  .flag-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    margin-top: 5px;
+    flex-shrink: 0;
+  }
+  .flag-dot.danger { background: #e04644; }
+  .flag-dot.warning { background: #e59934; }
+  .flag-dot.info { background: #6ba4d9; }
+  .flag-dot.positive { background: #81b64c; }
+
+  /* Pinpointed Suspect Games */
+  .pinpoint-panel {
+    border: 1px solid rgba(224, 70, 68, 0.36);
+    background: rgba(224, 70, 68, 0.07);
+    border-radius: 5px;
+    padding: 7px 8px;
+    display: flex;
+    flex-direction: column;
     gap: 6px;
-    padding: 6px 8px;
-    border-radius: 8px;
-    font-size: 10.8px;
-    line-height: 1.32;
-    font-weight: 500;
   }
 
-  .flag-chip.danger {
-    background: rgba(239, 68, 68, 0.13);
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    color: #fecaca;
-  }
-  .flag-chip.warning {
-    background: rgba(245, 158, 11, 0.12);
-    border: 1px solid rgba(245, 158, 11, 0.28);
-    color: #fde68a;
-  }
-  .flag-chip.info {
-    background: rgba(56, 189, 248, 0.12);
-    border: 1px solid rgba(56, 189, 248, 0.28);
-    color: #bae6fd;
-  }
-  .flag-chip.positive {
-    background: rgba(16, 185, 129, 0.11);
-    border: 1px solid rgba(16, 185, 129, 0.26);
-    color: #a7f3d0;
-  }
-
-  /* Collapsible 6-Signal Bars */
-  .details-toggle {
-    width: calc(100% - 28px);
-    margin: 0 14px 10px;
-    padding: 6px 10px;
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    background: rgba(255, 255, 255, 0.03);
-    color: #cbd5e1;
+  .sec-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     font-size: 10.5px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
+    font-weight: 600;
+    color: #a8a29e;
+  }
+
+  .pinpoint-panel .sec-head {
+    color: #f89896;
+  }
+
+  .pinpoint-item {
+    padding-top: 5px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .pinpoint-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: #f5f5f4;
+  }
+
+  .pinpoint-open {
+    font-size: 10px;
+    font-weight: 600;
+    color: #9c968f;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .pinpoint-open:hover {
+    color: #f5f5f4;
+  }
+
+  .pinpoint-body {
+    font-size: 10.5px;
+    line-height: 1.32;
+    color: #e7e5e4;
+  }
+
+  .pinpoint-san {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 9.5px;
+    color: #9c968f;
+  }
+
+  /* Collapsible Signal Breakdown */
+  .details-toggle {
+    width: 100%;
+    padding: 5px 8px;
+    border-radius: 4px;
+    border: 1px solid #302e2a;
+    background: #1b1a17;
+    color: #a8a29e;
+    font-size: 10.5px;
+    font-weight: 600;
+    font-family: inherit;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    transition: background 0.15s ease;
   }
 
   .details-toggle:hover {
-    background: rgba(255, 255, 255, 0.07);
+    color: #e7e5e4;
+    border-color: #3f3c36;
   }
 
   .signals-panel {
-    padding: 2px 14px 13px;
     display: flex;
     flex-direction: column;
-    gap: 7px;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    gap: 6px;
+    padding-top: 2px;
   }
 
   .signals-panel.collapsed {
@@ -1455,225 +1729,128 @@
   .sig-head {
     display: flex;
     justify-content: space-between;
-    font-size: 10px;
-    font-weight: 600;
-    color: #cbd5e1;
+    font-size: 10.5px;
+    color: #a8a29e;
   }
 
   .sig-score {
-    font-variant-numeric: tabular-nums;
-    font-weight: 700;
-    color: #f8fafc;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 600;
+    color: #d6d3ce;
   }
 
   .sig-bar-bg {
-    height: 5px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.08);
+    height: 3px;
+    border-radius: 1.5px;
+    background: #161513;
     overflow: hidden;
   }
 
   .sig-bar-fill {
     height: 100%;
-    border-radius: 999px;
-    transition: width 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+    border-radius: 1.5px;
+    transition: width 0.35s ease;
   }
 
-  /* v3.2 Automatic Plain-Language Verdict Card */
-  .auto-verdict-card {
-    margin: 0 14px 9px;
-    padding: 8px 10px;
-    border-radius: 10px;
-    border: 1px solid rgba(16, 185, 129, 0.32);
-    background: rgba(16, 185, 129, 0.1);
-    color: #d1fae5;
-    font-size: 10.5px;
-    line-height: 1.38;
-  }
-  .auto-verdict-card.smurf {
-    border-color: rgba(56, 189, 248, 0.35);
-    background: rgba(56, 189, 248, 0.11);
-    color: #e0f2fe;
-  }
-  .auto-verdict-card.warn {
-    border-color: rgba(245, 158, 11, 0.42);
-    background: rgba(245, 158, 11, 0.12);
-    color: #fef3c7;
-  }
-  .auto-verdict-card.danger {
-    border-color: rgba(239, 68, 68, 0.58);
-    background: rgba(127, 29, 29, 0.32);
-    color: #fee2e2;
-  }
-  .auto-verdict-head {
-    font-size: 8.5px;
-    font-weight: 800;
-    letter-spacing: 0.07em;
-    opacity: 0.82;
-    margin-bottom: 3px;
-  }
-  .auto-verdict-text {
-    font-weight: 600;
-  }
-
-  /* v3.2 Pinpointed Suspect Games & Exact Move Ranges Panel */
-  .pinpoint-panel {
-    margin: 0 14px 9px;
-    padding: 8px 10px;
-    border-radius: 10px;
-    background: rgba(127, 29, 29, 0.18);
-    border: 1px solid rgba(248, 113, 113, 0.35);
+  /* Clock & Histogram Panels */
+  .chart-box {
+    border: 1px solid #302e2a;
+    background: #1b1a17;
+    border-radius: 5px;
+    padding: 8px 9px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-  }
-  .pinpoint-title {
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    color: #fca5a5;
-  }
-  .pinpoint-item {
-    padding: 6px 8px;
-    border-radius: 7px;
-    background: rgba(15, 23, 42, 0.65);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-  .pinpoint-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 10px;
-    font-weight: 700;
-    color: #f8fafc;
-  }
-  .pinpoint-open {
-    font-size: 9.5px;
-    font-weight: 700;
-    color: #7dd3fc;
-    text-decoration: none;
-  }
-  .pinpoint-open:hover {
-    text-decoration: underline;
-  }
-  .pinpoint-body {
-    font-size: 10px;
-    line-height: 1.32;
-    color: #fecaca;
-    font-weight: 600;
-  }
-  .pinpoint-san {
-    font-size: 9px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    color: #cbd5e1;
-    opacity: 0.9;
+    gap: 7px;
   }
 
-  /* v3.0 / v3.2 Live Match Clock Radar with Move Numbers */
-  .live-clock-box {
-    margin: 0 14px 9px;
-    padding: 8px 10px;
-    border-radius: 10px;
-    background: rgba(15, 23, 42, 0.72);
-    border: 1px solid rgba(56, 189, 248, 0.22);
+  .chart-box.suspect {
+    border-color: rgba(224, 70, 68, 0.44);
   }
-  .live-clock-box.suspect {
-    background: rgba(127, 29, 29, 0.24);
-    border-color: rgba(239, 68, 68, 0.55);
+
+  .empty-note {
+    font-size: 11px;
+    color: #8c867e;
+    padding: 8px 2px;
+    line-height: 1.4;
   }
-  .live-clock-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 9.5px;
-    font-weight: 800;
-    letter-spacing: 0.05em;
-    color: #7dd3fc;
-    margin-bottom: 5px;
-  }
-  .live-clock-box.suspect .live-clock-head {
-    color: #fca5a5;
-  }
+
   .live-spark-bars {
     display: flex;
     align-items: flex-end;
-    gap: 3px;
-    height: 32px;
+    gap: 2px;
+    height: 44px;
+    padding-top: 4px;
   }
+
   .live-spark-item {
     flex: 1;
-    min-width: 8px;
+    min-width: 6px;
     height: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-end;
-    gap: 2px;
-  }
-  .live-spark-col {
-    width: 100%;
-    border-radius: 2px 2px 0 0;
-    transition: height 0.2s ease;
-  }
-  .live-spark-num {
-    font-size: 7.5px;
-    color: #94a3b8;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-  }
-  .live-spark-num.suspect {
-    color: #fca5a5;
-    font-weight: 800;
-  }
-  .live-spark-num.pause {
-    color: #fcd34d;
-    font-weight: 800;
-  }
-  .live-suspect-msg {
-    margin-top: 6px;
-    font-size: 10px;
-    font-weight: 700;
-    color: #fecaca;
-    line-height: 1.35;
-  }
-  .match-pin-tag {
-    padding: 1px 5px;
-    border-radius: 4px;
-    font-size: 8.5px;
-    font-weight: 800;
-    background: rgba(239, 68, 68, 0.22);
-    color: #fecaca;
-    border: 1px solid rgba(248, 113, 113, 0.35);
+    gap: 3px;
   }
 
-  /* v3.0 7-Bin Move-Time Histogram */
-  .hist-card {
-    margin-top: 6px;
-    padding: 8px 10px;
-    border-radius: 9px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+  .live-spark-col {
+    width: 100%;
+    border-radius: 1.5px 1.5px 0 0;
+    min-height: 3px;
   }
-  .sub-sec-head {
+
+  .live-spark-num {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 8px;
+    color: #78716c;
+    line-height: 1;
+  }
+
+  .live-spark-num.suspect {
+    color: #fca5a5;
+    font-weight: 700;
+  }
+
+  .live-spark-num.pause {
+    color: #e59934;
+    font-weight: 700;
+  }
+
+  .move-chips {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    color: #94a3b8;
-    margin-bottom: 7px;
+    flex-wrap: wrap;
+    gap: 3px;
   }
+
+  .move-chip {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 9.5px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: #252320;
+    color: #b8b2aa;
+    border: 1px solid #33302b;
+  }
+
+  .move-chip.suspect {
+    border-color: rgba(224, 70, 68, 0.45);
+    color: #fca5a5;
+  }
+
+  .live-suspect-msg {
+    font-size: 10.5px;
+    color: #fca5a5;
+    line-height: 1.35;
+  }
+
   .hist-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 4px;
     align-items: end;
-    height: 44px;
+    height: 46px;
   }
+
   .hist-col-wrap {
     display: flex;
     flex-direction: column;
@@ -1682,128 +1859,248 @@
     height: 100%;
     gap: 3px;
   }
+
   .hist-bar {
     width: 100%;
-    border-radius: 3px 3px 1px 1px;
-    min-height: 3px;
-  }
-  .hist-lbl {
-    font-size: 8px;
-    color: #64748b;
-    font-variant-numeric: tabular-nums;
+    border-radius: 1.5px 1.5px 0 0;
+    min-height: 2px;
   }
 
-  /* v3.0 Recent 5 Matches Strip */
-  .matches-card {
-    margin-top: 5px;
+  .hist-lbl {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 8px;
+    color: #78716c;
+  }
+
+  /* Recent Games List + Expandable Per-Game Sparkline */
+  .matches-list {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    border: 1px solid #302e2a;
+    border-radius: 5px;
+    overflow: hidden;
+    background: #1b1a17;
   }
+
+  .match-block {
+    border-bottom: 1px solid #2a2824;
+  }
+
+  .match-block:last-child {
+    border-bottom: none;
+  }
+
   .match-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 5px 8px;
-    border-radius: 7px;
-    background: rgba(255, 255, 255, 0.025);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    text-decoration: none;
-    color: #e2e8f0;
-    font-size: 10px;
-    transition: background 0.14s ease;
+    padding: 6px 8px;
+    gap: 6px;
+    font-size: 11px;
+    color: #e7e5e4;
   }
+
   .match-row:hover {
-    background: rgba(255, 255, 255, 0.07);
+    background: #24221f;
   }
+
   .match-left {
     display: flex;
     align-items: center;
     gap: 6px;
     min-width: 0;
+    flex: 1;
   }
+
   .match-res {
-    width: 16px;
-    height: 16px;
-    border-radius: 4px;
+    width: 15px;
+    height: 15px;
+    border-radius: 3px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 9.5px;
-    font-weight: 800;
+    font-weight: 700;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
   }
-  .match-res.W { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-  .match-res.L { background: rgba(239, 68, 68, 0.2); color: #f87171; }
-  .match-res.D { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+
+  .match-res.W { background: rgba(129, 182, 76, 0.2); color: #95c95f; }
+  .match-res.L { background: rgba(202, 52, 49, 0.2); color: #ef6b68; }
+  .match-res.D { background: rgba(140, 134, 126, 0.2); color: #b8b2aa; }
+
   .match-opp {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 145px;
-    font-weight: 600;
+    font-weight: 500;
+    color: #d6d3ce;
   }
+
+  .match-opp-elo {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 10px;
+    color: #8c867e;
+  }
+
   .match-right {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-variant-numeric: tabular-nums;
-    font-size: 9.5px;
-    color: #94a3b8;
+    gap: 5px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 10px;
+    color: #9c968f;
     flex-shrink: 0;
   }
+
   .match-acc {
-    padding: 1px 5px;
-    border-radius: 4px;
-    font-weight: 700;
-    background: rgba(56, 189, 248, 0.12);
-    color: #7dd3fc;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: #292723;
+    color: #d6d3ce;
   }
+
   .match-acc.high {
-    background: rgba(239, 68, 68, 0.18);
+    background: rgba(224, 70, 68, 0.18);
     color: #fca5a5;
   }
 
-  /* v3.0 Copy Fair-Play Evidence Button */
-  .copy-report-btn {
-    margin-top: 6px;
-    width: 100%;
-    padding: 7px 10px;
-    border-radius: 8px;
-    border: 1px solid rgba(56, 189, 248, 0.28);
-    background: rgba(56, 189, 248, 0.1);
-    color: #bae6fd;
-    font-size: 10.5px;
-    font-weight: 700;
+  .match-pin-tag {
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 9px;
+    background: rgba(224, 70, 68, 0.18);
+    color: #fca5a5;
+  }
+
+  .mini-link-btn {
+    appearance: none;
+    border: 1px solid #34312c;
+    background: #252320;
+    color: #a8a29e;
+    border-radius: 3px;
+    height: 19px;
+    padding: 0 5px;
+    font-size: 9.5px;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
     cursor: pointer;
-    transition: all 0.16s ease;
-    text-align: center;
+    text-decoration: none;
   }
-  .copy-report-btn:hover {
-    background: rgba(56, 189, 248, 0.19);
-    color: #f8fafc;
+
+  .mini-link-btn:hover {
+    color: #f5f5f4;
+    border-color: #4a463f;
   }
-  .copy-report-btn.copied {
-    border-color: rgba(16, 185, 129, 0.5);
-    background: rgba(16, 185, 129, 0.18);
-    color: #6ee7b7;
+
+  .mini-link-btn.active {
+    background: #302d28;
+    color: #f5f5f4;
+  }
+
+  .match-drawer {
+    padding: 6px 8px 8px;
+    background: #171614;
+    border-top: 1px solid #262420;
+  }
+
+  .drawer-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 28px;
+  }
+
+  .drawer-bar {
+    flex: 1;
+    min-width: 3px;
+    border-radius: 1px 1px 0 0;
+    background: #6ba4d9;
+  }
+
+  /* Footer Bar */
+  .hud-footer {
+    height: 34px;
+    padding: 0 10px;
+    background: #1a1917;
+    border-top: 1px solid #302e2a;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .footer-left {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .footer-btn {
+    appearance: none;
+    border: 1px solid #36332e;
+    background: #252320;
+    color: #d6d3ce;
+    border-radius: 4px;
+    height: 23px;
+    padding: 0 8px;
+    font-size: 10.5px;
+    font-weight: 600;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color 0.12s ease, border-color 0.12s ease;
+  }
+
+  .footer-btn:hover {
+    background: #2e2c28;
+    border-color: #4a463f;
+    color: #fff;
+  }
+
+  .footer-btn.copied {
+    border-color: rgba(129, 182, 76, 0.5);
+    color: #95c95f;
+  }
+
+  .footer-btn.report-warn {
+    border-color: rgba(224, 108, 53, 0.45);
+    color: #f3a982;
+  }
+
+  .footer-right {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .kbd-hint {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 9.5px;
+    color: #6e6962;
   }
 
   /* Loading State */
   .loading-box {
-    padding: 22px 16px;
+    padding: 18px 14px;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
   }
 
   .spinner {
-    width: 24px;
-    height: 24px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
-    border: 2.5px solid rgba(255, 255, 255, 0.12);
-    border-top-color: #38bdf8;
-    animation: spin 0.75s linear infinite;
+    border: 2px solid #36332e;
+    border-top-color: #81b64c;
+    animation: spin 0.7s linear infinite;
     flex-shrink: 0;
   }
 
@@ -1813,55 +2110,62 @@
 
   .loading-text {
     font-size: 12px;
-    color: #cbd5e1;
+    color: #e7e5e4;
     font-weight: 600;
   }
 
   .loading-sub {
     font-size: 11px;
-    color: #94a3b8;
-    margin-top: 2px;
+    color: #8c867e;
+    margin-top: 1px;
   }
 
-  /* Minimized Pill */
+  /* Minimized Compact Tag */
   .minimized-pill {
     pointer-events: auto;
     position: fixed;
-    top: 72px;
-    right: 20px;
+    top: 64px;
+    right: 16px;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 7px 12px;
-    border-radius: 999px;
-    background: rgba(11, 15, 26, 0.92);
-    backdrop-filter: blur(16px);
-    border: 1px solid var(--tier-border, rgba(148, 163, 184, 0.3));
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55), 0 0 18px -4px var(--tier-glow, transparent);
+    gap: 7px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    background: #21201d;
+    border: 1px solid #3a3732;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.48);
     cursor: pointer;
     user-select: none;
-    transition: transform 0.15s ease, box-shadow 0.2s ease;
+    transition: background-color 0.12s ease;
   }
 
   .minimized-pill:hover {
-    transform: translateY(-1px) scale(1.02);
+    background: #292724;
   }
 
   .minimized-pill.hidden {
     display: none;
   }
 
+  .min-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--tier-color, #81b64c);
+  }
+
   .min-pct {
-    font-size: 13px;
-    font-weight: 800;
-    color: var(--tier-color, #10b981);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--tier-color, #81b64c);
     font-variant-numeric: tabular-nums;
   }
 
   .min-user {
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 600;
-    color: #e2e8f0;
+    color: #d6d3ce;
     max-width: 130px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1871,21 +2175,12 @@
 
   // src/content/hud-overlay.ts
   var HIST_LABELS = ["<0.9s", "1.8s", "3.2s", "5.5s", "9.5s", "18s", "18s+"];
-  function countryToFlagEmoji(code) {
-    if (!code || code.length !== 2) return "";
-    const upper = code.toUpperCase();
-    const A = 127462;
-    const first = upper.charCodeAt(0) - 65;
-    const second = upper.charCodeAt(1) - 65;
-    if (first < 0 || first > 25 || second < 0 || second > 25) return "";
-    return String.fromCodePoint(A + first, A + second);
-  }
   function barColor(score) {
-    if (score < 25) return "#10b981";
-    if (score < 45) return "#38bdf8";
-    if (score < 68) return "#f59e0b";
-    if (score < 82) return "#f97316";
-    return "#ef4444";
+    if (score < 25) return "#81b64c";
+    if (score < 45) return "#6ba4d9";
+    if (score < 68) return "#e59934";
+    if (score < 82) return "#e06c35";
+    return "#e04644";
   }
   var SentinelHudOverlay = class {
     host = null;
@@ -1896,10 +2191,13 @@
     callbacks;
     currentResult = null;
     liveClock = null;
+    surface = "live";
     selectedFormat = "blitz";
+    activeTab = "overview";
+    expandedMatchIdx = null;
     isMinimized = false;
     isHidden = true;
-    detailsExpanded = true;
+    detailsExpanded = false;
     isAbortWindowOpen = false;
     isWatched = false;
     copiedFeedback = false;
@@ -1908,8 +2206,8 @@
     dragging = false;
     dragStartX = 0;
     dragStartY = 0;
-    startRight = 20;
-    startTop = 72;
+    startRight = 16;
+    startTop = 64;
     constructor(settings, callbacks) {
       this.settings = settings;
       this.callbacks = callbacks;
@@ -1957,9 +2255,19 @@
       }
     }
     updateLiveClock(telemetry) {
+      const wasSuspect = Boolean(this.liveClock?.isLiveSuspectPacing);
       this.liveClock = telemetry;
+      if (telemetry?.isLiveSuspectPacing && !wasSuspect) {
+        this.activeTab = "clock";
+      }
       if (this.currentResult && !this.isHidden) {
         this.render();
+      }
+    }
+    setSurface(surface) {
+      if (this.surface !== surface) {
+        this.surface = surface;
+        if (this.currentResult && !this.isHidden) this.render();
       }
     }
     setWatchedState(watched) {
@@ -1977,18 +2285,25 @@
       this.loadingUsername = username;
       this.currentResult = null;
       this.liveClock = null;
+      this.expandedMatchIdx = null;
       this.isHidden = false;
       this.render();
       this.syncVisibility();
     }
-    showResult(result, watched, isAbortWindowOpen) {
+    showResult(result, watched, isAbortWindowOpen, surface = "live") {
       this.mount();
+      const isNewUser = this.currentResult?.username !== result.username;
       this.loadingUsername = null;
       this.currentResult = result;
       this.selectedFormat = result.primaryFormat;
       this.isWatched = watched;
       this.isAbortWindowOpen = isAbortWindowOpen;
+      this.surface = surface;
       this.copiedFeedback = false;
+      if (isNewUser) {
+        this.activeTab = "overview";
+        this.expandedMatchIdx = null;
+      }
       this.isHidden = false;
       this.render();
       this.syncVisibility();
@@ -2002,7 +2317,6 @@
       setSafeHtml(
         this.cardEl,
         `
-      <div class="tier-accent-line"></div>
       ${this.renderHeaderHtml(lang)}
       <div class="loading-box">
         <div>
@@ -2082,30 +2396,35 @@
         }
       });
     }
+    getTargetLiveClock(res) {
+      if (!this.liveClock) return null;
+      const lcUser = this.liveClock.opponent.toLowerCase();
+      if (lcUser === res.username.toLowerCase() || lcUser === res.displayName.toLowerCase()) {
+        return this.liveClock;
+      }
+      return null;
+    }
     renderHeaderHtml(lang) {
       const t = TRANSLATIONS[lang];
       const nextLang = lang === "tr" ? "EN" : "TR";
-      const soundIcon = this.settings.soundAlerts ? "\u{1F514}" : "\u{1F515}";
-      const soundTitle = this.settings.soundAlerts ? t.actions.soundOn : t.actions.soundOff;
+      const surfLabel = t.surfaceBadge[this.surface];
+      const surfCls = this.surface === "live" ? "live" : "";
       return `
       <div class="hud-header" data-drag-handle="1">
         <div class="brand">
-          <svg class="brand-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-            <path d="M12 2L4 5.5v6.2c0 5.3 3.4 9.9 8 11.3 4.6-1.4 8-6 8-11.3V5.5L12 2z"/>
-            <path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+          <span class="brand-dot"></span>
           <span class="brand-title">Chess Sentinel</span>
+          <span class="surface-tag ${surfCls}">${escapeHtml(surfLabel)}</span>
         </div>
         <div class="header-actions">
-          <button class="icon-btn lang-btn" data-action="lang" title="Switch Language / Dil De\u011Fi\u015Ftir">${nextLang}</button>
-          <button class="icon-btn" data-action="sound" title="${escapeHtml(soundTitle)}">${soundIcon}</button>
-          <button class="icon-btn" data-action="swap" title="${escapeHtml(t.actions.swapTarget)}">\u21C5</button>
+          <button class="icon-btn lang-btn" data-action="lang" title="TR / EN">${nextLang}</button>
+          ${this.surface !== "profile" ? `<button class="icon-btn" data-action="swap" title="${escapeHtml(t.actions.swapTarget)}">${ICONS.swap}</button>` : ""}
           ${this.currentResult ? `<button class="icon-btn ${this.isWatched ? "active" : ""}" data-action="watch" title="${escapeHtml(
         this.isWatched ? t.actions.watchingSuspect : t.actions.watchSuspect
-      )}">\u{1F441}</button>` : ""}
-          <button class="icon-btn" data-action="refresh" title="${escapeHtml(t.actions.refresh)}">\u21BB</button>
-          <button class="icon-btn" data-action="minimize" title="${escapeHtml(t.actions.minimize)}">\u2014</button>
-          <button class="icon-btn" data-action="close" title="Close">\u2715</button>
+      )}">${this.isWatched ? ICONS.bookmarkFilled : ICONS.bookmark}</button>` : ""}
+          <button class="icon-btn" data-action="refresh" title="${escapeHtml(t.actions.refresh)}">${ICONS.refresh}</button>
+          <button class="icon-btn" data-action="minimize" title="${escapeHtml(t.actions.minimize)}">${ICONS.minimize}</button>
+          <button class="icon-btn" data-action="close" title="Close">${ICONS.close}</button>
         </div>
       </div>
     `;
@@ -2151,37 +2470,37 @@
         });
       });
     }
-    renderAutoVerdictHtml(res, displayProb, lang) {
+    resolveStatusLine(res, displayProb, lang) {
       const t = TRANSLATIONS[lang].v3;
-      const lc = this.liveClock && (this.liveClock.opponent.toLowerCase() === res.username.toLowerCase() || this.liveClock.opponent.toLowerCase() === res.displayName.toLowerCase()) ? this.liveClock : null;
-      let variant = "safe";
-      let message = t.verdictCleanSafe;
+      const lc = this.getTargetLiveClock(res);
       if (res.isBannedFairPlay) {
-        variant = "danger";
-        message = t.verdictBanned;
-      } else if (lc && lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null) {
-        variant = "danger";
-        if (lc.pauseMoveNumber !== null && lc.detectedPauseSec !== null) {
-          message = t.verdictLiveToggle.replace("{pauseMove}", String(lc.pauseMoveNumber)).replace("{pauseSec}", String(lc.detectedPauseSec)).replace("{start}", String(lc.roboticStartMove)).replace("{end}", String(lc.roboticEndMove)).replace("{min}", String(lc.roboticMinSec ?? "\u2014")).replace("{max}", String(lc.roboticMaxSec ?? "\u2014"));
-        } else {
-          message = t.verdictLiveFlatline.replace("{start}", String(lc.roboticStartMove)).replace("{end}", String(lc.roboticEndMove)).replace("{count}", String(lc.consecutiveRoboticMoves)).replace("{min}", String(lc.roboticMinSec ?? "\u2014")).replace("{max}", String(lc.roboticMaxSec ?? "\u2014"));
-        }
-      } else if (displayProb >= 75) {
-        variant = "danger";
-        message = this.isAbortWindowOpen ? t.verdictAbortNow.replace("{pins}", String(Math.max(1, res.suspectPinpoints.length))) : t.verdictHighWatch;
-      } else if (displayProb >= 55) {
-        variant = "warn";
-        message = t.verdictElevatedWatch;
-      } else if (res.flags.some((f) => f.id === "smurf_human_pacing")) {
-        variant = "smurf";
-        message = t.verdictSmurfHuman;
+        return { cls: "danger", message: t.verdictBanned };
       }
-      return `
-      <div class="auto-verdict-card ${variant}">
-        <div class="auto-verdict-head">${escapeHtml(t.autoVerdictTitle)}</div>
-        <div class="auto-verdict-text">${escapeHtml(message)}</div>
-      </div>
-    `;
+      if (lc && lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null) {
+        if (lc.pauseMoveNumber !== null && lc.detectedPauseSec !== null) {
+          return {
+            cls: "danger",
+            message: t.verdictLiveToggle.replace("{pauseMove}", String(lc.pauseMoveNumber)).replace("{pauseSec}", String(lc.detectedPauseSec)).replace("{start}", String(lc.roboticStartMove)).replace("{end}", String(lc.roboticEndMove)).replace("{min}", String(lc.roboticMinSec ?? "-")).replace("{max}", String(lc.roboticMaxSec ?? "-"))
+          };
+        }
+        return {
+          cls: "danger",
+          message: t.verdictLiveFlatline.replace("{start}", String(lc.roboticStartMove)).replace("{end}", String(lc.roboticEndMove)).replace("{count}", String(lc.consecutiveRoboticMoves)).replace("{min}", String(lc.roboticMinSec ?? "-")).replace("{max}", String(lc.roboticMaxSec ?? "-"))
+        };
+      }
+      if (displayProb >= 75) {
+        return {
+          cls: "danger",
+          message: this.isAbortWindowOpen ? t.verdictAbortNow.replace("{pins}", String(Math.max(1, res.suspectPinpoints.length))) : t.verdictHighWatch
+        };
+      }
+      if (displayProb >= 55) {
+        return { cls: "warn", message: t.verdictElevatedWatch };
+      }
+      if (res.flags.some((f) => f.id === "smurf_human_pacing")) {
+        return { cls: "", message: t.verdictSmurfHuman };
+      }
+      return { cls: "", message: t.verdictCleanSafe };
     }
     renderSuspectPinpointsHtml(res, lang) {
       if (!res.suspectPinpoints || res.suspectPinpoints.length === 0) return "";
@@ -2190,20 +2509,21 @@
         const href = p.gameUrl || `https://www.chess.com/member/${encodeURIComponent(res.displayName)}`;
         let desc = "";
         if (p.kind === "midgame_toggle") {
-          desc = `\u23F8\u2192\u{1F916} ${t.pinpointToggleRow.replace("{pauseMove}", String(p.pauseMoveNumber ?? "?")).replace("{pauseSec}", String(p.pauseSec ?? "?")).replace("{start}", String(p.suspectStartMove)).replace("{end}", String(p.suspectEndMove)).replace("{min}", String(p.minBandSec ?? "\u2014")).replace("{max}", String(p.maxBandSec ?? "\u2014"))}`;
+          desc = t.pinpointToggleRow.replace("{pauseMove}", String(p.pauseMoveNumber ?? "?")).replace("{pauseSec}", String(p.pauseSec ?? "?")).replace("{start}", String(p.suspectStartMove)).replace("{end}", String(p.suspectEndMove)).replace("{min}", String(p.minBandSec ?? "-")).replace("{max}", String(p.maxBandSec ?? "-"));
         } else if (p.kind === "robotic_flatline") {
-          desc = `\u{1F916} ${t.pinpointFlatlineRow.replace("{start}", String(p.suspectStartMove)).replace("{end}", String(p.suspectEndMove)).replace("{count}", String(p.roboticMoveCount)).replace("{min}", String(p.minBandSec ?? "\u2014")).replace("{max}", String(p.maxBandSec ?? "\u2014"))}`;
+          desc = t.pinpointFlatlineRow.replace("{start}", String(p.suspectStartMove)).replace("{end}", String(p.suspectEndMove)).replace("{count}", String(p.roboticMoveCount)).replace("{min}", String(p.minBandSec ?? "-")).replace("{max}", String(p.maxBandSec ?? "-"));
         } else {
-          desc = `\u{1F3AF} ${t.pinpointCapsRow.replace("{end}", String(p.suspectEndMove)).replace("{acc}", String(p.accuracy ?? "\u2014"))}`;
+          desc = t.pinpointCapsRow.replace("{end}", String(p.suspectEndMove)).replace("{acc}", String(p.accuracy ?? "-"));
         }
-        const sanHtml = p.sampleMoves && p.sampleMoves.length > 0 ? `<div class="pinpoint-san">${escapeHtml(p.sampleMoves.join("  "))}${p.accuracy !== null ? ` \u2022 CAPS2: %${p.accuracy}` : ""}</div>` : p.accuracy !== null && p.kind !== "caps2_spike" ? `<div class="pinpoint-san">CAPS2: %${p.accuracy}</div>` : "";
+        const sanHtml = p.sampleMoves && p.sampleMoves.length > 0 ? `<div class="pinpoint-san">${escapeHtml(p.sampleMoves.join("  "))}${p.accuracy !== null ? ` \xB7 %${p.accuracy}` : ""}</div>` : p.accuracy !== null && p.kind !== "caps2_spike" ? `<div class="pinpoint-san">CAPS2 %${p.accuracy}</div>` : "";
         return `
           <div class="pinpoint-item">
             <div class="pinpoint-head">
               <span>vs @${escapeHtml(p.opponentUsername)} (${p.opponentRating})</span>
-              <a class="pinpoint-open" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(
-          t.pinpointOpenGame
-        )}</a>
+              <a class="pinpoint-open" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">
+                <span>${escapeHtml(t.pinpointOpenGame)}</span>
+                ${ICONS.external}
+              </a>
             </div>
             <div class="pinpoint-body">${escapeHtml(desc)}</div>
             ${sanHtml}
@@ -2212,195 +2532,52 @@
       }).join("");
       return `
       <div class="pinpoint-panel">
-        <div class="pinpoint-title">${escapeHtml(t.pinpointSectionTitle)}</div>
+        <div class="sec-head">
+          <span>${escapeHtml(t.pinpointSectionTitle)}</span>
+          <span>${res.suspectPinpoints.length}</span>
+        </div>
         ${itemsHtml}
       </div>
     `;
     }
-    renderLiveClockHtml(lang) {
-      const lc = this.liveClock;
-      if (!lc || lc.movesObserved < 3) return "";
-      if (this.currentResult && lc.opponent.toLowerCase() !== this.currentResult.username.toLowerCase() && lc.opponent.toLowerCase() !== this.currentResult.displayName.toLowerCase()) {
-        return "";
-      }
+    renderOverviewTabHtml(res, lang) {
       const t = TRANSLATIONS[lang];
-      const maxSec = Math.max(12, ...lc.moveTimesSec);
-      const barsHtml = lc.moveTimesSec.map((sec, idx) => {
-        const moveNo = lc.moveNumbers?.[idx] ?? idx + 2;
-        const san = lc.moveSanLabels?.[idx] || "";
-        const isPauseMove = lc.pauseMoveNumber !== null && moveNo === lc.pauseMoveNumber;
-        const isInRoboticRange = lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null && moveNo >= lc.roboticStartMove && moveNo <= lc.roboticEndMove;
-        const hPx = Math.max(4, Math.min(20, Math.round(sec / maxSec * 20)));
-        const color = isPauseMove ? "#f59e0b" : isInRoboticRange ? "#ef4444" : sec <= 1.8 ? "#34d399" : sec >= 18 ? "#f59e0b" : "#38bdf8";
-        const numCls = isPauseMove ? "pause" : isInRoboticRange ? "suspect" : "";
-        const tip = `#${moveNo}${san ? ` (${san})` : ""}: ${sec}s`;
-        return `
-          <div class="live-spark-item" title="${escapeHtml(tip)}">
-            <div class="live-spark-col" style="height:${hPx}px;background:${color}"></div>
-            <span class="live-spark-num ${numCls}">${moveNo}</span>
-          </div>
-        `;
-      }).join("");
-      const statsText = t.v3.liveClockMoves.replace("{count}", String(lc.movesObserved)).replace("{mean}", String(lc.liveMeanSec ?? "\u2014")).replace("{qcd}", String(lc.liveQCD ?? "\u2014"));
-      let pinpointMsg = "";
-      if (lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null) {
-        if (lc.pauseMoveNumber !== null && lc.detectedPauseSec !== null) {
-          pinpointMsg = t.v3.livePinpointToggle.replace("{pauseMove}", String(lc.pauseMoveNumber)).replace("{pauseSec}", String(lc.detectedPauseSec)).replace("{start}", String(lc.roboticStartMove)).replace("{end}", String(lc.roboticEndMove)).replace("{min}", String(lc.roboticMinSec ?? "\u2014")).replace("{max}", String(lc.roboticMaxSec ?? "\u2014"));
-        } else {
-          pinpointMsg = t.v3.livePinpointFlatline.replace("{start}", String(lc.roboticStartMove)).replace("{end}", String(lc.roboticEndMove)).replace("{count}", String(lc.consecutiveRoboticMoves)).replace("{min}", String(lc.roboticMinSec ?? "\u2014")).replace("{max}", String(lc.roboticMaxSec ?? "\u2014"));
-        }
-      } else if (lc.isLiveSuspectPacing) {
-        pinpointMsg = t.v3.liveClockSuspect;
-      }
-      return `
-      <div class="live-clock-box ${lc.isLiveSuspectPacing ? "suspect" : ""}">
-        <div class="live-clock-head">
-          <span>${escapeHtml(t.v3.liveClockTitle)}</span>
-          <span>${escapeHtml(statsText)}</span>
-        </div>
-        <div class="live-spark-bars">${barsHtml}</div>
-        ${pinpointMsg ? `<div class="live-suspect-msg">${escapeHtml(pinpointMsg)}</div>` : ""}
-      </div>
-    `;
-    }
-    renderHistogramHtml(res, lang) {
-      if (res.pacing.gamesAnalyzed < 4 || res.pacing.bucketDistribution.length < 7) return "";
-      const t = TRANSLATIONS[lang];
-      const dist = res.pacing.bucketDistribution;
-      const maxRatio = Math.max(0.25, ...dist);
-      const colsHtml = dist.map((ratio, idx) => {
-        const hPx = Math.max(3, Math.round(ratio / maxRatio * 30));
-        const isRoboticZone = (idx === 3 || idx === 4) && res.signals.movePacing >= 55;
-        const color = isRoboticZone ? "#ef4444" : idx <= 1 ? "#34d399" : idx >= 5 ? "#38bdf8" : "#60a5fa";
-        const pct = Math.round(ratio * 100);
-        return `
-          <div class="hist-col-wrap" title="${HIST_LABELS[idx]}: ${pct}%">
-            <div class="hist-bar" style="height:${hPx}px;background:${color}"></div>
-            <span class="hist-lbl">${HIST_LABELS[idx]}</span>
-          </div>
-        `;
-      }).join("");
-      const entTag = t.v3.pacingEntropyTag.replace("{ent}", String(res.pacing.meanEntropyBits ?? "\u2014")).replace("{qcd}", String(res.pacing.medianQCD ?? "\u2014"));
-      return `
-      <div class="hist-card">
-        <div class="sub-sec-head">
-          <span>${escapeHtml(t.v3.pacingHistTitle)}</span>
-          <span>${escapeHtml(entTag)}</span>
-        </div>
-        <div class="hist-grid">${colsHtml}</div>
-      </div>
-    `;
-    }
-    renderRecentMatchesHtml(res, lang) {
-      if (!res.recentMatches || res.recentMatches.length === 0) return "";
-      const t = TRANSLATIONS[lang];
-      const bandCeiling = res.formats[res.primaryFormat]?.highAccCeiling ?? 92;
-      const rowsHtml = res.recentMatches.slice(0, 5).map((m) => {
-        const resLbl = lang === "tr" ? m.result === "W" ? "G" : m.result === "L" ? "M" : "B" : m.result;
-        const movesCount = Math.max(1, Math.round(m.plies / 2));
-        const accHtml = m.accuracy !== null ? `<span class="match-acc ${m.accuracy >= bandCeiling ? "high" : ""}">${m.accuracy}%</span>` : "";
-        const pinHtml = m.pinpointMoveRange ? `<span class="match-pin-tag">\u{1F3AF} ${escapeHtml(m.pinpointMoveRange)}</span>` : "";
-        const href = m.url || `https://www.chess.com/member/${encodeURIComponent(res.displayName)}`;
-        return `
-          <a class="match-row" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">
-            <div class="match-left">
-              <span class="match-res ${m.result}">${resLbl}</span>
-              <span class="match-opp">vs @${escapeHtml(m.opponentUsername)} (${m.opponentRating})</span>
-            </div>
-            <div class="match-right">
-              ${pinHtml}
-              ${accHtml}
-              <span>${movesCount}m</span>
-            </div>
-          </a>
-        `;
-      }).join("");
-      return `
-      <div class="hist-card">
-        <div class="sub-sec-head">
-          <span>${escapeHtml(t.v3.recentMatchesTitle)}</span>
-          <span>${res.analyzedGamesCount} total</span>
-        </div>
-        <div class="matches-card">${rowsHtml}</div>
-      </div>
-    `;
-    }
-    render() {
-      if (!this.cardEl || !this.minPillEl) return;
-      const lang = this.settings.language;
-      const t = TRANSLATIONS[lang];
-      if (this.loadingUsername && !this.currentResult) {
-        this.cardEl.style.setProperty("--tier-color", "#38bdf8");
-        this.cardEl.style.setProperty("--tier-border", "rgba(56, 189, 248, 0.3)");
-        this.cardEl.style.setProperty("--tier-glow", "rgba(56, 189, 248, 0.25)");
-        setSafeHtml(
-          this.cardEl,
-          `
-        <div class="tier-accent-line"></div>
-        ${this.renderHeaderHtml(lang)}
-        <div class="loading-box">
-          <div class="spinner"></div>
-          <div>
-            <div class="loading-text">@${escapeHtml(this.loadingUsername)}</div>
-            <div class="loading-sub">${escapeHtml(t.scanningOpponent)}</div>
-          </div>
-        </div>
-      `
-        );
-        setSafeHtml(
-          this.minPillEl,
-          `<span class="min-pct">\u2026</span><span class="min-user">@${escapeHtml(this.loadingUsername)}</span>`
-        );
-        this.bindHeaderEvents();
-        return;
-      }
-      const res = this.currentResult;
-      if (!res) return;
-      const theme = TIER_THEMES[res.tier];
-      this.cardEl.style.setProperty("--tier-color", theme.color);
-      this.cardEl.style.setProperty("--tier-bg", theme.accentBg);
-      this.cardEl.style.setProperty("--tier-border", theme.border);
-      this.cardEl.style.setProperty("--tier-glow", theme.glow);
-      this.minPillEl.style.setProperty("--tier-color", theme.color);
-      this.minPillEl.style.setProperty("--tier-border", theme.border);
-      this.minPillEl.style.setProperty("--tier-glow", theme.glow);
       const fmtData = res.formats[this.selectedFormat] || res.formats[res.primaryFormat];
-      const displayProb = res.isBannedFairPlay ? 100 : this.selectedFormat === res.primaryFormat ? res.probability : fmtData.formatProbability;
-      const radius = 35;
-      const circ = 2 * Math.PI * radius;
-      const offset = circ - Math.min(100, Math.max(0, displayProb)) / 100 * circ;
-      let alertHtml = "";
-      if (res.isBannedFairPlay) {
-        alertHtml = `<div class="alert-banner banned">\u{1F6A8} ${escapeHtml(t.bannedFairPlayBanner)}</div>`;
-      } else if (this.isAbortWindowOpen && displayProb >= 75) {
-        alertHtml = `<div class="alert-banner abort-warn">\u26A0\uFE0F ${escapeHtml(t.abortWindowActive)} \u2014 ${escapeHtml(
-          t.considerAborting
-        )}</div>`;
-      } else if (this.isAbortWindowOpen && displayProb < 30) {
-        alertHtml = `<div class="alert-banner abort-safe">\u{1F6E1}\uFE0F ${escapeHtml(t.safeToPlay)}</div>`;
-      }
-      const flagEmoji = countryToFlagEmoji(res.countryCode);
-      const avatarHtml = res.avatarUrl ? `<img class="avatar" src="${escapeHtml(res.avatarUrl)}" alt="" />` : `<div class="avatar">${escapeHtml(res.displayName.slice(0, 1).toUpperCase())}</div>`;
-      const titleBadgeHtml = res.title ? `<span class="title-pill">${escapeHtml(res.title.toUpperCase())}</span>` : "";
-      const verdictText = res.isBannedFairPlay ? t.tiers.banned.summary : displayProb >= 75 ? t.considerAborting : displayProb >= 55 ? t.cautionAdvised : t.safeToPlay;
-      const ageStr = formatAgeShort(res.accountAgeDays, lang);
-      const accStr = fmtData.avgAccuracy !== null ? `${fmtData.avgAccuracy}%` : "\u2014";
+      const formatTabsHtml = LIVE_FORMATS.map((fmt) => {
+        const f = res.formats[fmt];
+        const active = fmt === this.selectedFormat ? "active" : "";
+        const elo = f.currentRating ? String(f.currentRating) : "-";
+        return `
+        <button class="fmt-tab ${active}" data-fmt="${fmt}">
+          <span>${fmt}</span>
+          <span class="fmt-elo">${elo}</span>
+        </button>
+      `;
+      }).join("");
+      const formDotsHtml = res.recentForm.slice(0, 6).map((r) => `<span class="form-dot ${r}"></span>`).join("");
+      const wldVal = fmtData.recentTotal > 0 ? lang === "tr" ? `${fmtData.recentWins}G ${fmtData.recentLosses}M ${fmtData.recentDraws}B` : `${fmtData.recentWins}W ${fmtData.recentLosses}L ${fmtData.recentDraws}D` : lang === "tr" ? `%${fmtData.overallWinPct}` : `${fmtData.overallWinPct}%`;
+      const wldSub = fmtData.recentTotal > 0 ? `%${fmtData.recentWinPct}` : `${fmtData.overallTotal}`;
+      const perfStr = fmtData.performanceRating ? String(fmtData.performanceRating) : "-";
+      const zSign = fmtData.eloZScore >= 0 ? "+" : "";
+      const zClass = fmtData.eloZScore >= 2.8 ? "warn" : "";
+      const accStr = fmtData.avgAccuracy !== null ? `${fmtData.avgAccuracy}%` : "-";
       const accClass = fmtData.avgAccuracy !== null && fmtData.avgAccuracy - fmtData.expectedAccuracy >= 4 ? "neg" : fmtData.avgAccuracy !== null ? "pos" : "";
       const cvVal = res.pacing.medianCV;
-      const cvStr = cvVal !== null ? String(cvVal) : "\u2014";
-      const cvClass = cvVal !== null && cvVal < 0.48 ? "neg" : cvVal !== null && cvVal < 0.62 ? "warn" : "pos";
+      const qcdVal = res.pacing.medianQCD;
+      const paceStr = cvVal !== null ? `CV ${cvVal}` : "-";
+      const paceSub = qcdVal !== null ? `QCD ${qcdVal}` : "";
+      const cvClass = cvVal !== null && cvVal < 0.45 ? "neg" : cvVal !== null && cvVal < 0.6 ? "warn" : "pos";
       const d7 = fmtData.eloDelta7d;
       const d7Str = d7 === null ? "0" : d7 > 0 ? `+${d7}` : `${d7}`;
-      const d7Class = d7 !== null && d7 >= 90 ? "warn" : d7 !== null && d7 > 0 ? "pos" : "";
-      const formDotsHtml = res.recentForm.map((r) => {
-        const lbl = lang === "tr" ? r === "W" ? "G" : r === "L" ? "M" : "B" : r;
-        return `<span class="form-dot ${r}">${lbl}</span>`;
-      }).join("");
-      const wldLabel = fmtData.recentTotal > 0 ? lang === "tr" ? `Son: ${fmtData.recentWins}G ${fmtData.recentLosses}M ${fmtData.recentDraws}B (%${fmtData.recentWinPct})` : `Recent: ${fmtData.recentWins}W ${fmtData.recentLosses}L ${fmtData.recentDraws}D (${fmtData.recentWinPct}%)` : lang === "tr" ? `Genel: %${fmtData.overallWinPct} (${fmtData.overallTotal})` : `All: ${fmtData.overallWinPct}% (${fmtData.overallTotal})`;
+      const d7Class = d7 !== null && d7 >= 100 ? "warn" : d7 !== null && d7 > 0 ? "pos" : "";
+      const streakSub = res.winStreak >= 2 ? lang === "tr" ? `${res.winStreak}G seri` : `${res.winStreak}W streak` : "";
+      const ageStr = formatAgeShort(res.accountAgeDays, lang);
+      const totalGames = res.formats.rapid.overallTotal + res.formats.blitz.overallTotal + res.formats.bullet.overallTotal + res.formats.daily.overallTotal;
+      const gamesSub = t.stats.lifetimeGames.replace("{count}", String(totalGames));
       const flagsHtml = res.flags.map(
         (f) => `
-        <div class="flag-chip ${f.severity}">
-          <span>${f.icon}</span>
+        <div class="flag-line">
+          <span class="flag-dot ${f.severity}"></span>
           <span>${escapeHtml(formatFlag(lang, f.id, f.params))}</span>
         </div>
       `
@@ -2418,7 +2595,7 @@
         <div class="sig-row">
           <div class="sig-head">
             <span>${escapeHtml(s.label)}</span>
-            <span class="sig-score">${s.score}/100</span>
+            <span class="sig-score">${s.score}</span>
           </div>
           <div class="sig-bar-bg">
             <div class="sig-bar-fill" style="width:${s.score}%;background:${barColor(s.score)}"></div>
@@ -2426,120 +2603,354 @@
         </div>
       `
       ).join("");
-      const formatTabsHtml = LIVE_FORMATS.map((fmt) => {
-        const f = res.formats[fmt];
-        const active = fmt === this.selectedFormat ? "active" : "";
-        const elo = f.currentRating ? String(f.currentRating) : "\u2014";
-        return `
-        <button class="fmt-tab ${active}" data-fmt="${fmt}">
-          <span>${fmt}</span>
-          <span class="fmt-elo">${elo}</span>
-        </button>
-      `;
-      }).join("");
-      const pctDisplay = lang === "tr" ? `<span>%</span>${displayProb}` : `${displayProb}<span>%</span>`;
-      setSafeHtml(
-        this.cardEl,
-        `
-      <div class="tier-accent-line"></div>
-      ${this.renderHeaderHtml(lang)}
-      <div class="hud-scroll-body">
-        ${alertHtml}
-        <div class="hero">
-          <div class="gauge-wrap">
-            <svg class="gauge-svg" viewBox="0 0 86 86">
-              <circle class="gauge-track" cx="43" cy="43" r="${radius}"></circle>
-              <circle
-                class="gauge-progress"
-                cx="43"
-                cy="43"
-                r="${radius}"
-                stroke-dasharray="${circ.toFixed(2)}"
-                stroke-dashoffset="${offset.toFixed(2)}"
-              ></circle>
-            </svg>
-            <div class="gauge-center">
-              <div class="gauge-pct">${pctDisplay}</div>
-              <div class="gauge-caption">${escapeHtml(t.cheatProbability)}</div>
-            </div>
-          </div>
-          <div class="identity">
-            <div class="player-row">
-              ${avatarHtml}
-              ${titleBadgeHtml}
-              <a class="username-link" href="https://www.chess.com/member/${encodeURIComponent(
-          res.displayName
-        )}" target="_blank" rel="noopener noreferrer">
-                ${escapeHtml(res.displayName)}
-              </a>
-              ${flagEmoji ? `<span>${flagEmoji}</span>` : ""}
-            </div>
-            <div class="tier-badge-row">
-              <span class="tier-pill">${escapeHtml(t.tiers[res.tier].label)}</span>
-              <span class="conf-tag">\u2022 ${escapeHtml(t.confidenceLabel[res.confidence])}</span>
-            </div>
-            <div class="verdict-sub">${escapeHtml(verdictText)}</div>
-          </div>
-        </div>
-
-        ${this.renderAutoVerdictHtml(res, displayProb, lang)}
-        ${this.renderLiveClockHtml(lang)}
-        ${this.renderSuspectPinpointsHtml(res, lang)}
-
+      return `
+      <div class="tab-pane">
         <div class="format-tabs">${formatTabsHtml}</div>
 
-        <div class="stat-grid">
-          <div class="stat-tile">
-            <div class="stat-val">${escapeHtml(ageStr)}</div>
-            <div class="stat-lbl">${escapeHtml(t.stats.accountAge)}</div>
+        <div class="metric-table">
+          <div class="metric-cell">
+            <div class="metric-lbl">
+              <span>${escapeHtml(t.stats.recentRecord)}</span>
+              <span class="form-dots">${formDotsHtml}</span>
+            </div>
+            <div class="metric-val">${escapeHtml(wldVal)} <span class="metric-sub">${escapeHtml(wldSub)}</span></div>
           </div>
-          <div class="stat-tile">
-            <div class="stat-val ${accClass}">${escapeHtml(accStr)}</div>
-            <div class="stat-lbl">${escapeHtml(t.stats.avgAccuracy)}</div>
+
+          <div class="metric-cell">
+            <div class="metric-lbl"><span>${escapeHtml(t.stats.performance)}</span></div>
+            <div class="metric-val ${zClass}">${escapeHtml(perfStr)} <span class="metric-sub">${zSign}${fmtData.eloZScore}\u03C3</span></div>
           </div>
-          <div class="stat-tile">
-            <div class="stat-val ${cvClass}">${escapeHtml(cvStr)}</div>
-            <div class="stat-lbl">${escapeHtml(t.stats.moveCV)}</div>
+
+          <div class="metric-cell">
+            <div class="metric-lbl"><span>${escapeHtml(t.stats.avgAccuracy)}</span></div>
+            <div class="metric-val ${accClass}">${escapeHtml(accStr)} <span class="metric-sub">${escapeHtml(t.stats.expectedShort)} ${fmtData.expectedAccuracy}%</span></div>
           </div>
-          <div class="stat-tile">
-            <div class="stat-val ${d7Class}">${escapeHtml(d7Str)}</div>
-            <div class="stat-lbl">${escapeHtml(t.stats.elo7d)}</div>
+
+          <div class="metric-cell">
+            <div class="metric-lbl"><span>${escapeHtml(t.stats.moveCV)}</span></div>
+            <div class="metric-val ${cvClass}">${escapeHtml(paceStr)} <span class="metric-sub">${escapeHtml(paceSub)}</span></div>
+          </div>
+
+          <div class="metric-cell">
+            <div class="metric-lbl"><span>${escapeHtml(t.stats.elo7d)}</span></div>
+            <div class="metric-val ${d7Class}">${escapeHtml(d7Str)} <span class="metric-sub">${escapeHtml(streakSub)}</span></div>
+          </div>
+
+          <div class="metric-cell">
+            <div class="metric-lbl"><span>${escapeHtml(t.stats.accountAge)}</span></div>
+            <div class="metric-val">${escapeHtml(ageStr)} <span class="metric-sub">${escapeHtml(gamesSub)}</span></div>
           </div>
         </div>
 
-        ${res.recentForm.length > 0 ? `<div class="form-strip">
-                <div class="form-dots">${formDotsHtml}</div>
-                <div class="wld-summary">${escapeHtml(wldLabel)}</div>
-              </div>` : ""}
-
+        ${this.renderSuspectPinpointsHtml(res, lang)}
         ${flagsHtml ? `<div class="flags-list">${flagsHtml}</div>` : ""}
 
         <button class="details-toggle" data-toggle-details="1">
           <span>${escapeHtml(this.detailsExpanded ? t.actions.hideDetails : t.actions.toggleDetails)}</span>
-          <span>${this.detailsExpanded ? "\u25B4" : "\u25BE"}</span>
+          ${this.detailsExpanded ? ICONS.chevronUp : ICONS.chevronDown}
         </button>
 
         <div class="signals-panel ${this.detailsExpanded ? "" : "collapsed"}">
           ${signalsHtml}
-          ${this.renderHistogramHtml(res, lang)}
-          ${this.renderRecentMatchesHtml(res, lang)}
-          <button class="copy-report-btn ${this.copiedFeedback ? "copied" : ""}" data-copy-report="1">
-            ${escapeHtml(this.copiedFeedback ? t.actions.copiedReport : t.actions.copyReport)}
+        </div>
+      </div>
+    `;
+    }
+    renderClockTabHtml(res, lang) {
+      const t = TRANSLATIONS[lang];
+      const lc = this.getTargetLiveClock(res);
+      let liveBoxHtml = "";
+      if (!lc || lc.movesObserved < 2) {
+        liveBoxHtml = `
+        <div class="chart-box">
+          <div class="sec-head"><span>${escapeHtml(t.v3.liveClockTitle)}</span></div>
+          <div class="empty-note">${escapeHtml(t.v3.emptyLiveClock)}</div>
+        </div>
+      `;
+      } else {
+        const maxSec = Math.max(12, ...lc.moveTimesSec);
+        const barsHtml = lc.moveTimesSec.map((sec, idx) => {
+          const moveNo = lc.moveNumbers?.[idx] ?? idx + 2;
+          const san = lc.moveSanLabels?.[idx] || "";
+          const isPauseMove = lc.pauseMoveNumber !== null && moveNo === lc.pauseMoveNumber;
+          const isInRoboticRange = lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null && moveNo >= lc.roboticStartMove && moveNo <= lc.roboticEndMove;
+          const hPx = Math.max(3, Math.min(32, Math.round(sec / maxSec * 32)));
+          const color = isPauseMove ? "#e59934" : isInRoboticRange ? "#e04644" : sec <= 1.8 ? "#81b64c" : sec >= 18 ? "#d9922b" : "#6ba4d9";
+          const numCls = isPauseMove ? "pause" : isInRoboticRange ? "suspect" : "";
+          const tip = `#${moveNo}${san ? ` (${san})` : ""}: ${sec}s`;
+          return `
+            <div class="live-spark-item" title="${escapeHtml(tip)}">
+              <div class="live-spark-col" style="height:${hPx}px;background:${color}"></div>
+              <span class="live-spark-num ${numCls}">${moveNo}</span>
+            </div>
+          `;
+        }).join("");
+        const recentChipsHtml = lc.moveTimesSec.slice(-8).map((sec, idx, arr) => {
+          const globalIdx = lc.moveTimesSec.length - arr.length + idx;
+          const moveNo = lc.moveNumbers?.[globalIdx] ?? globalIdx + 2;
+          const san = lc.moveSanLabels?.[globalIdx] || "";
+          const isSus = lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null && moveNo >= lc.roboticStartMove && moveNo <= lc.roboticEndMove;
+          return `<span class="move-chip ${isSus ? "suspect" : ""}">#${moveNo}${san ? ` ${escapeHtml(san)}` : ""} ${sec}s</span>`;
+        }).join("");
+        const statsText = t.v3.liveClockMoves.replace("{count}", String(lc.movesObserved)).replace("{mean}", String(lc.liveMeanSec ?? "-")).replace("{qcd}", String(lc.liveQCD ?? "-"));
+        let pinpointMsg = "";
+        if (lc.isLiveSuspectPacing && lc.roboticStartMove !== null && lc.roboticEndMove !== null) {
+          if (lc.pauseMoveNumber !== null && lc.detectedPauseSec !== null) {
+            pinpointMsg = t.v3.livePinpointToggle.replace("{pauseMove}", String(lc.pauseMoveNumber)).replace("{pauseSec}", String(lc.detectedPauseSec)).replace("{start}", String(lc.roboticStartMove)).replace("{end}", String(lc.roboticEndMove)).replace("{min}", String(lc.roboticMinSec ?? "-")).replace("{max}", String(lc.roboticMaxSec ?? "-"));
+          } else {
+            pinpointMsg = t.v3.livePinpointFlatline.replace("{start}", String(lc.roboticStartMove)).replace("{end}", String(lc.roboticEndMove)).replace("{count}", String(lc.consecutiveRoboticMoves)).replace("{min}", String(lc.roboticMinSec ?? "-")).replace("{max}", String(lc.roboticMaxSec ?? "-"));
+          }
+        } else if (lc.isLiveSuspectPacing) {
+          pinpointMsg = t.v3.liveClockSuspect;
+        }
+        const headTitle = lc.isFinishedGame ? t.v3.finishedClockTitle : t.v3.liveClockTitle;
+        liveBoxHtml = `
+        <div class="chart-box ${lc.isLiveSuspectPacing ? "suspect" : ""}">
+          <div class="sec-head">
+            <span>${escapeHtml(headTitle)}</span>
+            <span>${escapeHtml(statsText)}</span>
+          </div>
+          <div class="live-spark-bars">${barsHtml}</div>
+          <div class="move-chips">${recentChipsHtml}</div>
+          ${pinpointMsg ? `<div class="live-suspect-msg">${escapeHtml(pinpointMsg)}</div>` : ""}
+        </div>
+      `;
+      }
+      let histHtml = "";
+      if (res.pacing.gamesAnalyzed >= 4 && res.pacing.bucketDistribution.length >= 7) {
+        const dist = res.pacing.bucketDistribution;
+        const maxRatio = Math.max(0.25, ...dist);
+        const colsHtml = dist.map((ratio, idx) => {
+          const hPx = Math.max(2, Math.round(ratio / maxRatio * 32));
+          const isRoboticZone = (idx === 3 || idx === 4) && res.signals.movePacing >= 55;
+          const color = isRoboticZone ? "#e04644" : idx <= 1 ? "#81b64c" : "#6ba4d9";
+          const pct = Math.round(ratio * 100);
+          return `
+            <div class="hist-col-wrap" title="${HIST_LABELS[idx]}: ${pct}%">
+              <div class="hist-bar" style="height:${hPx}px;background:${color}"></div>
+              <span class="hist-lbl">${HIST_LABELS[idx]}</span>
+            </div>
+          `;
+        }).join("");
+        const entTag = t.v3.pacingEntropyTag.replace("{ent}", String(res.pacing.meanEntropyBits ?? "-")).replace("{qcd}", String(res.pacing.medianQCD ?? "-"));
+        histHtml = `
+        <div class="chart-box">
+          <div class="sec-head">
+            <span>${escapeHtml(t.v3.pacingHistTitle)}</span>
+            <span>${escapeHtml(entTag)}</span>
+          </div>
+          <div class="hist-grid">${colsHtml}</div>
+        </div>
+      `;
+      }
+      return `<div class="tab-pane">${liveBoxHtml}${histHtml}</div>`;
+    }
+    renderGamesTabHtml(res, lang) {
+      const t = TRANSLATIONS[lang];
+      if (!res.recentMatches || res.recentMatches.length === 0) {
+        return `<div class="tab-pane"><div class="empty-note">${escapeHtml(t.stats.noReviewedGames)}</div></div>`;
+      }
+      const bandCeiling = res.formats[res.primaryFormat]?.highAccCeiling ?? 92;
+      const rowsHtml = res.recentMatches.slice(0, 8).map((m, idx) => {
+        const resLbl = lang === "tr" ? m.result === "W" ? "G" : m.result === "L" ? "M" : "B" : m.result;
+        const movesCount = Math.max(1, Math.round(m.plies / 2));
+        const accHtml = m.accuracy !== null ? `<span class="match-acc ${m.accuracy >= bandCeiling ? "high" : ""}">${m.accuracy}%</span>` : "";
+        const pinHtml = m.pinpointMoveRange ? `<span class="match-pin-tag">${escapeHtml(m.pinpointMoveRange)}</span>` : "";
+        const href = m.url || `https://www.chess.com/member/${encodeURIComponent(res.displayName)}`;
+        const hasSpark = Array.isArray(m.moveTimesSec) && m.moveTimesSec.length >= 4;
+        const isExpanded = this.expandedMatchIdx === idx && hasSpark;
+        let drawerHtml = "";
+        if (isExpanded && m.moveTimesSec) {
+          const maxD = Math.max(10, ...m.moveTimesSec);
+          const bars = m.moveTimesSec.map((sec, sIdx) => {
+            const h = Math.max(2, Math.min(26, Math.round(sec / maxD * 26)));
+            const col = m.pinpointKind && sec >= 2.6 && sec <= 8.5 ? "#e04644" : sec <= 1.8 ? "#81b64c" : "#6ba4d9";
+            return `<div class="drawer-bar" style="height:${h}px;background:${col}" title="#${sIdx + 2}: ${sec}s"></div>`;
+          }).join("");
+          drawerHtml = `
+            <div class="match-drawer">
+              <div class="drawer-bars">${bars}</div>
+            </div>
+          `;
+        }
+        return `
+          <div class="match-block">
+            <div class="match-row">
+              <div class="match-left">
+                <span class="match-res ${m.result}">${resLbl}</span>
+                <span class="match-opp">@${escapeHtml(m.opponentUsername)}</span>
+                <span class="match-opp-elo">(${m.opponentRating})</span>
+              </div>
+              <div class="match-right">
+                ${pinHtml}
+                ${accHtml}
+                <span>${movesCount}m</span>
+                ${hasSpark ? `<button class="mini-link-btn ${isExpanded ? "active" : ""}" data-expand-match="${idx}" title="${escapeHtml(t.v3.inspectMoves)}">${ICONS.clock}</button>` : ""}
+                <a class="mini-link-btn" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(t.v3.pinpointOpenGame)}">${ICONS.external}</a>
+              </div>
+            </div>
+            ${drawerHtml}
+          </div>
+        `;
+      }).join("");
+      return `
+      <div class="tab-pane">
+        <div class="sec-head">
+          <span>${escapeHtml(t.v3.recentMatchesTitle)}</span>
+          <span>${escapeHtml(t.stats.gamesAnalyzed.replace("{count}", String(res.analyzedGamesCount)))}</span>
+        </div>
+        <div class="matches-list">${rowsHtml}</div>
+      </div>
+    `;
+    }
+    render() {
+      if (!this.cardEl || !this.minPillEl) return;
+      const lang = this.settings.language;
+      const t = TRANSLATIONS[lang];
+      if (this.loadingUsername && !this.currentResult) {
+        this.cardEl.style.setProperty("--tier-color", "#81b64c");
+        setSafeHtml(
+          this.cardEl,
+          `
+        ${this.renderHeaderHtml(lang)}
+        <div class="loading-box">
+          <div class="spinner"></div>
+          <div>
+            <div class="loading-text">@${escapeHtml(this.loadingUsername)}</div>
+            <div class="loading-sub">${escapeHtml(t.scanningOpponent)}</div>
+          </div>
+        </div>
+      `
+        );
+        setSafeHtml(
+          this.minPillEl,
+          `<span class="min-dot"></span><span class="min-pct">...</span><span class="min-user">@${escapeHtml(this.loadingUsername)}</span>`
+        );
+        this.bindHeaderEvents();
+        return;
+      }
+      const res = this.currentResult;
+      if (!res) return;
+      const lc = this.getTargetLiveClock(res);
+      const eff = computeEffectiveLiveRisk(res, lc, this.selectedFormat);
+      const theme = TIER_THEMES[eff.tier];
+      this.cardEl.style.setProperty("--tier-color", theme.color);
+      this.minPillEl.style.setProperty("--tier-color", theme.color);
+      const fmtData = res.formats[this.selectedFormat] || res.formats[res.primaryFormat];
+      const displayProb = eff.probability;
+      let alertHtml = "";
+      if (res.isBannedFairPlay) {
+        alertHtml = `<div class="alert-banner banned">${escapeHtml(t.bannedFairPlayBanner)}</div>`;
+      } else if (this.isAbortWindowOpen && displayProb >= 75) {
+        alertHtml = `<div class="alert-banner abort-warn">${escapeHtml(t.abortWindowActive)}: ${escapeHtml(
+          t.considerAborting
+        )}</div>`;
+      }
+      const avatarHtml = res.avatarUrl ? `<img class="avatar" src="${escapeHtml(res.avatarUrl)}" alt="" />` : `<div class="avatar">${escapeHtml(res.displayName.slice(0, 1).toUpperCase())}</div>`;
+      const titleBadgeHtml = res.title ? `<span class="title-pill">${escapeHtml(res.title.toUpperCase())}</span>` : "";
+      const isoHtml = res.countryCode && res.countryCode.length === 2 ? `<span class="iso-tag">${escapeHtml(res.countryCode.toUpperCase())}</span>` : "";
+      const fmtRatingLabel = `${this.selectedFormat.charAt(0).toUpperCase() + this.selectedFormat.slice(1)} ${fmtData.currentRating ?? "-"}`;
+      const pctText = lang === "tr" ? `%${displayProb}` : `${displayProb}%`;
+      const statusLine = this.resolveStatusLine(res, displayProb, lang);
+      const clockCountBadge = lc && lc.movesObserved >= 2 ? `<span class="tab-count ${lc.isLiveSuspectPacing ? "alert" : ""}">${lc.movesObserved}</span>` : "";
+      const gamesCountBadge = res.suspectPinpoints.length > 0 ? `<span class="tab-count alert">${res.suspectPinpoints.length}</span>` : `<span class="tab-count">${res.recentMatches.length}</span>`;
+      const tabContentHtml = this.activeTab === "overview" ? this.renderOverviewTabHtml(res, lang) : this.activeTab === "clock" ? this.renderClockTabHtml(res, lang) : this.renderGamesTabHtml(res, lang);
+      const soundIcon = this.settings.soundAlerts ? ICONS.bellOn : ICONS.bellOff;
+      const soundTitle = this.settings.soundAlerts ? t.actions.soundOn : t.actions.soundOff;
+      setSafeHtml(
+        this.cardEl,
+        `
+      ${this.renderHeaderHtml(lang)}
+      ${alertHtml}
+      <div class="hud-scroll-body">
+        <div class="hero">
+          <div class="hero-top">
+            <div class="identity">
+              ${avatarHtml}
+              <div class="id-meta">
+                <div class="player-row">
+                  ${titleBadgeHtml}
+                  <a class="username-link" href="https://www.chess.com/member/${encodeURIComponent(
+          res.displayName
+        )}" target="_blank" rel="noopener noreferrer">
+                    ${escapeHtml(res.displayName)}
+                  </a>
+                  ${isoHtml}
+                </div>
+                <div class="sub-meta-row">
+                  <span>${escapeHtml(fmtRatingLabel)}</span>
+                  <span>\xB7</span>
+                  <span>${escapeHtml(t.confidenceLabel[res.confidence])}</span>
+                </div>
+              </div>
+            </div>
+            <div class="score-readout">
+              <div class="score-num">${pctText}</div>
+              <div class="score-tier">${escapeHtml(t.tiers[eff.tier].label)}</div>
+            </div>
+          </div>
+
+          <div class="meter-wrap">
+            <div class="meter-track">
+              <div class="meter-fill" style="width:${Math.max(2, displayProb)}%"></div>
+            </div>
+          </div>
+          <div class="verdict-line ${statusLine.cls}">${escapeHtml(statusLine.message)}</div>
+        </div>
+
+        <div class="view-tabs">
+          <button class="view-tab ${this.activeTab === "overview" ? "active" : ""}" data-view-tab="overview">
+            <span>${escapeHtml(t.hudTabs.overview)}</span>
           </button>
+          <button class="view-tab ${this.activeTab === "clock" ? "active" : ""}" data-view-tab="clock">
+            <span>${escapeHtml(t.hudTabs.clock)}</span>
+            ${clockCountBadge}
+          </button>
+          <button class="view-tab ${this.activeTab === "games" ? "active" : ""}" data-view-tab="games">
+            <span>${escapeHtml(t.hudTabs.games)}</span>
+            ${gamesCountBadge}
+          </button>
+        </div>
+
+        ${tabContentHtml}
+      </div>
+
+      <div class="hud-footer">
+        <div class="footer-left">
+          <button class="footer-btn ${this.copiedFeedback ? "copied" : ""}" data-copy-report="1">
+            ${this.copiedFeedback ? ICONS.check : ICONS.copy}
+            <span>${escapeHtml(this.copiedFeedback ? t.actions.copiedReport : t.actions.copyReport)}</span>
+          </button>
+          <button class="footer-btn ${displayProb >= 45 ? "report-warn" : ""}" data-open-report="1" title="${escapeHtml(t.actions.openProfile)}">
+            ${ICONS.flag}
+            <span>${escapeHtml(t.actions.reportFairPlay)}</span>
+          </button>
+        </div>
+        <div class="footer-right">
+          <button class="icon-btn" data-action="sound" title="${escapeHtml(soundTitle)}">${soundIcon}</button>
+          <span class="kbd-hint">Alt+S</span>
         </div>
       </div>
     `
       );
-      const minPctText = lang === "tr" ? `%${displayProb}` : `${displayProb}%`;
       setSafeHtml(
         this.minPillEl,
         `
-      <span>\u{1F6E1}\uFE0F</span>
-      <span class="min-pct">${minPctText}</span>
+      <span class="min-dot"></span>
+      <span class="min-pct">${pctText}</span>
       <span class="min-user">@${escapeHtml(res.displayName)}</span>
     `
       );
       this.bindHeaderEvents();
+      this.cardEl.querySelectorAll("button[data-view-tab]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const tab = btn.dataset.viewTab;
+          if (tab && tab !== this.activeTab) {
+            this.activeTab = tab;
+            this.render();
+          }
+        });
+      });
       this.cardEl.querySelectorAll("button[data-fmt]").forEach((btn) => {
         btn.addEventListener("click", () => {
           const fmt = btn.dataset.fmt;
@@ -2556,10 +2967,17 @@
           this.render();
         });
       }
+      this.cardEl.querySelectorAll("button[data-expand-match]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const idx = Number(btn.dataset.expandMatch);
+          this.expandedMatchIdx = this.expandedMatchIdx === idx ? null : idx;
+          this.render();
+        });
+      });
       const copyBtn = this.cardEl.querySelector('[data-copy-report="1"]');
       if (copyBtn) {
         copyBtn.addEventListener("click", () => {
-          const text = buildFairPlayEvidenceReport(res, lang, this.liveClock);
+          const text = buildFairPlayEvidenceReport(res, lang, lc);
           void navigator.clipboard?.writeText(text).catch(() => {
           });
           this.copiedFeedback = true;
@@ -2567,7 +2985,20 @@
           setTimeout(() => {
             this.copiedFeedback = false;
             if (!this.isHidden) this.render();
-          }, 2200);
+          }, 2e3);
+        });
+      }
+      const reportBtn = this.cardEl.querySelector('[data-open-report="1"]');
+      if (reportBtn) {
+        reportBtn.addEventListener("click", () => {
+          const text = buildFairPlayEvidenceReport(res, lang, lc);
+          void navigator.clipboard?.writeText(text).catch(() => {
+          });
+          window.open(
+            `https://www.chess.com/member/${encodeURIComponent(res.displayName)}`,
+            "_blank",
+            "noopener,noreferrer"
+          );
         });
       }
     }
@@ -2585,25 +3016,27 @@
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      margin-left: 7px;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 11.5px;
-      font-weight: 700;
-      line-height: 1.35;
-      letter-spacing: 0.01em;
+      margin-left: 6px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: #21201d;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.4;
+      color: #e7e5e4;
       cursor: pointer;
       user-select: none;
       vertical-align: middle;
-      transition: transform 0.16s ease, filter 0.16s ease, box-shadow 0.16s ease;
-      backdrop-filter: blur(8px);
       white-space: nowrap;
+      transition: background-color 0.12s ease, border-color 0.12s ease;
       z-index: 20;
     }
     .${BADGE_CLASS}:hover {
-      transform: translateY(-1px) scale(1.03);
-      filter: brightness(1.12);
+      background: #2b2926;
+      border-color: rgba(255, 255, 255, 0.26);
     }
     .${BADGE_CLASS} .cs-pill-dot {
       width: 6px;
@@ -2611,17 +3044,37 @@
       border-radius: 50%;
       flex-shrink: 0;
     }
+    .${BADGE_CLASS} .cs-pill-prob {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-weight: 700;
+    }
     .${BADGE_CLASS} .cs-pill-wld {
-      opacity: 0.85;
-      font-weight: 600;
+      color: #a8a29e;
+      font-weight: 500;
       font-size: 10.5px;
-      padding-left: 4px;
-      border-left: 1px solid rgba(255, 255, 255, 0.16);
+      padding-left: 5px;
+      border-left: 1px solid rgba(255, 255, 255, 0.12);
     }
   `;
     document.head.appendChild(style);
   }
-  function findPlayerAnchorContainer(targetSide) {
+  function findProfileHeaderAnchor() {
+    const selectors = [
+      ".profile-card-username",
+      '[data-cy="profile-header-username"]',
+      ".profile-header-details-username",
+      ".v5-section-content-wide .profile-card-info h1"
+    ];
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (el) return el.parentElement || el;
+    }
+    return null;
+  }
+  function findPlayerAnchorContainer(targetSide, surface = "live") {
+    if (surface === "profile") {
+      return findProfileHeaderAnchor();
+    }
     const selectors = targetSide === "top" ? [
       "#board-layout-player-top .user-tagline-component",
       "#board-layout-top .user-tagline-component",
@@ -2658,31 +3111,29 @@
     }
     return null;
   }
-  function renderInlineUsernameBadge(result, targetSide, lang, onClick) {
+  function renderInlineUsernameBadge(result, targetSide, lang, onClick, options) {
     ensureInlineStyles();
     removeInlineUsernameBadges();
-    const container = findPlayerAnchorContainer(targetSide);
+    const container = findPlayerAnchorContainer(targetSide, options?.surface ?? "live");
     if (!container) return;
-    const theme = TIER_THEMES[result.tier];
+    const eff = computeEffectiveLiveRisk(result, options?.liveClock);
+    const theme = TIER_THEMES[eff.tier];
     const pf = result.formats[result.primaryFormat];
-    const probText = lang === "tr" ? `%${result.probability}` : `${result.probability}%`;
-    const wldText = pf.recentTotal > 0 ? lang === "tr" ? `${pf.recentWins}G/${pf.recentLosses}M` : `${pf.recentWins}W/${pf.recentLosses}L` : lang === "tr" ? `${pf.overallWins}G/${pf.overallLosses}M` : `${pf.overallWins}W/${pf.overallLosses}L`;
+    const probText = lang === "tr" ? `%${eff.probability}` : `${eff.probability}%`;
+    const wldText = pf.recentTotal > 0 ? lang === "tr" ? `${pf.recentWins}G-${pf.recentLosses}M` : `${pf.recentWins}W-${pf.recentLosses}L` : lang === "tr" ? `${pf.overallWins}G-${pf.overallLosses}M` : `${pf.overallWins}W-${pf.overallLosses}L`;
     const pill = document.createElement("span");
     pill.className = BADGE_CLASS;
-    pill.style.background = theme.accentBg;
-    pill.style.border = `1px solid ${theme.border}`;
-    pill.style.color = theme.color;
-    pill.style.boxShadow = `0 2px 10px ${theme.glow}`;
-    pill.title = lang === "tr" ? `Chess Sentinel \u2014 Hile Olas\u0131l\u0131\u011F\u0131: %${result.probability} (Detaylar i\xE7in t\u0131kla)` : `Chess Sentinel \u2014 Cheat Probability: ${result.probability}% (Click for HUD)`;
+    pill.style.borderColor = theme.border;
+    pill.title = lang === "tr" ? `Chess Sentinel: %${eff.probability} (Paneli acmak icin tikla)` : `Chess Sentinel: ${eff.probability}% (Click to open panel)`;
     const dot = document.createElement("span");
     dot.className = "cs-pill-dot";
     dot.style.background = theme.color;
-    dot.style.boxShadow = `0 0 6px ${theme.color}`;
     const probSpan = document.createElement("span");
+    probSpan.className = "cs-pill-prob";
+    probSpan.style.color = theme.color;
     probSpan.textContent = probText;
     const wldSpan = document.createElement("span");
     wldSpan.className = "cs-pill-wld";
-    wldSpan.style.color = "#e2e8f0";
     wldSpan.textContent = wldText;
     pill.append(dot, probSpan, wldSpan);
     pill.addEventListener("click", (e) => {
@@ -2723,13 +3174,13 @@
     }
     return sorted[base];
   }
-  function summarizeLiveMoveTimes(opponent, allMoveTimesSec, allMoveNumbers, allSanLabels) {
+  function summarizeLiveMoveTimes(opponent, allMoveTimesSec, allMoveNumbers, allSanLabels, meta) {
     const n = allMoveTimesSec.length;
     const resolvedMoveNums = allMoveNumbers && allMoveNumbers.length === n ? allMoveNumbers : Array.from({ length: n }, (_, idx) => idx + 2);
     const resolvedSan = allSanLabels && allSanLabels.length === n ? allSanLabels : Array.from({ length: n }, () => "");
-    const recentTimes = allMoveTimesSec.slice(-16);
-    const recentNums = resolvedMoveNums.slice(-16);
-    const recentSan = resolvedSan.slice(-16);
+    const recentTimes = allMoveTimesSec.slice(-24);
+    const recentNums = resolvedMoveNums.slice(-24);
+    const recentSan = resolvedSan.slice(-24);
     if (n < 4) {
       return {
         opponent,
@@ -2746,7 +3197,10 @@
         roboticEndMove: null,
         roboticMinSec: null,
         roboticMaxSec: null,
-        isLiveSuspectPacing: false
+        isLiveSuspectPacing: false,
+        source: meta?.source,
+        isFinishedGame: meta?.isFinishedGame,
+        gameId: meta?.gameId ?? null
       };
     }
     const evalMoves = n >= 6 ? allMoveTimesSec.slice(3) : allMoveTimesSec;
@@ -2805,7 +3259,10 @@
       roboticEndMove,
       roboticMinSec,
       roboticMaxSec,
-      isLiveSuspectPacing
+      isLiveSuspectPacing,
+      source: meta?.source,
+      isFinishedGame: meta?.isFinishedGame,
+      gameId: meta?.gameId ?? null
     };
   }
   var LiveMatchClockMonitor = class {
@@ -2816,25 +3273,49 @@
     moveTimesSec = [];
     moveNumbers = [];
     moveSanLabels = [];
+    source = "live_dom";
+    isFinishedGame = false;
+    gameId = null;
     wasTargetTurn = false;
     turnStartMs = 0;
     lastKnownPlyCount = 0;
     constructor(onUpdate) {
       this.onUpdate = onUpdate;
     }
-    setTarget(opponent, side) {
+    setTarget(opponent, side, gameId = null) {
       const normalized = opponent.toLowerCase();
-      if (this.targetOpponent?.toLowerCase() !== normalized || this.targetSide !== side) {
+      if (this.targetOpponent?.toLowerCase() !== normalized || this.targetSide !== side || gameId && this.gameId && gameId !== this.gameId) {
         this.targetOpponent = opponent;
         this.targetSide = side;
+        this.gameId = gameId;
         this.moveTimesSec = [];
         this.moveNumbers = [];
         this.moveSanLabels = [];
+        this.source = "live_dom";
+        this.isFinishedGame = false;
         this.wasTargetTurn = false;
         this.turnStartMs = 0;
         this.lastKnownPlyCount = this.countDomPlies();
+      } else if (gameId) {
+        this.gameId = gameId;
       }
       this.ensureRunning();
+    }
+    hydrateServerMoves(opponent, timesSec, moveNumbers, isFinished, gameId) {
+      if (!this.targetOpponent || this.targetOpponent.toLowerCase() !== opponent.toLowerCase()) {
+        return;
+      }
+      if (timesSec.length === 0 || timesSec.length < this.moveTimesSec.length) {
+        return;
+      }
+      this.moveTimesSec = [...timesSec];
+      this.moveNumbers = moveNumbers.length === timesSec.length ? [...moveNumbers] : Array.from({ length: timesSec.length }, (_, idx) => idx + 2);
+      this.moveSanLabels = Array.from({ length: timesSec.length }, () => "");
+      this.source = "server_callback";
+      this.isFinishedGame = isFinished;
+      this.gameId = gameId;
+      const snap = this.getLatestTelemetry();
+      if (snap) this.onUpdate(snap);
     }
     stop() {
       if (this.timer) {
@@ -2845,6 +3326,8 @@
       this.moveTimesSec = [];
       this.moveNumbers = [];
       this.moveSanLabels = [];
+      this.isFinishedGame = false;
+      this.gameId = null;
       this.wasTargetTurn = false;
     }
     getLatestTelemetry() {
@@ -2853,7 +3336,12 @@
         this.targetOpponent,
         this.moveTimesSec,
         this.moveNumbers,
-        this.moveSanLabels
+        this.moveSanLabels,
+        {
+          source: this.source,
+          isFinishedGame: this.isFinishedGame,
+          gameId: this.gameId
+        }
       );
     }
     ensureRunning() {
@@ -2941,7 +3429,12 @@
               this.targetOpponent,
               this.moveTimesSec,
               this.moveNumbers,
-              this.moveSanLabels
+              this.moveSanLabels,
+              {
+                source: this.source,
+                isFinishedGame: false,
+                gameId: this.gameId
+              }
             )
           );
         }
@@ -2956,10 +3449,12 @@
     detector = null;
     clockMonitor = null;
     lastCtx = null;
+    cachedCallback = null;
     targetSide = "top";
     activeUsername = null;
     latestResult = null;
     alertedUsernames = /* @__PURE__ */ new Set();
+    liveAlertedUsernames = /* @__PURE__ */ new Set();
     async init() {
       this.settings = await getSettings();
       this.hud = new SentinelHudOverlay(this.settings, {
@@ -2985,7 +3480,7 @@
         }
       });
       this.clockMonitor = new LiveMatchClockMonitor((telemetry) => {
-        this.hud?.updateLiveClock(telemetry);
+        this.handleLiveClockUpdate(telemetry);
       });
       this.detector = new ChessComOpponentDetector(
         (ctx) => this.handleMatchContext(ctx),
@@ -2996,6 +3491,26 @@
       this.setupStorageSync();
       this.setupRuntimeMessages();
     }
+    handleLiveClockUpdate(telemetry) {
+      this.hud?.updateLiveClock(telemetry);
+      if (this.latestResult && this.settings.showInlineBadge) {
+        renderInlineUsernameBadge(
+          this.latestResult,
+          this.targetSide,
+          this.settings.language,
+          () => this.hud?.expandFromBadge(),
+          {
+            liveClock: telemetry,
+            surface: this.lastCtx?.surface ?? "live"
+          }
+        );
+      }
+      const userKey = telemetry.opponent.toLowerCase();
+      if (telemetry.isLiveSuspectPacing && !telemetry.isFinishedGame && this.settings.soundAlerts && !this.liveAlertedUsernames.has(userKey)) {
+        this.liveAlertedUsernames.add(userKey);
+        playRiskAlertChime(true);
+      }
+    }
     async persistSettings(patch) {
       this.settings = await updateSettings(patch);
       this.hud?.updateSettings(this.settings);
@@ -3004,28 +3519,106 @@
           this.latestResult,
           this.targetSide,
           this.settings.language,
-          () => this.hud?.expandFromBadge()
+          () => this.hud?.expandFromBadge(),
+          {
+            liveClock: this.clockMonitor?.getLatestTelemetry(),
+            surface: this.lastCtx?.surface ?? "live"
+          }
         );
       }
     }
+    applyCallbackHydrationToSide(target, side) {
+      if (!this.cachedCallback || !this.clockMonitor) return;
+      const cb = this.cachedCallback;
+      const matchTop = cb.topPlayer?.toLowerCase() === target.toLowerCase();
+      const matchBottom = cb.bottomPlayer?.toLowerCase() === target.toLowerCase();
+      if (matchTop) {
+        this.clockMonitor.hydrateServerMoves(
+          target,
+          cb.topTimesSec,
+          cb.topMoveNumbers,
+          cb.isFinished,
+          cb.gameId
+        );
+      } else if (matchBottom) {
+        this.clockMonitor.hydrateServerMoves(
+          target,
+          cb.bottomTimesSec,
+          cb.bottomMoveNumbers,
+          cb.isFinished,
+          cb.gameId
+        );
+      } else if (side === "top" && cb.topTimesSec.length > 0) {
+        this.clockMonitor.hydrateServerMoves(
+          target,
+          cb.topTimesSec,
+          cb.topMoveNumbers,
+          cb.isFinished,
+          cb.gameId
+        );
+      } else if (side === "bottom" && cb.bottomTimesSec.length > 0) {
+        this.clockMonitor.hydrateServerMoves(
+          target,
+          cb.bottomTimesSec,
+          cb.bottomMoveNumbers,
+          cb.isFinished,
+          cb.gameId
+        );
+      }
+    }
+    async fetchAndHydrateGameCallback(gameId, target) {
+      if (this.cachedCallback?.gameId === gameId) {
+        this.applyCallbackHydrationToSide(target, this.targetSide);
+        return;
+      }
+      try {
+        const resp = await chrome.runtime.sendMessage({
+          type: "FETCH_GAME_CALLBACK",
+          gameId
+        });
+        if (!resp?.ok || !resp.data) return;
+        this.cachedCallback = resp.data;
+        if (this.lastCtx?.gameId === gameId) {
+          this.hud?.setAbortWindow(resp.data.isAbortable);
+          this.hud?.setSurface(resp.data.isFinished ? "game" : "live");
+          if (this.activeUsername) {
+            this.applyCallbackHydrationToSide(this.activeUsername, this.targetSide);
+          }
+        }
+      } catch {
+      }
+    }
     swapTargetSide() {
-      if (!this.lastCtx) return;
+      if (!this.lastCtx || this.lastCtx.surface === "profile") return;
       const nextSide = this.targetSide === "top" ? "bottom" : "top";
-      const candidate = nextSide === "top" ? this.lastCtx.topPlayer : this.lastCtx.bottomPlayer;
+      const candidate = nextSide === "top" ? this.lastCtx.topPlayer || this.cachedCallback?.topPlayer || null : this.lastCtx.bottomPlayer || this.cachedCallback?.bottomPlayer || null;
       if (!candidate) return;
       this.targetSide = nextSide;
-      this.clockMonitor?.setTarget(candidate, nextSide);
+      this.clockMonitor?.setTarget(candidate, nextSide, this.lastCtx.gameId);
+      this.applyCallbackHydrationToSide(candidate, nextSide);
       void this.analyzeTarget(candidate, this.lastCtx.detectedFormat, false);
     }
     handleMatchContext(ctx) {
       const prevOpponent = this.lastCtx?.opponent?.toLowerCase();
+      const prevGameId = this.lastCtx?.gameId;
       this.lastCtx = ctx;
+      if (ctx.gameId !== prevGameId) {
+        this.cachedCallback = null;
+      }
       if (ctx.opponent.toLowerCase() !== prevOpponent) {
         this.targetSide = ctx.opponentSide;
       }
-      const target = this.targetSide === "bottom" ? ctx.bottomPlayer || ctx.opponent : ctx.topPlayer || ctx.opponent;
-      this.clockMonitor?.setTarget(target, this.targetSide);
+      const target = ctx.surface === "profile" ? ctx.opponent : this.targetSide === "bottom" ? ctx.bottomPlayer || ctx.opponent : ctx.topPlayer || ctx.opponent;
+      if (ctx.surface === "profile") {
+        this.clockMonitor?.stop();
+      } else {
+        this.clockMonitor?.setTarget(target, this.targetSide, ctx.gameId);
+        if (ctx.gameId) {
+          void this.fetchAndHydrateGameCallback(ctx.gameId, target);
+        }
+      }
       this.hud?.setAbortWindow(ctx.isAbortWindowOpen);
+      this.hud?.setSurface(ctx.surface);
       if (target.toLowerCase() !== this.activeUsername?.toLowerCase()) {
         void this.analyzeTarget(target, ctx.detectedFormat, false);
       }
@@ -3034,26 +3627,33 @@
       this.activeUsername = null;
       this.latestResult = null;
       this.lastCtx = null;
+      this.cachedCallback = null;
       this.clockMonitor?.stop();
       removeInlineUsernameBadges();
       this.hud?.hide();
     }
     async analyzeTarget(username, preferredFormat, forceRefresh) {
       this.activeUsername = username;
-      if (this.settings.autoShowHud || forceRefresh) {
+      const isSelfProfile = Boolean(
+        this.lastCtx?.surface === "profile" && this.lastCtx.isSelfProfile
+      );
+      const shouldAutoOpenHud = this.settings.autoShowHud && !isSelfProfile || forceRefresh;
+      if (shouldAutoOpenHud) {
         this.hud?.showLoading(username);
       }
       try {
         const msg = {
           type: "ANALYZE_PLAYER",
           username,
-          preferredFormat,
+          preferredFormat: preferredFormat || this.cachedCallback?.detectedFormat,
           forceRefresh
         };
         const response = await chrome.runtime.sendMessage(msg);
         if (this.activeUsername?.toLowerCase() !== username.toLowerCase()) return;
         if (!response || !response.ok || !response.result) {
-          this.hud?.showError(username, response?.error || "Could not retrieve Chess.com telemetry");
+          if (shouldAutoOpenHud) {
+            this.hud?.showError(username, response?.error || "Could not load Chess.com data");
+          }
           return;
         }
         const result = response.result;
@@ -3062,20 +3662,39 @@
         const isWatched = watchlist.some(
           (w) => w.username.toLowerCase() === result.username.toLowerCase()
         );
-        if (this.settings.soundAlerts && !this.alertedUsernames.has(result.username.toLowerCase()) && (result.probability >= 75 || result.isBannedFairPlay || isWatched)) {
+        if (this.settings.soundAlerts && !isSelfProfile && !this.alertedUsernames.has(result.username.toLowerCase()) && (result.probability >= 75 || result.isBannedFairPlay || isWatched)) {
           this.alertedUsernames.add(result.username.toLowerCase());
           playRiskAlertChime(result.probability >= 88 || result.isBannedFairPlay);
         }
-        if (this.settings.autoShowHud || forceRefresh) {
-          this.hud?.showResult(result, isWatched, this.lastCtx?.isAbortWindowOpen ?? false);
-          const liveSnap = this.clockMonitor?.getLatestTelemetry() ?? null;
+        const surface = this.lastCtx?.surface ?? "live";
+        const liveSnap = this.clockMonitor?.getLatestTelemetry() ?? null;
+        if (shouldAutoOpenHud) {
+          this.hud?.showResult(
+            result,
+            isWatched,
+            this.lastCtx?.isAbortWindowOpen ?? false,
+            surface
+          );
           if (liveSnap) this.hud?.updateLiveClock(liveSnap);
         }
         if (this.settings.showInlineBadge) {
-          renderInlineUsernameBadge(result, this.targetSide, this.settings.language, () => {
-            this.hud?.showResult(result, isWatched, this.lastCtx?.isAbortWindowOpen ?? false);
-            this.hud?.expandFromBadge();
-          });
+          renderInlineUsernameBadge(
+            result,
+            this.targetSide,
+            this.settings.language,
+            () => {
+              this.hud?.showResult(
+                result,
+                isWatched,
+                this.lastCtx?.isAbortWindowOpen ?? false,
+                surface
+              );
+              const snap = this.clockMonitor?.getLatestTelemetry() ?? null;
+              if (snap) this.hud?.updateLiveClock(snap);
+              this.hud?.expandFromBadge();
+            },
+            { liveClock: liveSnap, surface }
+          );
         } else {
           removeInlineUsernameBadges();
         }
@@ -3129,7 +3748,11 @@
               this.latestResult,
               this.targetSide,
               this.settings.language,
-              () => this.hud?.expandFromBadge()
+              () => this.hud?.expandFromBadge(),
+              {
+                liveClock: this.clockMonitor?.getLatestTelemetry(),
+                surface: this.lastCtx?.surface ?? "live"
+              }
             );
           }
         })();
@@ -3145,6 +3768,13 @@
             this.hud?.toggleVisibility();
           }
           sendResponse({ ok: true });
+        } else if (msg.type === "GET_ACTIVE_MATCH_STATE") {
+          sendResponse({
+            ok: true,
+            activeUsername: this.activeUsername,
+            result: this.latestResult,
+            liveClock: this.clockMonitor?.getLatestTelemetry() ?? null
+          });
         }
         return false;
       });
